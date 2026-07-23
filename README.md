@@ -89,5 +89,9 @@ Use placeholder values (`REPLACE_ME`, `YOUR_CHAT_ID`, etc.) in anything publishe
 Distributed under the MIT License — see [LICENSE](./LICENSE) for details. You're free to use, modify, and redistribute any workflow here, including commercially, with attribution.
 
 ---
+## 🙌 Want to Contribute?
+Check the [open issues](../../issues) labeled `good first issue` or
+`help wanted` — pick one, and see [CONTRIBUTING.md](./CONTRIBUTING.md)
+for the branch → PR → review process.
 
 Built and maintained by [Shinjan Das](https://github.com/Skull-boy) — issues and PRs welcome.
