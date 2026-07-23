@@ -84,16 +84,6 @@ Use placeholder values (`REPLACE_ME`, `YOUR_CHAT_ID`, etc.) in anything publishe
 
 ---
 
-## 🔮 Roadmap
-
-- [ ] Add a `workflows/` folder convention going forward (migrate the debugger agent into it)
-- [ ] Add a CONTRIBUTING.md with a workflow-submission template
-- [ ] Add a LICENSE (MIT)
-- [ ] Tag releases per workflow addition
-- [ ] Add local-LLM variants of existing OpenAI-based workflows for privacy-focused users
-
----
-
 ## 📄 License
 
 Distributed under the MIT License — see [LICENSE](./LICENSE) for details. You're free to use, modify, and redistribute any workflow here, including commercially, with attribution.
