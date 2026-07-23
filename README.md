@@ -1,4 +1,14 @@
+<div align="center">
+
+<img src="assets/logo.png" width="380" alt="n8n Workflows"/>
+
 # n8n Workflows
+
+**Community-driven collection of reusable n8n workflows**
+
+Build • Share • Improve
+
+</div>
 
 A growing, open-source collection of practical n8n workflows — built, tested, and used in real projects, then published here for anyone to import and adapt.
 
