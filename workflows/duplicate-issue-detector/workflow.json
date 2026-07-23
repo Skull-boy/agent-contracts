@@ -1,0 +1,336 @@
+{
+  "name": "Semantic Duplicate Issue Detector",
+  "nodes": [
+    {
+      "parameters": {
+        "owner": { "__rl": true, "value": "REPLACE_OWNER", "mode": "list" },
+        "repository": { "__rl": true, "value": "REPLACE_REPO", "mode": "list" },
+        "events": ["issues"]
+      },
+      "id": "github-trigger",
+      "name": "New Issue Opened",
+      "type": "n8n-nodes-base.githubTrigger",
+      "typeVersion": 1,
+      "position": [-1700, -260],
+      "webhookId": "REPLACE_AUTO_GENERATED",
+      "credentials": {
+        "githubApi": { "id": "REPLACE_ME", "name": "GitHub Fine-Grained Token" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "only-opened",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "opened",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-opened-only",
+      "name": "Only 'Opened' Events",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-1480, -260]
+    },
+    {
+      "parameters": {
+        "jsCode": "const issue = $input.first().json.issue;\nreturn [{\n  json: {\n    issueNumber: issue.number,\n    title: issue.title,\n    body: issue.body || '',\n    combinedText: `${issue.title}\\n\\n${issue.body || ''}`.slice(0, 6000),\n    url: issue.html_url\n  }\n}];"
+      },
+      "id": "prepare-text-live",
+      "name": "Prepare Issue Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1260, -260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $credentials.openAiApi.apiKey }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"text-embedding-3-small\", input: $json.combinedText }) }}",
+        "options": {}
+      },
+      "id": "embed-live",
+      "name": "Embed New Issue (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1040, -260],
+      "credentials": {
+        "openAiApi": { "id": "REPLACE_ME", "name": "OpenAI API" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const vector = $input.first().json.data[0].embedding;\nconst prev = $('Prepare Issue Text').first().json;\nreturn [{ json: { ...prev, vector } }];"
+      },
+      "id": "extract-vector-live",
+      "name": "Extract Vector",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-820, -260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=REPLACE_QDRANT_URL/collections/REPLACE_COLLECTION_NAME/points/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "api-key", "value": "REPLACE_QDRANT_API_KEY" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ vector: $json.vector, limit: 3, with_payload: true }) }}",
+        "options": {}
+      },
+      "id": "qdrant-search",
+      "name": "Search Similar Issues (Qdrant)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-600, -260]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = ($input.first().json.result || []).filter(\n  r => r.payload.issueNumber !== $('Prepare Issue Text').first().json.issueNumber\n);\nconst best = results[0] || null;\nreturn [{\n  json: {\n    ...$('Extract Vector').first().json,\n    bestMatchScore: best ? best.score : 0,\n    bestMatchIssueNumber: best ? best.payload.issueNumber : null,\n    bestMatchTitle: best ? best.payload.title : null\n  }\n}];"
+      },
+      "id": "parse-search-result",
+      "name": "Parse Best Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-380, -260]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "score-threshold",
+              "leftValue": "={{ $json.bestMatchScore }}",
+              "rightValue": 0.87,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-likely-duplicate",
+      "name": "Score >= 0.87?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-160, -260]
+    },
+    {
+      "parameters": {
+        "resource": "issue",
+        "operation": "createComment",
+        "owner": { "__rl": true, "value": "REPLACE_OWNER", "mode": "list" },
+        "repository": { "__rl": true, "value": "REPLACE_REPO", "mode": "list" },
+        "issueNumber": "={{ $json.issueNumber }}",
+        "body": "=🔍 This issue looks similar to #{{ $json.bestMatchIssueNumber }} — \"{{ $json.bestMatchTitle }}\" (similarity score: {{ $json.bestMatchScore.toFixed(3) }}).\n\nThis is an automated suggestion, not a decision — a maintainer will confirm whether this is a true duplicate."
+      },
+      "id": "comment-possible-duplicate",
+      "name": "Comment: Possible Duplicate",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [60, -340],
+      "credentials": {
+        "githubApi": { "id": "REPLACE_ME", "name": "GitHub Fine-Grained Token" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=REPLACE_QDRANT_URL/collections/REPLACE_COLLECTION_NAME/points",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "api-key", "value": "REPLACE_QDRANT_API_KEY" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ points: [{ id: $json.issueNumber, vector: $json.vector, payload: { issueNumber: $json.issueNumber, title: $json.title, url: $json.url } }] }) }}",
+        "options": {}
+      },
+      "id": "qdrant-upsert-live",
+      "name": "Index This Issue (Qdrant Upsert)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [280, -260]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger-backfill",
+      "name": "Run Once: Backfill Existing Issues",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1700, 300]
+    },
+    {
+      "parameters": {
+        "resource": "issue",
+        "operation": "getAll",
+        "owner": { "__rl": true, "value": "REPLACE_OWNER", "mode": "list" },
+        "repository": { "__rl": true, "value": "REPLACE_REPO", "mode": "list" },
+        "returnAll": true,
+        "filters": { "state": "open" }
+      },
+      "id": "github-get-all-issues",
+      "name": "Get All Open Issues",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [-1480, 300],
+      "credentials": {
+        "githubApi": { "id": "REPLACE_ME", "name": "GitHub Fine-Grained Token" }
+      }
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "split-in-batches",
+      "name": "Loop One Issue At A Time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [-1260, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const issue = $input.first().json;\nreturn [{\n  json: {\n    issueNumber: issue.number,\n    title: issue.title,\n    body: issue.body || '',\n    combinedText: `${issue.title}\\n\\n${issue.body || ''}`.slice(0, 6000),\n    url: issue.html_url\n  }\n}];"
+      },
+      "id": "prepare-text-backfill",
+      "name": "Prepare Issue Text (Backfill)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1040, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $credentials.openAiApi.apiKey }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"text-embedding-3-small\", input: $json.combinedText }) }}",
+        "options": {}
+      },
+      "id": "embed-backfill",
+      "name": "Embed Issue (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-820, 300],
+      "credentials": {
+        "openAiApi": { "id": "REPLACE_ME", "name": "OpenAI API" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const vector = $input.first().json.data[0].embedding;\nconst prev = $('Prepare Issue Text (Backfill)').first().json;\nreturn [{ json: { ...prev, vector } }];"
+      },
+      "id": "extract-vector-backfill",
+      "name": "Extract Vector (Backfill)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-600, 300]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=REPLACE_QDRANT_URL/collections/REPLACE_COLLECTION_NAME/points",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "api-key", "value": "REPLACE_QDRANT_API_KEY" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ points: [{ id: $json.issueNumber, vector: $json.vector, payload: { issueNumber: $json.issueNumber, title: $json.title, url: $json.url } }] }) }}",
+        "options": {}
+      },
+      "id": "qdrant-upsert-backfill",
+      "name": "Index Issue (Qdrant Upsert)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-380, 300]
+    },
+    {
+      "parameters": { "amount": 1, "unit": "seconds" },
+      "id": "rate-limit-wait",
+      "name": "Wait (Avoid Rate Limit)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [-160, 300]
+    }
+  ],
+  "connections": {
+    "New Issue Opened": {
+      "main": [[{ "node": "Only 'Opened' Events", "type": "main", "index": 0 }]]
+    },
+    "Only 'Opened' Events": {
+      "main": [[{ "node": "Prepare Issue Text", "type": "main", "index": 0 }]]
+    },
+    "Prepare Issue Text": {
+      "main": [[{ "node": "Embed New Issue (OpenAI)", "type": "main", "index": 0 }]]
+    },
+    "Embed New Issue (OpenAI)": {
+      "main": [[{ "node": "Extract Vector", "type": "main", "index": 0 }]]
+    },
+    "Extract Vector": {
+      "main": [[{ "node": "Search Similar Issues (Qdrant)", "type": "main", "index": 0 }]]
+    },
+    "Search Similar Issues (Qdrant)": {
+      "main": [[{ "node": "Parse Best Match", "type": "main", "index": 0 }]]
+    },
+    "Parse Best Match": {
+      "main": [[{ "node": "Score >= 0.87?", "type": "main", "index": 0 }]]
+    },
+    "Score >= 0.87?": {
+      "main": [
+        [{ "node": "Comment: Possible Duplicate", "type": "main", "index": 0 }],
+        [{ "node": "Index This Issue (Qdrant Upsert)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Comment: Possible Duplicate": {
+      "main": [[{ "node": "Index This Issue (Qdrant Upsert)", "type": "main", "index": 0 }]]
+    },
+    "Run Once: Backfill Existing Issues": {
+      "main": [[{ "node": "Get All Open Issues", "type": "main", "index": 0 }]]
+    },
+    "Get All Open Issues": {
+      "main": [[{ "node": "Loop One Issue At A Time", "type": "main", "index": 0 }]]
+    },
+    "Loop One Issue At A Time": {
+      "main": [
+        [],
+        [{ "node": "Prepare Issue Text (Backfill)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Issue Text (Backfill)": {
+      "main": [[{ "node": "Embed Issue (OpenAI)", "type": "main", "index": 0 }]]
+    },
+    "Embed Issue (OpenAI)": {
+      "main": [[{ "node": "Extract Vector (Backfill)", "type": "main", "index": 0 }]]
+    },
+    "Extract Vector (Backfill)": {
+      "main": [[{ "node": "Index Issue (Qdrant Upsert)", "type": "main", "index": 0 }]]
+    },
+    "Index Issue (Qdrant Upsert)": {
+      "main": [[{ "node": "Wait (Avoid Rate Limit)", "type": "main", "index": 0 }]]
+    },
+    "Wait (Avoid Rate Limit)": {
+      "main": [[{ "node": "Loop One Issue At A Time", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
