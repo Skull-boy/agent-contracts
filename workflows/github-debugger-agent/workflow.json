@@ -14,10 +14,7 @@
       "name": "Get Repo Files",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [
-        460,
-        300
-      ],
+      "position": [460, 300],
       "credentials": {
         "githubApi": {
           "id": "YOUR_GITHUB_CREDENTIAL_ID",
@@ -33,10 +30,7 @@
       "name": "Filter Code Files",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        680,
-        300
-      ]
+      "position": [680, 300]
     },
     {
       "parameters": {
@@ -47,10 +41,7 @@
       "name": "Loop Files",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [
-        900,
-        300
-      ]
+      "position": [900, 300]
     },
     {
       "parameters": {
@@ -64,10 +55,7 @@
       "name": "Get File Content",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [
-        1120,
-        300
-      ],
+      "position": [1120, 300],
       "credentials": {
         "githubApi": {
           "id": "YOUR_GITHUB_CREDENTIAL_ID",
@@ -95,10 +83,7 @@
       "name": "LLM Debugger",
       "type": "n8n-nodes-base.openAi",
       "typeVersion": 1,
-      "position": [
-        1340,
-        300
-      ],
+      "position": [1340, 300],
       "credentials": {
         "openAiApi": {
           "id": "YOUR_OPENAI_CREDENTIAL_ID",
@@ -115,10 +100,7 @@
       "name": "Send to Discord",
       "type": "n8n-nodes-base.discord",
       "typeVersion": 2,
-      "position": [
-        1560,
-        300
-      ]
+      "position": [1560, 300]
     },
     {
       "parameters": {
@@ -129,10 +111,7 @@
       "name": "Wait for Approval",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [
-        1780,
-        300
-      ],
+      "position": [1780, 300],
       "webhookId": "approve_commit"
     },
     {
@@ -149,10 +128,7 @@
       "name": "Commit Fixes",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [
-        2000,
-        300
-      ],
+      "position": [2000, 300],
       "credentials": {
         "githubApi": {
           "id": "YOUR_GITHUB_CREDENTIAL_ID",
@@ -162,119 +138,44 @@
     },
     {
       "parameters": {
-        "owner": "shinjan-das",
-        "repo": "my-repo",
-        "branch": "main"
+        "owner": "REPLACE_WITH_YOUR_OWNER",
+        "repo": "REPLACE_WITH_YOUR_REPO",
+        "branch": "REPLACE_WITH_YOUR_WORKING_BRANCH"
       },
       "id": "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a1b2c",
       "name": "Manual Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        240,
-        300
-      ]
+      "position": [240, 300]
     }
   ],
   "connections": {
     "Manual Trigger": {
-      "main": [
-        [
-          {
-            "node": "Get Repo Files",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Get Repo Files", "type": "main", "index": 0 }]]
     },
     "Get Repo Files": {
-      "main": [
-        [
-          {
-            "node": "Filter Code Files",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Filter Code Files", "type": "main", "index": 0 }]]
     },
     "Filter Code Files": {
-      "main": [
-        [
-          {
-            "node": "Loop Files",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Loop Files", "type": "main", "index": 0 }]]
     },
     "Loop Files": {
-      "main": [
-        [
-          {
-            "node": "Get File Content",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Get File Content", "type": "main", "index": 0 }]]
     },
     "Get File Content": {
-      "main": [
-        [
-          {
-            "node": "LLM Debugger",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "LLM Debugger", "type": "main", "index": 0 }]]
     },
     "LLM Debugger": {
-      "main": [
-        [
-          {
-            "node": "Send to Discord",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Send to Discord", "type": "main", "index": 0 }]]
     },
     "Send to Discord": {
-      "main": [
-        [
-          {
-            "node": "Wait for Approval",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Wait for Approval", "type": "main", "index": 0 }]]
     },
     "Wait for Approval": {
-      "main": [
-        [
-          {
-            "node": "Commit Fixes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Commit Fixes", "type": "main", "index": 0 }]]
     },
     "Commit Fixes": {
-      "main": [
-        [
-          {
-            "node": "Loop Files",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Loop Files", "type": "main", "index": 0 }]]
     }
   }
 }
