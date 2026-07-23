@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" width="380" alt="n8n Workflows"/>
+<img src="assets/logo-light.jpeg" width="850" alt="n8n Workflows"/>
 
 # n8n Workflows
 
