@@ -1,108 +1,103 @@
+# n8n Workflows
 
-# 🐞 AI-Powered GitHub Debugger Agent
+A growing, open-source collection of practical n8n workflows — built, tested, and used in real projects, then published here for anyone to import and adapt.
 
-An automated code quality agent that fetches your code, detects bugs using LLMs, and fixes them—but only when you say so.
+Every workflow ships as a ready-to-import `.json` file plus its own short README covering what it does, what it needs, and how to set it up.
 
-# 📖 Overview
+---
 
-The AI-Powered GitHub Debugger Agent is an n8n workflow designed to act as a "Human-in-the-Loop" DevOps bot. It autonomously audits your repository for bugs, inefficiencies, and redundancy.
+## 📂 Repository Structure
 
-Instead of blindly committing AI-generated code, it sends a detailed report to Discord. You review the changes, and if you approve (via a secure webhook link), the agent pushes the fixes directly to your repository.
+```
+n8n_workflows/
+├── workflows/
+│   ├── github-debugger-agent/
+│   │   ├── workflow.json
+│   │   └── README.md
+│   ├── telegram-github-antigravity-pipeline/
+│   │   ├── workflow.json
+│   │   └── README.md
+│   └── <next-workflow>/
+│       ├── workflow.json
+│       └── README.md
+├── LICENSE
+├── CONTRIBUTING.md
+└── README.md   ← you are here
+```
 
-# ✨ Key Features
+Each workflow lives in its own folder under `workflows/`, so the collection can grow indefinitely without the root becoming cluttered.
 
-📂 Auto-Fetch: Recursively scans your GitHub repository for code files (.js, .ts, .py, .cpp, etc.).
+---
 
-🧠 Intelligent Analysis: Uses GPT-4o to identify logic errors, O(n²) inefficiencies, and redundant variables.
+## 🗂️ Workflow Index
 
-🛡️ Human-in-the-Loop: Zero code is committed without your explicit click of an approval link.
+| Workflow | Description | Stack |
+|---|---|---|
+| [GitHub Debugger Agent](./workflows/github-debugger-agent) | Scans a repo for bugs/inefficiencies with an LLM, reports to Discord, fixes only on approval | n8n, OpenAI/GPT-4o, GitHub API, Discord |
+| [Telegram → GitHub → Antigravity Pipeline](./workflows/telegram-github-antigravity-pipeline) | Message an issue number on Telegram; a local LLM reasons about it, Antigravity codes the fix, you approve, it pushes | n8n, Ollama/llama.cpp, GitHub API, Antigravity CLI, Telegram |
 
-🔔 Real-time Reporting: Delivers formatted Markdown bug reports directly to your Discord server.
+*(New workflows are added regularly — see [Roadmap](#-roadmap) below or watch this repo for updates.)*
 
-⚡ Automated Fixes: Applies the AI-suggested refactor instantly upon approval.
+---
 
-# 🏗️ Architecture
+## 🧠 Philosophy
 
-The workflow operates in a linear 4-phase loop:
+Every workflow here follows the same core principle: **human-in-the-loop by default.** None of them auto-commit, auto-merge, or take irreversible action without an explicit approval step from a real person. Automation should remove the tedious part of the work, not the judgment.
 
-Ingestion: Fetches the file tree from GitHub and filters for source code.
+---
 
-Analysis: The LLM reads the code and outputs a JSON object containing a Documentation report and Fixed_Code.
+## 🚀 Getting Started
 
-Authorization: The workflow pauses and sends a webhook link to Discord.
+**Prerequisites (common to most workflows in this repo):**
+- An n8n instance — self-hosted (Docker) or n8n Cloud (v1.28+ recommended for native Ollama support)
+- Git and a GitHub account, with a fine-grained Personal Access Token scoped to the specific repo you're automating
+- Any workflow-specific requirements — see that workflow's own README (LLM provider, messaging platform, etc.)
 
-Execution: Once the link is clicked, the workflow resumes and commits the changes via the GitHub API.
+**To use any workflow:**
+1. Open the workflow's folder under `workflows/`
+2. Read its README for exact prerequisites and setup steps
+3. In n8n: **Workflows → Import from File**, select that workflow's `workflow.json`
+4. Fill in the credentials and placeholder values called out in its README
+5. Test on a throwaway/sandbox repo before pointing it at anything important
 
-# 🚀 Getting Started
+---
 
-Prerequisites
+## 🤝 Contributing
 
-n8n Instance: Self-hosted or Cloud (v1.0+).
+Contributions are welcome — new workflows, fixes to existing ones, or clearer documentation. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the process. In short:
+1. Fork the repo
+2. Add your workflow under `workflows/<your-workflow-name>/`, including a `workflow.json` and a `README.md` describing it
+3. Open a pull request
 
-GitHub Account: A Personal Access Token (Classic) with repo scope.
+If your workflow handles credentials, tokens, or personal data anywhere in its JSON, scrub them and replace with placeholders (e.g. `REPLACE_ME`) before committing — see the [Security Note](#-security-note) below.
 
-OpenAI API Key: Access to GPT-4o or GPT-3.5-Turbo.
+---
 
-Discord Server: Ability to create Webhooks.
+## 🔒 Security Note
 
-Installation
+n8n exports can embed credential *references* but not raw secrets by default — still, always double-check your exported JSON before committing. Never commit:
+- API keys, tokens, or webhook secrets
+- Real chat IDs, user IDs, or email addresses
+- Real repo names/paths if they reveal something private
 
-Import the Workflow:
+Use placeholder values (`REPLACE_ME`, `YOUR_CHAT_ID`, etc.) in anything published here.
 
-Copy the JSON workflow code (located in workflow.json or provided separately).
+---
 
-In n8n, go to Workflows > Import from JSON.
+## 🔮 Roadmap
 
-Configure Credentials:
+- [ ] Add a `workflows/` folder convention going forward (migrate the debugger agent into it)
+- [ ] Add a CONTRIBUTING.md with a workflow-submission template
+- [ ] Add a LICENSE (MIT)
+- [ ] Tag releases per workflow addition
+- [ ] Add local-LLM variants of existing OpenAI-based workflows for privacy-focused users
 
-GitHub API: Create a credential in n8n using your Personal Access Token.
+---
 
-OpenAI API: Create a credential using your API Key.
+## 📄 License
 
-Setup Nodes:
+Distributed under the MIT License — see [LICENSE](./LICENSE) for details. You're free to use, modify, and redistribute any workflow here, including commercially, with attribution.
 
-Manual Trigger: Set your default Owner, Repo, and Branch.
+---
 
-Send to Discord: Paste your Discord Webhook URL.
-
-Filter Code Files: (Optional) Add extensions like .rs or .go if needed.
-
-# 🕹️ Usage
-
-Trigger the Agent:
-
-Open the workflow in n8n and click "Execute Workflow" (or use the Manual Trigger form).
-
-Wait for Analysis:
-
-The agent will process files in batches.
-
-Check Discord:
-
-You will receive a notification: "🐞 Bug Report for src/app.js".
-
-Approve or Ignore:
-
-To Fix: Click the "Approve & Commit" link in the message.
-
-To Skip: Simply ignore the message. The workflow will not modify the file.
-
-# 🔮 Roadmap
-
-We are constantly improving the agent. Here is what's coming in v2.0:
-
-[ ] Pull Request Integration: Create a fix/ai-branch and open a PR instead of committing directly to main.
-
-[ ] RAG (Context-Awareness): Use a vector store (Pinecone) so the AI understands cross-file dependencies.
-
-[ ] Local LLM Support: Option to swap OpenAI for Ollama/Llama 3 for data privacy.
-
-[ ] Compiler Loop: Run a build command (e.g., npm test) to verify the fix before asking for human approval.
-
-# 📄 License
-
-Distributed under the MIT License. See LICENSE for more information.
-
-<p align="center">
-Built with ❤️ using <a href="https://n8n.io">n8n</a> and ☕
-</p>
+Built and maintained by [Shinjan Das](https://github.com/Skull-boy) — issues and PRs welcome.
