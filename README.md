@@ -30,6 +30,9 @@ n8n_workflows/
 │   ├── duplicate-issue-detector/
 │   │   ├── workflow.json
 │   │   └── README.md
+│   ├── competitor-feature-parity-watcher/
+│   │   ├── workflow.json
+│   │   └── README.md
 │   └── <next-workflow>/
 │       ├── workflow.json
 │       └── README.md
@@ -47,8 +50,9 @@ Each workflow lives in its own folder under `workflows/`, so the collection can 
 | Workflow | Description | Stack |
 |---|---|---|
 | [GitHub Debugger Agent](./workflows/github-debugger-agent) | Scans a repo for bugs/inefficiencies with an LLM, reports to Discord, fixes only on approval | n8n, OpenAI/GPT-4o, GitHub API, Discord |
-| [Telegram → GitHub → Antigravity Pipeline](./workflows/telegram-github-antigravity-pipeline) | Message an issue number on Telegram; a local LLM reasons about it, Antigravity codes the fix, you approve, it pushes | n8n, Ollama/llama.cpp, GitHub API, Antigravity CLI, Telegram |
+| [Telegram → GitHub → Antigravity Pipeline](./workflows/telegram-github-antigravity-pipeline) | Message an issue number on Telegram; a local LLM reasons about it, Antigravity codes the fix, you approve, it pushes | n8n, Ollama/llama.cpp, GitHub API, Antigravity CLI, Telegram 
 | [Semantic Duplicate Issue Detector](./workflows/duplicate-issue-detector) | Flags likely-duplicate GitHub issues using semantic similarity, comments with the match — never closes/labels without review | n8n, OpenAI Embeddings, Qdrant, GitHub API |
+| [Competitor Feature-Parity Watcher](./workflows/competitor-feature-parity-watcher) | Watches competitor changelogs weekly; an LLM scores relevance against your own feature list, filtering signal from noise | n8n, OpenRouter, Google Sheets, RSS |
 
 *(New workflows are added regularly — see [Roadmap](#-roadmap) below or watch this repo for updates.)*
 
