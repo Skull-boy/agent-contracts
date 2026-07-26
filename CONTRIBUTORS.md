@@ -23,9 +23,10 @@ Some of the most valuable contributions to this project didn't arrive as pull re
 ## 🤝 Code Contributors
 
 *(This section grows as pull requests are merged.)*
+- **[fun-geek](https://github.com/fun-geek)** — contributed a workflow around structured AI document generation, advancing the repository with JSON-first LLM contracts, validation-driven execution, self-correcting retries, and automated PDF delivery. Extends the repository's collection of reusable agentic workflow patterns focused on reliability and structured outputs.
 
 Contributions in progress:
-- **Responsible-Beat2137** — planning a contribution around workflow contracts, context packets, execution records, and interface boundaries, extending the Contract framework toward a more complete automation architecture. Scope being finalized in [issue link].
+- **[neohack2023](https://github.com/neohack2023)** — planning a contribution around workflow contracts, context packets, execution records, and interface boundaries, extending the Contract framework toward a more complete automation architecture. Scope being finalized in [issue link].
 
 ---
 
