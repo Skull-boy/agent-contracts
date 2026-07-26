@@ -16,7 +16,7 @@ Some of the most valuable contributions to this project didn't arrive as pull re
 
 - **jake_that_dude** (r/n8n) — proposed adding structured `reasonCode` values alongside the relevance score in the Competitor Feature-Parity Watcher, so LLM-based scoring could be debugged and tuned systematically instead of argued over as raw numbers. Implemented in the workflow's relevance-judging step.
 - **[Bino5150](https://github.com/Bino5150)** (r/AI_Agents, r/n8n) — raised the security risk of importing third-party automation workflows without review, which shaped the "Before You Import Any Workflow" checklist in the root README. Also maintains [lumina](https://github.com/Bino5150/lumina), a local-first agentic harness — a good reference point if this repo ever adds a natural-language-driven workflow interface alongside the explicit graph approach.
-- **przemarzec, ebwaked, FirstThoroughfare, BP041, Responsible-Beat2137** (r/AI_Agents) — independently converged on the idea that reusable automation needs a declared contract — not just documentation — covering permissions, side effects, and recovery behavior. This directly shaped the Contract framework now required in every workflow's README.
+- **przemarzec, ebwaked, FirstThoroughfare, BP041, [neohack2023](https://github.com/neohack2023)** (r/AI_Agents) — independently converged on the idea that reusable automation needs a declared contract — not just documentation — covering permissions, side effects, and recovery behavior. This directly shaped the Contract framework now required in every workflow's README.
 
 ---
 
