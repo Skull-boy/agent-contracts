@@ -8,11 +8,18 @@
 
 Build • Share • Improve
 
+![License](https://img.shields.io/github/license/Skull-boy/n8n_workflows)
+![Stars](https://img.shields.io/github/stars/Skull-boy/n8n_workflows)
+![Issues](https://img.shields.io/github/issues/Skull-boy/n8n_workflows)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
+
 </div>
 
 A growing, open-source collection of practical n8n workflows — built, tested, and used in real projects, then published here for anyone to import and adapt.
 
 Every workflow ships as a ready-to-import `.json` file, its own README covering setup, and a structured **Contract** — what it needs, what it's allowed to touch, and how it recovers when something breaks. Not just prose you have to trust; a declared behavior spec you can check.
+
+> **Contract rollout status:** newly added workflows ship with a full Contract from day one. Earlier workflows are being migrated to the same format — check a given workflow's own README for its current status, and see [open issues](../../issues) if you'd like to help close the gap on an older one.
 
 ---
 
@@ -55,15 +62,24 @@ n8n_workflows/
 │   ├── competitor-feature-parity-watcher/
 │   │   ├── workflow.json
 │   │   └── README.md
+│   ├── job-application-silent-rejection-detector/
+│   │   ├── workflow.json
+│   │   └── README.md
+│   ├── telegram-structured-solver-pdf/
+│   │   ├── workflow.json
+│   │   └── README.md
 │   └── <next-workflow>/
 │       ├── workflow.json
 │       └── README.md
 ├── LICENSE
 ├── CONTRIBUTING.md
+├── CONTRIBUTORS.md
 └── README.md   ← you are here
 ```
 
 Each workflow lives in its own folder under `workflows/`, so the collection can grow indefinitely without the root becoming cluttered.
+
+> **Note:** the two most recently built workflows above (`job-application-silent-rejection-detector`, `telegram-structured-solver-pdf`) are shown here on the assumption they've been merged — double-check they're actually present in `workflows/` before trusting this diagram, and remove this note once confirmed.
 
 ---
 
@@ -74,7 +90,9 @@ Each workflow lives in its own folder under `workflows/`, so the collection can 
 | [GitHub Debugger Agent](./workflows/github-debugger-agent) | Scans a repo for bugs/inefficiencies with an LLM, reports to Discord, fixes only on approval | n8n, OpenAI/GPT-4o, GitHub API, Discord |
 | [Telegram → GitHub → Antigravity Pipeline](./workflows/telegram-github-antigravity-pipeline) | Message an issue number on Telegram; a local LLM reasons about it, Antigravity codes the fix, you approve, it pushes | n8n, Ollama/llama.cpp, GitHub API, Antigravity CLI, Telegram |
 | [Semantic Duplicate Issue Detector](./workflows/duplicate-issue-detector) | Flags likely-duplicate GitHub issues using semantic similarity, comments with the match — never closes/labels without review | n8n, OpenAI Embeddings, Qdrant, GitHub API |
-| [Competitor Feature-Parity Watcher](./workflows/competitor-feature-parity-watcher) | Watches competitor changelogs weekly; an LLM scores relevance against your own feature list, filtering signal from noise | n8n, OpenRouter, Google Sheets, RSS |
+| [Competitor Feature-Parity Watcher](./workflows/competitor-feature-parity-watcher) | Watches competitor changelogs weekly; an LLM scores relevance (with debuggable reason codes) against your own feature list | n8n, OpenRouter, Google Sheets, RSS |
+| [Job Application Silent-Rejection Detector](./workflows/job-application-silent-rejection-detector) | Watches postings you've applied to for status changes — a real signal instead of indefinite silence | n8n, OpenRouter, Google Sheets |
+| [Telegram Structured Solver → PDF](./workflows/telegram-structured-solver-pdf) | Message an assignment to a bot; an agent solves it step-by-step in strict JSON with a self-correcting retry loop, returns a formatted PDF | n8n, OpenAI, Telegram, PDFShift |
 
 *(New workflows are added regularly — see [open issues](../../issues) or watch this repo for updates.)*
 
@@ -117,12 +135,16 @@ This applies to every workflow in this repo too — if you spot something that d
 
 ## 🤝 Contributing
 
-Contributions are welcome — new workflows, fixes to existing ones, or clearer documentation. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the process. In short:
+Contributions are welcome — new workflows, fixes to existing ones, clearer documentation, or a Contract block for a workflow that doesn't have one yet. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full process. In short:
+
 1. Fork the repo
-2. Add your workflow under `workflows/<your-workflow-name>/`, including a `workflow.json` and a `README.md` with a Contract section describing it
-3. Open a pull request
+2. Add your workflow under `workflows/<your-workflow-name>/`, including a `workflow.json` and a `README.md` with a Contract section
+3. Open a pull request — branch off `main`, never commit directly to it
+4. Check the [open issues](../../issues) tagged `good first issue` or `help wanted` if you're not sure where to start
 
 If your workflow handles credentials, tokens, or personal data anywhere in its JSON, scrub them and replace with placeholders (e.g. `REPLACE_ME`) before committing — see the [Security Note](#-security-note) below.
+
+Everyone who contributes code or meaningfully shapes this project through discussion is credited in [CONTRIBUTORS.md](./CONTRIBUTORS.md).
 
 ---
 
@@ -143,9 +165,4 @@ Distributed under the MIT License — see [LICENSE](./LICENSE) for details. You'
 
 ---
 
-## 🙌 Want to Contribute?
-Check the [open issues](../../issues) labeled `good first issue` or
-`help wanted` — pick one, and see [CONTRIBUTING.md](./CONTRIBUTING.md)
-for the branch → PR → review process.
-
-Built and maintained by [Shinjan Das](https://github.com/Skull-boy) — issues and PRs welcome.
+Built and maintained by [Shinjan Das](https://github.com/Skull-boy) — see [CONTRIBUTORS.md](./CONTRIBUTORS.md) for everyone who's helped shape it. Issues and PRs welcome.
