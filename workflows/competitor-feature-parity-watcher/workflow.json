@@ -208,19 +208,27 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $credentials.openAiApi.apiKey }}"
+              "value": "Bearer REPLACE_OPENROUTER_API_KEY"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://github.com/Skull-boy/n8n_workflows"
+            },
+            {
+              "name": "X-OpenRouter-Title",
+              "value": "n8n_workflows-competitor-watcher"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: \"gpt-4o-mini\", messages: [{ role: \"system\", content: \"Extract a JSON array of recent product updates from this raw changelog page text. Each item: {title, date}. Return ONLY the JSON array, nothing else.\" }, { role: \"user\", content: $json.data.slice(0, 8000) }] }) }}",
+        "jsonBody": "={{ JSON.stringify({ models: [\"nvidia/nemotron-3-ultra:free\", \"qwen/qwen3-coder:free\", \"openai/gpt-oss:free\"], messages: [{ role: \"system\", content: \"Extract a JSON array of recent product updates from this raw changelog page text. Each item: {title, date}. Return ONLY the JSON array, nothing else.\" }, { role: \"user\", content: $json.data.slice(0, 8000) }] }) }}",
         "options": {}
       },
       "id": "extract-updates-via-llm",
@@ -231,12 +239,7 @@
         -580,
         140
       ],
-      "credentials": {
-        "openAiApi": {
-          "id": "REPLACE_ME",
-          "name": "OpenAI API"
-        }
-      }
+      "credentials": {}
     },
     {
       "parameters": {
@@ -352,19 +355,27 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $credentials.openAiApi.apiKey }}"
+              "value": "Bearer REPLACE_OPENROUTER_API_KEY"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://github.com/Skull-boy/n8n_workflows"
+            },
+            {
+              "name": "X-OpenRouter-Title",
+              "value": "n8n_workflows-competitor-watcher"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: \"gpt-4o-mini\", messages: [{ role: \"system\", content: `You judge competitive relevance. Our product (${$('Your Product Context (edit me)').first().json.productName}) has these features: ${$('Your Product Context (edit me)').first().json.features.join(', ')}. For each competitor update given, score 1-5 how relevant/threatening it is to us specifically (5 = direct feature overlap or gap, 1 = irrelevant noise), with a one-sentence reason. Return ONLY a JSON array: [{title, score, reason}]` }, { role: \"user\", content: JSON.stringify($json.newItems) }] }) }}",
+        "jsonBody": "={{ JSON.stringify({ models: [\"nvidia/nemotron-3-ultra:free\", \"qwen/qwen3-coder:free\", \"openai/gpt-oss:free\"], messages: [{ role: \"system\", content: `You judge competitive relevance. Our product (${$('Your Product Context (edit me)').first().json.productName}) has these features: ${$('Your Product Context (edit me)').first().json.features.join(', ')}. For each competitor update given, score 1-5 how relevant/threatening it is to us specifically (5 = direct feature overlap or gap, 1 = irrelevant noise). Also assign ONE reasonCode from this fixed set: pricing, enterprise, integration, migration-risk, new_offer, positioning_shift, other. Keep reasonCode to exactly one of these values, nothing else, so scores stay filterable and debuggable over time. Return ONLY a JSON array: [{title, score, reasonCode, reason}]` }, { role: \"user\", content: JSON.stringify($json.newItems) }] }) }}",
         "options": {}
       },
       "id": "judge-relevance",
@@ -375,16 +386,11 @@
         520,
         -80
       ],
-      "credentials": {
-        "openAiApi": {
-          "id": "REPLACE_ME",
-          "name": "OpenAI API"
-        }
-      }
+      "credentials": {}
     },
     {
       "parameters": {
-        "jsCode": "const competitor = $('Filter To New Items Only').first().json.competitor;\nconst newItems = $('Filter To New Items Only').first().json.newItems;\nlet judged = [];\ntry {\n  judged = JSON.parse($input.first().json.choices[0].message.content);\n} catch (e) {\n  judged = [];\n}\nconst relevant = judged.filter(j => j.score >= 3).map(j => {\n  const match = newItems.find(n => n.title === j.title);\n  return { competitor, title: j.title, score: j.score, reason: j.reason, link: match ? match.link : '', scanDate: new Date().toISOString().slice(0,10) };\n});\nreturn relevant.map(r => ({ json: r }));"
+        "jsCode": "const competitor = $('Filter To New Items Only').first().json.competitor;\nconst newItems = $('Filter To New Items Only').first().json.newItems;\nlet judged = [];\ntry {\n  judged = JSON.parse($input.first().json.choices[0].message.content);\n} catch (e) {\n  judged = [];\n}\nconst VALID_CODES = ['pricing','enterprise','integration','migration-risk','new_offer','positioning_shift','other'];\nconst relevant = judged.filter(j => j.score >= 3).map(j => {\n  const match = newItems.find(n => n.title === j.title);\n  const reasonCode = VALID_CODES.includes(j.reasonCode) ? j.reasonCode : 'other';\n  return { competitor, title: j.title, score: j.score, reasonCode, reason: j.reason, link: match ? match.link : '', scanDate: new Date().toISOString().slice(0,10) };\n});\nreturn relevant.map(r => ({ json: r }));"
       },
       "id": "parse-and-filter-relevant",
       "name": "Parse & Filter Relevant",
@@ -416,7 +422,8 @@
             "score": "={{ $json.score }}",
             "reason": "={{ $json.reason }}",
             "link": "={{ $json.link }}",
-            "scanDate": "={{ $json.scanDate }}"
+            "scanDate": "={{ $json.scanDate }}",
+            "reasonCode": "={{ $json.reasonCode }}"
           }
         }
       },
@@ -541,7 +548,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rows = $input.all().map(i => i.json);\nif (rows.length === 0) {\n  return [{ json: { digest: '\ud83d\udcca Competitor Watch: no relevant updates this week.' } }];\n}\nconst byCompetitor = {};\nfor (const r of rows) {\n  byCompetitor[r.competitor] = byCompetitor[r.competitor] || [];\n  byCompetitor[r.competitor].push(r);\n}\nlet msg = '\ud83d\udcca Weekly Competitor Watch\\n\\n';\nfor (const [comp, items] of Object.entries(byCompetitor)) {\n  msg += `\ud83d\udd39 ${comp}\\n`;\n  for (const it of items) {\n    msg += `  \u2022 [${it.score}/5] ${it.title}\\n    ${it.reason}\\n    ${it.link}\\n`;\n  }\n  msg += '\\n';\n}\nreturn [{ json: { digest: msg } }];"
+        "jsCode": "const rows = $input.all().map(i => i.json);\nif (rows.length === 0) {\n  return [{ json: { digest: '\ud83d\udcca Competitor Watch: no relevant updates this week.' } }];\n}\nconst byCompetitor = {};\nfor (const r of rows) {\n  byCompetitor[r.competitor] = byCompetitor[r.competitor] || [];\n  byCompetitor[r.competitor].push(r);\n}\nlet msg = '\ud83d\udcca Weekly Competitor Watch\\n\\n';\nfor (const [comp, items] of Object.entries(byCompetitor)) {\n  msg += `\ud83d\udd39 ${comp}\\n`;\n  for (const it of items) {\n    msg += `  \u2022 [${it.score}/5 \u00b7 ${it.reasonCode}] ${it.title}\\n    ${it.reason}\\n    ${it.link}\\n`;\n  }\n  msg += '\\n';\n}\nreturn [{ json: { digest: msg } }];"
       },
       "id": "build-digest",
       "name": "Build Digest Report",
