@@ -1,0 +1,284 @@
+{
+  "name": "Telegram → GitHub → Local LLM → Antigravity → Approve → Push",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"]
+      },
+      "id": "tg-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-1200, 0],
+      "webhookId": "REPLACE_WITH_AUTO_GENERATED_ID",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auth-check",
+              "leftValue": "={{ $json.message.chat.id }}",
+              "rightValue": "REPLACE_WITH_YOUR_TELEGRAM_CHAT_ID",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "auth-if",
+      "name": "Is It Me?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-980, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pulls an issue number out of a message like 'check issue #12 in myrepo'\nconst text = $input.first().json.message.text || '';\nconst issueMatch = text.match(/#(\\d+)/);\nconst repoMatch = text.match(/in\\s+([\\w.-]+\\/[\\w.-]+|\\S+)/i);\nreturn [{\n  json: {\n    issueNumber: issueMatch ? issueMatch[1] : null,\n    repo: repoMatch ? repoMatch[1] : 'REPLACE_DEFAULT_OWNER/REPLACE_DEFAULT_REPO',\n    rawText: text,\n    chatId: $input.first().json.message.chat.id\n  }\n}];"
+      },
+      "id": "parse-message",
+      "name": "Parse Telegram Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-760, -80]
+    },
+    {
+      "parameters": {
+        "resource": "issue",
+        "operation": "get",
+        "owner": {
+          "__rl": true,
+          "value": "={{ $json.repo.split('/')[0] }}",
+          "mode": "expression"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "={{ $json.repo.split('/')[1] }}",
+          "mode": "expression"
+        },
+        "issueNumber": "={{ $json.issueNumber }}"
+      },
+      "id": "github-get-issue",
+      "name": "Get GitHub Issue",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [-540, -80],
+      "credentials": {
+        "githubApi": {
+          "id": "REPLACE_ME",
+          "name": "GitHub Fine-Grained Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a coding-task orchestrator. Read the GitHub issue title and body given to you. Write ONE clear, complete, actionable prompt that a coding agent (Antigravity) can execute directly to resolve this issue. Be specific: name files/areas if mentioned, describe the expected fix or feature, and state any constraints. Output ONLY the prompt text, nothing else — no preamble, no markdown fences."
+        },
+        "text": "=Issue Title: {{ $json.title }}\n\nIssue Body:\n{{ $json.body }}"
+      },
+      "id": "ai-agent",
+      "name": "Reasoning Agent (Local Model)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-320, -80]
+    },
+    {
+      "parameters": {
+        "model": "hermes3-custom",
+        "options": {
+          "baseURL": "http://localhost:11434/v1"
+        }
+      },
+      "id": "ollama-model",
+      "name": "Local llama.cpp Server",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [-320, 100],
+      "credentials": {
+        "ollamaApi": {
+          "id": "REPLACE_ME",
+          "name": "Local Ollama/llama.cpp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "=agy run \"{{ $json.output }}\" --output C:\\workspace\\result.md --repo C:\\workspace\\REPLACE_WITH_LOCAL_REPO_FOLDER"
+      },
+      "id": "run-antigravity",
+      "name": "Run Antigravity CLI",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [-100, -80]
+    },
+    {
+      "parameters": {
+        "command": "=git -C C:\\workspace\\REPLACE_WITH_LOCAL_REPO_FOLDER diff"
+      },
+      "id": "get-diff",
+      "name": "Get Git Diff",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [120, -80]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Parse Telegram Message').item.json.chatId }}",
+        "message": "=Antigravity finished working on issue #{{ $('Parse Telegram Message').item.json.issueNumber }}.\n\nDiff:\n{{ $json.stdout.slice(0, 3000) }}\n\nApprove pushing this to the working branch?",
+        "responseType": "approval",
+        "approvalOptions": {
+          "values": {
+            "approveLabel": "✅ Push it",
+            "disapproveLabel": "❌ Discard"
+          }
+        }
+      },
+      "id": "telegram-approve",
+      "name": "Send Diff & Wait For Approval",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [340, -80],
+      "webhookId": "REPLACE_WITH_AUTO_GENERATED_ID",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "approved-check",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "approved-if",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [560, -80]
+    },
+    {
+      "parameters": {
+        "command": "=cd C:\\workspace\\REPLACE_WITH_LOCAL_REPO_FOLDER && git checkout -b fix-issue-{{ $('Parse Telegram Message').item.json.issueNumber }} && git add -A && git commit -m \"Fix issue #{{ $('Parse Telegram Message').item.json.issueNumber }} via Antigravity\" && git push origin fix-issue-{{ $('Parse Telegram Message').item.json.issueNumber }}"
+      },
+      "id": "git-push",
+      "name": "Push To Branch",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [780, -180]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Telegram Message').item.json.chatId }}",
+        "text": "=✅ Pushed to branch fix-issue-{{ $('Parse Telegram Message').item.json.issueNumber }}. Open a PR when ready.",
+        "additionalFields": {}
+      },
+      "id": "notify-pushed",
+      "name": "Notify: Pushed",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1000, -180],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Telegram Message').item.json.chatId }}",
+        "text": "❌ Discarded. Nothing was pushed.",
+        "additionalFields": {}
+      },
+      "id": "notify-discarded",
+      "name": "Notify: Discarded",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [780, 20],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Is It Me?", "type": "main", "index": 0 }]]
+    },
+    "Is It Me?": {
+      "main": [[{ "node": "Parse Telegram Message", "type": "main", "index": 0 }]]
+    },
+    "Parse Telegram Message": {
+      "main": [[{ "node": "Get GitHub Issue", "type": "main", "index": 0 }]]
+    },
+    "Get GitHub Issue": {
+      "main": [[{ "node": "Reasoning Agent (Local Model)", "type": "main", "index": 0 }]]
+    },
+    "Local llama.cpp Server": {
+      "ai_languageModel": [[{ "node": "Reasoning Agent (Local Model)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Reasoning Agent (Local Model)": {
+      "main": [[{ "node": "Run Antigravity CLI", "type": "main", "index": 0 }]]
+    },
+    "Run Antigravity CLI": {
+      "main": [[{ "node": "Get Git Diff", "type": "main", "index": 0 }]]
+    },
+    "Get Git Diff": {
+      "main": [[{ "node": "Send Diff & Wait For Approval", "type": "main", "index": 0 }]]
+    },
+    "Send Diff & Wait For Approval": {
+      "main": [[{ "node": "Approved?", "type": "main", "index": 0 }]]
+    },
+    "Approved?": {
+      "main": [
+        [{ "node": "Push To Branch", "type": "main", "index": 0 }],
+        [{ "node": "Notify: Discarded", "type": "main", "index": 0 }]
+      ]
+    },
+    "Push To Branch": {
+      "main": [[{ "node": "Notify: Pushed", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
