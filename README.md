@@ -79,8 +79,6 @@ n8n_workflows/
 
 Each workflow lives in its own folder under `workflows/`, so the collection can grow indefinitely without the root becoming cluttered.
 
-> **Note:** the two most recently built workflows above (`job-application-silent-rejection-detector`, `telegram-structured-solver-pdf`) are shown here on the assumption they've been merged — double-check they're actually present in `workflows/` before trusting this diagram, and remove this note once confirmed.
-
 ---
 
 ## 🗂️ Workflow Index
