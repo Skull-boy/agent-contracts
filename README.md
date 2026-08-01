@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="assets/logo-light.jpeg" width="850" alt="n8n Workflows"/>
+<img src="assets/logo-light.jpeg" width="850" alt="agent-contracts"/>
 
-# n8n Workflows
+# agent-contracts
 
-**Community-driven collection of reusable automation patterns**
+**A governance layer for AI agents — permissions, side effects, and approval boundaries, independent of framework**
 
-Build • Share • Improve
+MCP and A2A standardized how agents talk to tools and to each other. Nobody standardized what they're allowed to do. This is that layer — implemented today in n8n, designed to outlive it.
 
 ![License](https://img.shields.io/github/license/Skull-boy/n8n_workflows)
 ![Stars](https://img.shields.io/github/stars/Skull-boy/n8n_workflows)
@@ -15,9 +15,7 @@ Build • Share • Improve
 
 </div>
 
-A growing, open-source collection of practical n8n workflows — built, tested, and used in real projects, then published here for anyone to import and adapt.
-
-Every workflow ships as a ready-to-import `.json` file, its own README covering setup, and a structured **Contract** — what it needs, what it's allowed to touch, and how it recovers when something breaks. Not just prose you have to trust; a declared behavior spec you can check.
+This repository is organized around a documented set of reusable automation **patterns**, each with a framework-agnostic specification and a **Contract** declaring exactly what a given implementation is allowed to do — its permissions, side effects, approval points, and recovery behavior. Read [`docs/workflow-engineering.md`](./docs/workflow-engineering.md) for the full reasoning, and [`WORKFLOW-CONTRACT-SPEC.md`](./WORKFLOW-CONTRACT-SPEC.md) for the spec itself. n8n is the first implementation, not the identity — Make, LangGraph, LangChain, or anything that comes after are equally valid targets for the same Contract.
 
 > **Contract rollout status:** newly added workflows ship with a full Contract from day one. Earlier workflows are being migrated to the same format — check a given workflow's own README for its current status, and see [open issues](../../issues) if you'd like to help close the gap on an older one.
 
