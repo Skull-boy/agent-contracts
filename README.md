@@ -4,9 +4,9 @@
 
 # agent-contracts
 
-**A governance layer for AI agents — permissions, side effects, and approval boundaries, independent of framework**
+**Portable contracts for agentic workflows — permissions, side effects, approval boundaries, recovery, and execution guarantees.**
 
-MCP and A2A standardized how agents talk to tools and to each other. Nobody standardized what they're allowed to do. This is that layer — implemented today in n8n, designed to outlive it.
+MCP and A2A are standardizing how agents interact with tools and with each other. agent-contracts explores the layer above that: what an agent is allowed to do, what requires approval, what side effects it may create, and what should happen when execution fails.
 
 ![License](https://img.shields.io/github/license/Skull-boy/n8n_workflows)
 ![Stars](https://img.shields.io/github/stars/Skull-boy/n8n_workflows)
