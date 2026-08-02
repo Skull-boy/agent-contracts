@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo-light.jpeg" width="850" alt="agent-contracts"/>
+<img src="assets/logo.png" width="850" alt="agent-contracts"/>
 
 # agent-contracts
 
