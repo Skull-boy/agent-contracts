@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" width="850" alt="agent-contracts"/>
+<img src="assets/logo.png" width="650" breadth="650" alt="agent-contracts"/>
 
 # agent-contracts
 
@@ -46,33 +46,32 @@ This is what "human-in-the-loop by default" actually means in practice — not a
 ## 📂 Repository Structure
 
 ```
-n8n_workflows/
-├── workflows/
-│   ├── github-debugger-agent/
-│   │   ├── workflow.json
-│   │   └── README.md
-│   ├── telegram-github-antigravity-pipeline/
-│   │   ├── workflow.json
-│   │   └── README.md
-│   ├── duplicate-issue-detector/
-│   │   ├── workflow.json
-│   │   └── README.md
-│   ├── competitor-feature-parity-watcher/
-│   │   ├── workflow.json
-│   │   └── README.md
-│   ├── job-application-silent-rejection-detector/
-│   │   ├── workflow.json
-│   │   └── README.md
-│   ├── telegram-structured-solver-pdf/
-│   │   ├── workflow.json
-│   │   └── README.md
-│   └── <next-workflow>/
-│       ├── workflow.json
-│       └── README.md
-├── LICENSE
+agent-contracts/
+├── README.md
+├── WORKFLOW-CONTRACT-SPEC.md
 ├── CONTRIBUTING.md
 ├── CONTRIBUTORS.md
-└── README.md   ← you are here
+├── LICENSE
+├── docs/
+│   ├── workflow-engineering.md
+│   ├── architecture.md
+│   └── concepts/
+│       ├── permissions.md
+│       ├── side-effects.md
+│       ├── approval-boundaries.md
+│       ├── replay-semantics.md
+│       └── recovery.md
+├── patterns/
+│   └── detect-judge-approve-act.md      ← docs only, links out to implementations
+├── implementations/
+│   └── n8n/
+│       ├── duplicate-issue-detector/
+│       │   ├── workflow.json
+│       │   ├── contract.yaml            ← contract stays here, per-implementation
+│       │   └── README.md
+│       └── ...
+└── rfcs/
+    └── 0001-contract-model.md            ← permanent record, once something's decided
 ```
 
 Each workflow lives in its own folder under `workflows/`, so the collection can grow indefinitely without the root becoming cluttered.
