@@ -1,0 +1,41 @@
+# contract.yaml
+version: 1
+workflow: duplicate-issue-detector
+
+inputs:
+  - GitHub issue title + body (from webhook trigger)
+
+outputs:
+  - One comment on the triggering issue, only if a duplicate is found
+
+permissions:
+  - github: issues:write   # comment only — never close, label, or edit
+  - openai: embeddings:read
+  - qdrant: read+write on one collection
+
+side_effects:
+  - Posts one comment on the triggering issue, if similarity >= threshold
+  - Writes one vector to the Qdrant collection
+
+approval_points: []   # intentionally empty — this workflow only ever comments,
+                       # never closes or merges, so no approval gate is required
+
+recovery_strategy: >
+  If Qdrant is unreachable, the run fails loudly and visibly in n8n's
+  execution log. It does not silently skip the duplicate check.
+
+replay_semantics: >
+  Idempotent per issue — re-running on the same issue re-embeds and
+  re-checks, but the Qdrant upsert uses the issue number as point ID,
+  so it overwrites rather than duplicates.
+
+dependencies:
+  - GitHub API
+  - OpenAI Embeddings API
+  - Qdrant instance
+
+state: >
+  Persisted in a Qdrant collection — one vector per previously-seen issue.
+
+observability:
+  - GitHub comment itself is the only execution signal (no separate log/digest)
