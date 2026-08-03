@@ -2,6 +2,8 @@
 
 Automatically flags likely-duplicate GitHub issues using semantic similarity — not keyword matching — and leaves the final call to a maintainer.
 
+> **Warning**: At first try not to use paid API of OpenAI or Claude directly. Try it out from OpenRouter or try out local model based API as its sensible.
+
 ---
 
 ## 📖 Overview

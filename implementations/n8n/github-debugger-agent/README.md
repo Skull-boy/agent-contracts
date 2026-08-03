@@ -2,6 +2,8 @@
 
 An automated code quality agent that fetches your code, detects bugs using an LLM, and fixes them — but only when you say so.
 
+> **Warning**: At first try not to use paid API of OpenAI or Claude directly. Try it out from OpenRouter or try out local model based API as its sensible.
+
 ---
 
 ## 📖 Overview
