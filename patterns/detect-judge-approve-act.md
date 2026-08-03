@@ -1,6 +1,6 @@
 # Pattern: Detect → Judge → Approve → Act
 
-**Status:** Proven — one full implementation exists
+**Status:** Proven — two full implementations exist (n8n + LangGraph)
 **Category:** Reasoning / Safety pattern
 
 ---
@@ -41,8 +41,9 @@ Every workflow in this repository that isn't a pure notification bot follows thi
 | Framework | Implementation | Contract |
 |---|---|---|
 | n8n | [`duplicate-issue-detector`](../implementations/n8n/duplicate-issue-detector) | [contract.yaml](../implementations/n8n/duplicate-issue-detector/contract.yaml) |
+| LangGraph | [`duplicate-issue-detector`](../implementations/langgraph/duplicate-issue-detector) | [contract.yaml](../implementations/langgraph/duplicate-issue-detector/contract.yaml) |
 
-**Not yet built, hypothesis under test:** a LangGraph implementation of this same pattern. See [`docs/workflow-engineering.md`](../docs/workflow-engineering.md#why-do-patterns-outlive-frameworks) for why this specific gap matters more than it might look like it does.
+**The second-framework implementation now exists.** The LangGraph implementation was built from the same pattern and contract shape as the n8n version — same four stages, same declared permissions, same `approval_points: []` claim, same idempotency mechanism. See [`docs/workflow-engineering.md`](../docs/workflow-engineering.md#why-do-patterns-outlive-frameworks) for the hypothesis this implements.
 
 **Other workflows in this repository may also instantiate this pattern** — several look like plausible fits on inspection — but per this project's own governance process, a pattern classification isn't asserted here without a worked-through Contract confirming it. If you believe a workflow belongs in this table, open the discussion under [`rfcs/`](../rfcs) with the Contract that supports it, rather than a one-line addition to this table.
 

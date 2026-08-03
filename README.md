@@ -19,6 +19,8 @@ This repository is organized around a documented set of reusable automation **pa
 
 > **Contract rollout status:** newly added implementations ship with a full v1 Contract (ten fields, `README.md` + `contract.yaml`) from day one. Earlier workflows are being migrated to the same format — tracked in [this issue](../../issues) — check a given implementation's own README for its current status.
 
+> **Warning**: At first try not to use paid API of OpenAI or Claude directly. Try it out from OpenRouter or try out local model based API as its sensible.
+
 ---
 
 ## 🧩 What This Actually Is

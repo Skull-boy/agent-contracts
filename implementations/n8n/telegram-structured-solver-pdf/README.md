@@ -2,6 +2,8 @@
 
 Message a GitHub issue number to a Telegram bot, and a local LLM reads the issue, hands off the actual coding work to Antigravity, sends you the resulting diff for review, and only pushes to a working branch once you explicitly approve it on Telegram.
 
+> **Warning**: At first try not to use paid API of OpenAI or Claude directly. Try it out from OpenRouter or try out local model based API as its sensible.
+
 ---
 
 ## 📖 Overview

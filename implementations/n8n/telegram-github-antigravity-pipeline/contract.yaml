@@ -55,3 +55,60 @@ observability:
   - The Telegram thread itself is the only execution log — ack, diff, and
     final push/discard notice are the sole visibility into what happened,
     with no separate dashboard or digest
+# contract.yaml
+version: 1
+workflow: telegram-github-antigravity-pipeline
+
+inputs:
+  - Telegram message text naming an issue number and repo (e.g. "check issue #5 in myrepo")
+  - GitHub issue title + body, fetched via GitHub API after the message is parsed
+
+outputs:
+  - A git diff summary sent to Telegram for human review
+  - A new branch pushed to GitHub, only if the human approves
+
+permissions:
+  - telegram: read+send messages, restricted to one allowlisted chat ID
+  - github: issues:read, contents:write   # branch push only — never to main
+  - local-llm: inference via localhost llama.cpp/Ollama server (no external network access required)
+  - antigravity-cli: local shell execution against the working repo directory
+
+side_effects:
+  - Sends Telegram messages at each stage (ack, diff summary, approval prompt, push confirmation or discard notice)
+  - Runs the local Antigravity CLI against the repo's local working directory
+  - Pushes exactly one new branch, named after the issue number, if and only if approved — never pushes to main
+
+approval_points:
+  - Before the branch push: a human reviews the actual git diff on Telegram and must reply
+    with explicit approval. Rejection (or no reply) results in no push and a
+    "discarded" notice — the branch is never created on the rejection path.
+
+recovery_strategy: >
+  If the local LLM server is unreachable, the run fails loudly in n8n's execution
+  log rather than silently skipping the reasoning step. If the Antigravity CLI
+  fails or produces no diff, the workflow does not proceed to request approval
+  for an empty or broken change. If the GitHub push itself fails, it fails
+  loudly — there is no silent retry that could push to an unintended branch.
+
+replay_semantics: >
+  NOT safely repeatable for the same issue without manual cleanup. The branch
+  name is derived directly from the issue number (fix-issue-<number>), so a
+  second run on the same issue before the first branch is merged or deleted
+  will fail at the git checkout -b step rather than silently overwriting or
+  duplicating anything. This is a known limitation, not a designed idempotency
+  guarantee — re-running requires the prior branch to be resolved first.
+
+dependencies:
+  - Telegram Bot API
+  - GitHub API
+  - Local llama.cpp/Ollama server (localhost)
+  - Antigravity CLI (local shell access)
+
+state: >
+  Stateless between runs — no persistent store. The chat-ID allowlist is
+  static configuration, not runtime state.
+
+observability:
+  - The Telegram thread itself is the only execution log — ack, diff, and
+    final push/discard notice are the sole visibility into what happened,
+    with no separate dashboard or digest
