@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "agent-contracts"
+version = "0.1.0"
+description = "Framework-independent contracts and validation tooling for AI agents and automated workflows."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+
+authors = [
+    { name = "Shinjan Das" }
+]
+
+dependencies = [
+    "PyYAML>=6.0,<7.0",
+    "jsonschema>=4.20,<5.0",
+]
+
+[project.scripts]
+agent-contracts = "agent_contracts.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Skull-boy/agent-contracts"
+Issues = "https://github.com/Skull-boy/agent-contracts/issues"
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.setuptools.package-data]
+agent_contracts = [
+    "schemas/v1/*.json"
+]

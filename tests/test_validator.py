@@ -19,7 +19,7 @@ def test_valid_contract_passes():
         / "contract.yaml"
     )
 
-    result = validate_contract(contract, SCHEMA)
+    result = validate_contract(contract)
 
     assert result.valid is True
     assert result.errors == ()
@@ -50,4 +50,4 @@ def test_malformed_yaml_raises_yaml_error():
     contract = ROOT / "tests" / "fixtures" / "malformed.yaml"
 
     with pytest.raises(yaml.YAMLError):
-        validate_contract(contract, SCHEMA)
+        validate_contract(contract)

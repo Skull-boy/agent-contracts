@@ -7,6 +7,10 @@ import yaml
 from jsonschema import Draft202012Validator
 
 
+PACKAGE_ROOT = Path(__file__).resolve().parent
+DEFAULT_SCHEMA_PATH = PACKAGE_ROOT / "schemas" / "v1" / "contract.schema.json"
+
+
 @dataclass(frozen=True)
 class ValidationError:
     path: str
@@ -27,7 +31,7 @@ def load_contract(path: str | Path) -> Any:
         return yaml.safe_load(file)
 
 
-def load_schema(path: str | Path) -> dict[str, Any]:
+def load_schema(path: str | Path = DEFAULT_SCHEMA_PATH) -> dict[str, Any]:
     """Load an Agent Contract JSON Schema."""
     schema_path = Path(path)
 
@@ -37,16 +41,25 @@ def load_schema(path: str | Path) -> dict[str, Any]:
 
 def validate_contract(
     contract_path: str | Path,
-    schema_path: str | Path,
+    schema_path: str | Path | None = None,
 ) -> ValidationResult:
     """
-    Validate one Agent Contract against an Agent Contract JSON Schema.
+    Validate one Agent Contract.
+
+    By default, the Contract is validated against the Agent Contract v1
+    schema bundled with this package.
+
+    A custom schema path may be supplied explicitly for development,
+    testing, or experimental schema versions.
 
     This function performs no printing and does not terminate the process.
     Callers decide how validation results should be presented.
     """
     contract = load_contract(contract_path)
-    schema = load_schema(schema_path)
+
+    schema = load_schema(
+        DEFAULT_SCHEMA_PATH if schema_path is None else schema_path
+    )
 
     if contract is None:
         return ValidationResult(
