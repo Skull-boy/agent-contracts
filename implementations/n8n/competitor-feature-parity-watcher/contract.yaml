@@ -1,0 +1,61 @@
+# contract.yaml
+version: 1
+workflow: competitor-feature-parity-watcher
+
+inputs:
+  - Product name and current product feature list configured in the workflow
+  - Competitor watchlist containing competitor name, changelog URL, and source type (rss or webpage)
+  - Public competitor RSS/Atom feeds or changelog webpages
+
+outputs:
+  - Relevant competitor updates with title, relevance score, reason, link, and scan date persisted to Google Sheets
+  - A weekly competitor-update digest sent to the configured Telegram chat
+
+permissions:
+  - network: read configured public RSS feeds and changelog webpages
+  - openai: GPT-4o-mini inference for webpage extraction and relevance scoring
+  - google-sheets: read+write CompetitorState and FlaggedUpdates sheets
+  - telegram: send digest messages to the configured chat
+
+side_effects:
+  - Sends webpage changelog content to the configured OpenAI model when the webpage fallback path is used
+  - Sends new competitor updates and product feature context to the configured OpenAI model for relevance scoring
+  - Writes relevance-scored competitor updates to the FlaggedUpdates Google Sheet
+  - Updates each successfully processed competitor's last-checked state in the CompetitorState Google Sheet
+  - Sends a competitor digest to Telegram after the scan completes
+
+approval_points: []
+
+recovery_strategy: >
+  RSS and webpage sources are processed independently for each configured competitor.
+  A failed webpage fetch is converted to a fetch_failed result, and malformed LLM
+  extraction output is converted to parse_failed. These failure states produce no
+  new items and do not intentionally advance that competitor's saved state.
+  The workflow defines no explicit retry strategy for OpenAI, Google Sheets,
+  Telegram, or other external-service failures, so those failures rely on n8n's
+  execution behavior.
+
+replay_semantics: >
+  Partially repeatable but not strictly idempotent. The CompetitorState sheet stores
+  each competitor's last checked date and is used to filter previously observed
+  updates on later scans. Flagged updates are appended to a separate sheet rather
+  than upserted by a stable update identifier, so repeated or manually replayed
+  executions can still produce duplicate flagged rows or digest entries under
+  some state and failure conditions.
+
+dependencies:
+  - n8n runtime
+  - Public competitor RSS/Atom feeds or changelog webpages
+  - OpenAI Chat Completions API (GPT-4o-mini in the current implementation)
+  - Google Sheets
+  - Telegram Bot API
+
+state: >
+  Persistent cross-run state is stored in Google Sheets. CompetitorState records
+  each competitor and its lastCheckedDate, while FlaggedUpdates stores surfaced
+  updates including competitor, title, score, reason, link, and scanDate.
+
+observability:
+  - Google Sheets provides persistent visibility into competitor state and flagged updates
+  - Telegram provides the final weekly digest of surfaced competitor updates
+  - n8n execution history provides workflow execution and failure visibility

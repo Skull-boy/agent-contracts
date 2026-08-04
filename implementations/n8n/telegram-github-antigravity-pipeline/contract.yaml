@@ -22,7 +22,8 @@ side_effects:
   - Pushes exactly one new branch, named after the issue number, if and only if approved — never pushes to main
 
 approval_points:
-  - Before the branch push: a human reviews the actual git diff on Telegram and must reply
+  - >
+    Before the branch push: a human reviews the actual git diff on Telegram and must reply
     with explicit approval. Rejection (or no reply) results in no push and a
     "discarded" notice — the branch is never created on the rejection path.
 
