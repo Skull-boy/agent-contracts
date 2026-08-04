@@ -1,0 +1,57 @@
+# contract.yaml
+version: 1
+workflow: github-debugger-agent
+
+inputs:
+  - GitHub repository owner, repository name, and configured working branch
+  - Source files discovered recursively from the target repository with .js, .ts, .cpp, or .py extensions
+
+outputs:
+  - A Markdown debugging report sent to Discord for each processed source file
+  - AI-generated replacement code committed to GitHub after the workflow is resumed through its approval webhook
+
+permissions:
+  - github: repository contents read+write
+  - openai: GPT-4o inference
+  - discord: send messages through configured webhook
+
+side_effects:
+  - Sends debugging reports and approval links to Discord
+  - Sends repository source code to the configured OpenAI model for analysis
+  - Updates repository file contents through the GitHub API after approval webhook resume
+
+approval_points:
+  - >
+    Before each generated fix is committed, execution pauses at an n8n Wait node.
+    The Discord report contains the execution resume URL, and the commit path
+    proceeds only after that webhook resumes the workflow. Possession of the
+    resume URL acts as the approval capability; the workflow does not perform
+    separate approver identity or approval-payload validation.
+
+recovery_strategy: >
+  No explicit retry or recovery path is defined by this workflow. Failures in
+  GitHub access, LLM analysis, Discord delivery, approval waiting, or the GitHub
+  update operation rely on n8n's execution failure behavior rather than a
+  workflow-defined recovery strategy.
+
+replay_semantics: >
+  NOT guaranteed to be idempotent. Re-running the workflow can produce new LLM
+  output and new Discord reports, and an approved execution can update repository
+  contents again. The workflow contains no explicit replay guard or deduplication
+  mechanism.
+
+dependencies:
+  - n8n runtime
+  - GitHub API
+  - OpenAI API (GPT-4o in the current implementation)
+  - Discord webhook
+  - n8n execution resume webhook
+
+state: >
+  Workflow execution state is held by n8n while processing files and while
+  waiting for approval. No separate persistent application datastore is defined
+  by the workflow.
+
+observability:
+  - Discord receives the generated debugging report and approval link
+  - n8n execution history provides workflow execution and failure visibility

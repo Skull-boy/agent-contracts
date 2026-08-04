@@ -4,6 +4,7 @@
 *.key
 *.pem
 credentials.json
+.venv/
 
 # n8n local runtime/export junk
 .n8n/
