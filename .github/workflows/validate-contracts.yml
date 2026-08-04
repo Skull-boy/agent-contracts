@@ -25,5 +25,12 @@ jobs:
       - name: Install validation dependencies
         run: python -m pip install -r requirements-dev.txt
 
+      - name: Run validator tests
+        env:
+          PYTHONPATH: src
+        run: python -m pytest -v
+
       - name: Validate contracts
+        env:
+          PYTHONPATH: src
         run: python scripts/validate_contracts.py

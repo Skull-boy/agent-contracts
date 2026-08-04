@@ -1,0 +1,6 @@
+version: 1
+workflow: malformed-test
+
+approval_points:
+  - Before approval: human must review
+    this continuation is invalid YAML

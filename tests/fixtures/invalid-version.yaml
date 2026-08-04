@@ -1,0 +1,14 @@
+version: 2
+workflow: deliberately-invalid-test
+
+inputs: []
+outputs: []
+permissions: []
+side_effects: []
+approval_points: []
+
+recovery_strategy: none
+replay_semantics: none
+dependencies: []
+state: none
+observability: []
