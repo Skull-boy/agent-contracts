@@ -25,10 +25,7 @@ def main():
         relative_path = contract_path.relative_to(ROOT)
 
         try:
-            result = validate_contract(
-                contract_path=contract_path,
-                schema_path=SCHEMA_PATH,
-            )
+            result = validate_contract(contract_path)
 
             if result.valid:
                 print(f"PASS  {relative_path}")
