@@ -58,7 +58,7 @@ Pattern  →  Implementation  →  Contract
 
 A **Pattern** is the abstract, framework-agnostic shape (`patterns/`). An **Implementation** is one concrete realization of it in a specific framework (`implementations/<framework>/<name>/`). A **Contract** describes exactly what that one implementation is allowed to do — it belongs to the implementation, not the pattern, because permissions and side effects are specific to how something was actually built. Full reasoning in [`docs/architecture.md`](./docs/architecture.md).
 
-Structural and governance changes to this model itself go through an RFC, recorded permanently in [`rfcs/`](./rfcs) once decided.
+Structural and governance changes to this model itself go through an RFC, recorded permanently in `implementations/rfcs/` once decided.
 
 ---
 
@@ -71,6 +71,13 @@ agent-contracts/
 ├── CONTRIBUTING.md
 ├── CONTRIBUTORS.md
 ├── LICENSE
+├── requirements-dev.txt
+├── .github/
+│   └── workflows/
+│       └── validate-contracts.yml
+├── assets/
+│   ├── logo.png
+│   └── logo-light.jpeg
 ├── docs/
 │   ├── workflow-engineering.md
 │   ├── architecture.md
@@ -82,28 +89,54 @@ agent-contracts/
 │       └── recovery.md
 ├── patterns/
 │   └── detect-judge-approve-act.md
-├── implementations/
-│   └── n8n/
-│       ├── github-debugger-agent/
-│       ├── telegram-github-antigravity-pipeline/
-│       ├── duplicate-issue-detector/
-│       │   ├── workflow.json
-│       │   ├── contract.yaml
-│       │   └── README.md
-│       ├── competitor-feature-parity-watcher/
-│       ├── job-application-silent-rejection-detector/
-│       └── telegram-structured-solver-pdf/
-└── rfcs/
-    └── 0001-contract-model.md
+├── schemas/
+│   └── v1/
+│       └── contract.schema.json
+├── scripts/
+│   └── validate_contracts.py
+└── implementations/
+    ├── n8n/
+    │   ├── github-debugger-agent/
+    │   │   ├── workflow.json
+    │   │   ├── contract.yaml
+    │   │   └── README.md
+    │   ├── telegram-github-antigravity-pipeline/
+    │   │   ├── workflow.json
+    │   │   ├── contract.yaml
+    │   │   └── README.md
+    │   ├── duplicate-issue-detector/
+    │   │   ├── workflow.json
+    │   │   ├── contract.yaml
+    │   │   └── README.md
+    │   └── competitor-feature-parity-watcher/
+    │       ├── workflow.json
+    │       ├── contract.yaml
+    │       └── README.md
+    ├── langgraph/
+    │   ├── duplicate-issue-detector/
+    │   │   ├── duplicate_issue_detector/
+    │   │   │   ├── __init__.py
+    │   │   │   ├── __main__.py
+    │   │   │   ├── graph.py
+    │   │   │   ├── nodes.py
+    │   │   │   └── state.py
+    │   │   ├── backfill.py
+    │   │   ├── pyproject.toml
+    │   │   ├── contract.yaml
+    │   │   ├── .env.example
+    │   │   └── README.md
+    │   └── telegram-github-antigravity-pipeline/
+    └── rfcs/
+        └── 01-contract-model.md
 ```
 
 Each implementation lives in its own folder under `implementations/<framework>/`, so the collection can grow — across frameworks, not just within n8n — without the root becoming cluttered.
 
-> **This structure reflects the direction proposed in the open Migration RFC.** If that RFC hasn't been resolved with the community members it was raised with yet, confirm this tree matches what's actually merged on `main` before treating it as current fact rather than intent.
-
 ---
 
 ## 🗂️ Implementation Index
+
+### n8n
 
 | Implementation | Description | Stack |
 |---|---|---|
@@ -111,8 +144,13 @@ Each implementation lives in its own folder under `implementations/<framework>/`
 | [Telegram → GitHub → Antigravity Pipeline](./implementations/n8n/telegram-github-antigravity-pipeline) | Message an issue number on Telegram; a local LLM reasons about it, Antigravity codes the fix, you approve, it pushes | n8n, Ollama/llama.cpp, GitHub API, Antigravity CLI, Telegram |
 | [Semantic Duplicate Issue Detector](./implementations/n8n/duplicate-issue-detector) | Flags likely-duplicate GitHub issues using semantic similarity, comments with the match — never closes/labels without review | n8n, OpenAI Embeddings, Qdrant, GitHub API |
 | [Competitor Feature-Parity Watcher](./implementations/n8n/competitor-feature-parity-watcher) | Watches competitor changelogs weekly; an LLM scores relevance (with debuggable reason codes) against your own feature list | n8n, OpenRouter, Google Sheets, RSS |
-| [Job Application Silent-Rejection Detector](./implementations/n8n/job-application-silent-rejection-detector) | Watches postings you've applied to for status changes — a real signal instead of indefinite silence | n8n, OpenRouter, Google Sheets |
-| [Telegram Structured Solver → PDF](./implementations/n8n/telegram-structured-solver-pdf) | Message an assignment to a bot; an agent solves it step-by-step in strict JSON with a self-correcting retry loop, returns a formatted PDF | n8n, OpenAI, Telegram, PDFShift |
+
+### LangGraph
+
+| Implementation | Description | Stack |
+|---|---|---|
+| [Semantic Duplicate Issue Detector](./implementations/langgraph/duplicate-issue-detector) | Python-native port of the duplicate-detector: LangGraph graph, Qdrant vector store, backfill script for existing issues | LangGraph, OpenAI Embeddings, Qdrant, GitHub API |
+| [Telegram → GitHub → Antigravity Pipeline](./implementations/langgraph/telegram-github-antigravity-pipeline) | LangGraph port of the Telegram → GitHub pipeline | LangGraph, GitHub API, Antigravity CLI, Telegram |
 
 *(New implementations are added regularly — see [open issues](../../issues) or watch this repo for updates.)*
 
@@ -120,17 +158,23 @@ Each implementation lives in its own folder under `implementations/<framework>/`
 
 ## 🚀 Getting Started
 
-**Prerequisites (common to most n8n implementations in this repo):**
-- An n8n instance — self-hosted (Docker) or n8n Cloud (v1.28+ recommended for native Ollama support)
+**Prerequisites (common to all implementations):**
 - Git and a GitHub account, with a fine-grained Personal Access Token scoped to the specific repo you're automating
-- Any implementation-specific requirements — see its own README (LLM provider, messaging platform, etc.)
+- Any implementation-specific requirements — see its own README (LLM provider, messaging platform, vector store, etc.)
 
-**To use any implementation:**
-1. Open its folder under `implementations/<framework>/`
-2. Read its README for its Contract, prerequisites, and setup steps
+**n8n implementations:**
+1. Open the implementation folder under `implementations/n8n/<name>/`
+2. Read its `README.md` for its Contract, prerequisites, and setup steps
 3. In n8n: **Workflows → Import from File**, select its `workflow.json`
 4. Fill in the credentials and placeholder values called out in its README
 5. Test on a throwaway/sandbox repo before pointing it at anything important
+
+**LangGraph implementations:**
+1. Open the implementation folder under `implementations/langgraph/<name>/`
+2. Read its `README.md` — each ships a `pyproject.toml` and `.env.example`
+3. Install dependencies: `pip install -e .` (or `uv sync`)
+4. Copy `.env.example` to `.env` and fill in your secrets
+5. Run via `python -m <package_name>` or the entry point documented in its README
 
 ---
 
