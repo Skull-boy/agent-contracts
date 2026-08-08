@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from agent_contracts import lint_contract, Contract
-from agent_contracts.cli import main
+from scyvera import lint_contract, Contract
+from scyvera.cli import main
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -71,7 +71,7 @@ def test_cli_lint_command(monkeypatch, capsys):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["agent-contract", "lint", str(contract)],
+        ["scyvera", "lint", str(contract)],
     )
 
     exit_code = main()

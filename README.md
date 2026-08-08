@@ -2,11 +2,11 @@
 
 <img src="assets/logo.png" width="450" alt="agent-contracts"/>
 
-# agent-contracts
+# Scyvera
 
 **Machine-readable, domain-independent, and framework-independent operational contracts for AI agents and automated systems.**
 
-MCP and A2A standardize how agents communicate with tools and each other. `agent-contracts` defines the layer above: what an intelligent system can do, what resources it can access, what authority it requires, what constraints apply, what side effects it produces, and how it is governed.
+MCP and A2A standardize how agents communicate with tools and each other. `Scyvera` defines the layer above: what an intelligent system can do, what resources it can access, what authority it requires, what constraints apply, what side effects it produces, and how it is governed.
 
 ![License](https://img.shields.io/github/license/Skull-boy/agent-contracts)
 ![Stars](https://img.shields.io/github/stars/Skull-boy/agent-contracts)
@@ -20,7 +20,7 @@ MCP and A2A standardize how agents communicate with tools and each other. `agent
 
 ## 🧩 What This Actually Is
 
-`agent-contracts` provides a machine-readable specification and Python tooling layer for defining the operational boundary of intelligent or automated systems.
+`Scyvera` provides a machine-readable specification and Python tooling layer for defining the operational boundary of intelligent or automated systems.
 
 It is **NOT**:
 - another agent framework
@@ -41,7 +41,7 @@ A framework-independent and domain-independent specification layer describing sy
 Install locally or in your project virtualenv:
 
 ```bash
-pip install agent-contract
+pip install scyvera
 # Or for local development:
 pip install -e .
 ```
@@ -50,18 +50,18 @@ pip install -e .
 
 #### Create a starter Contract template (v1.1)
 ```bash
-agent-contract init contract.yaml --name "Research Assistant"
+scyvera init contract.yaml --name "Research Assistant"
 ```
 
 Interactive wizard mode:
 ```bash
-agent-contract init contract.yaml -i
+scyvera init contract.yaml -i
 ```
 
 #### Validate an Agent Contract
 The CLI automatically detects the specification version (`1` vs `1.1`) and validates against the corresponding JSON Schema:
 ```bash
-agent-contract validate contract.yaml
+scyvera validate contract.yaml
 ```
 
 Output:
@@ -71,7 +71,7 @@ PASS  contract.yaml
 
 Override with a custom JSON Schema file:
 ```bash
-agent-contract validate contract.yaml --schema path/to/custom.schema.json
+scyvera validate contract.yaml --schema path/to/custom.schema.json
 ```
 
 ---
@@ -81,7 +81,7 @@ agent-contract validate contract.yaml --schema path/to/custom.schema.json
 You can programmatically construct, inspect, serialize, and validate Agent Contracts in Python without manually writing YAML:
 
 ```python
-from agent_contracts import Contract, validate_contract
+from scyvera import Contract, validate_contract
 
 # Programmatically construct a v1.1 Contract
 contract = (
@@ -113,7 +113,7 @@ else:
 
 Validate an existing YAML file programmatically:
 ```python
-from agent_contracts import validate_contract
+from scyvera import validate_contract
 
 result = validate_contract("contract.yaml")
 print(f"Valid: {result.valid}")
@@ -166,7 +166,7 @@ agent-contracts/
 │       ├── financial-operations.yaml
 │       └── clinical-information-assistant.yaml
 ├── src/
-│   └── agent_contracts/                # Python Package
+│   └── scyvera/                # Python Package
 │       ├── __init__.py
 │       ├── builder.py                  # Programmatic Contract Builder API
 │       ├── validator.py                # Multi-Version Validator Engine

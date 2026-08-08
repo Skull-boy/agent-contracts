@@ -50,7 +50,7 @@ jobs:
         run: |
           mkdir -p /tmp/wheel-test
           cd /tmp/wheel-test
-          python -c "import agent_contracts; print(agent_contracts.__file__)" > import_path.txt
+          python -c "import scyvera; print(scyvera.__file__)" > import_path.txt
           cat import_path.txt
           if grep -q "site-packages" import_path.txt; then
             echo "Successfully loaded from site-packages"
@@ -62,15 +62,15 @@ jobs:
       - name: Verify CLI executable
         run: |
           cd /tmp/wheel-test
-          agent-contract --help
-          agent-contract init test_contract.yaml --name "Release System" --domain "software"
-          agent-contract validate test_contract.yaml
-          agent-contract lint test_contract.yaml
+          scyvera --help
+          scyvera init test_contract.yaml --name "Release System" --domain "software"
+          scyvera validate test_contract.yaml
+          scyvera lint test_contract.yaml
 
       - name: Verify Python API
         run: |
           cd /tmp/wheel-test
-          python -c 'from agent_contracts import Contract; c = Contract(name="Release System").set_domain("software").add_capability("test"); v = c.validate(); assert v.valid is True'
+          python -c 'from scyvera import Contract; c = Contract(name="Release System").set_domain("software").add_capability("test"); v = c.validate(); assert v.valid is True'
 
       - name: Run test suite on installed package
         run: |

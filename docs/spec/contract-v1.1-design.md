@@ -643,7 +643,7 @@ Agent Contracts v0.1 established the initial implementation foundation:
 - Contract v1 JSON Schema;
 - YAML-based Agent Contracts;
 - Python validation API;
-- `agent-contracts` command-line interface;
+- `scyvera` command-line interface;
 - repository-wide Contract validation;
 - automated validator and CLI tests;
 - installable Python distribution;

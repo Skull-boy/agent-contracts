@@ -39,7 +39,7 @@ jobs:
 
       - name: Verify CLI executable
         run: |
-          agent-contract --help
-          agent-contract init test_contract.yaml --name "CI System" --domain "software"
-          agent-contract validate test_contract.yaml
-          agent-contract lint test_contract.yaml
+          scyvera --help
+          scyvera init test_contract.yaml --name "CI System" --domain "software"
+          scyvera validate test_contract.yaml
+          scyvera lint test_contract.yaml

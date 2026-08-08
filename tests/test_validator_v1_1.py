@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from agent_contracts import validate_contract, SCHEMA_V1_1_PATH
+from scyvera import validate_contract, SCHEMA_V1_1_PATH
 
 
 ROOT = Path(__file__).resolve().parent.parent

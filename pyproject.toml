@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "agent-contract"
+name = "scyvera"
 version = "1.1.0"
 description = "Framework-independent contracts and validation tooling for AI agents and automated workflows."
 readme = "README.md"
@@ -51,7 +51,7 @@ dev = [
 ]
 
 [project.scripts]
-agent-contract = "agent_contracts.cli:main"
+scyvera = "scyvera.cli:main"
 
 [project.urls]
 Repository = "https://github.com/Skull-boy/agent-contracts"
@@ -63,6 +63,6 @@ where = ["src"]
 
 
 [tool.setuptools.package-data]
-agent_contracts = [
+scyvera = [
     "schemas/*/*.json"
 ]
