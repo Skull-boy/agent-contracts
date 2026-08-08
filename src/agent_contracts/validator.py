@@ -1,14 +1,30 @@
 from dataclasses import dataclass
+import importlib.resources
+import json
 from pathlib import Path
 from typing import Any
-import json
 
 import yaml
 from jsonschema import Draft202012Validator
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parent
-DEFAULT_SCHEMA_PATH = PACKAGE_ROOT / "schemas" / "v1" / "contract.schema.json"
+
+
+def _resolve_package_schema(relative_path: str) -> Path:
+    """Resolve packaged schema path using importlib.resources with fallback."""
+    try:
+        traversable = importlib.resources.files("agent_contracts").joinpath(relative_path)
+        p = Path(str(traversable))
+        if p.exists():
+            return p
+    except Exception:
+        pass
+    return PACKAGE_ROOT / relative_path
+
+
+SCHEMA_V1_PATH = _resolve_package_schema("schemas/v1/contract.schema.json")
+SCHEMA_V1_1_PATH = _resolve_package_schema("schemas/v1.1/contract.schema.json")
+DEFAULT_SCHEMA_PATH = SCHEMA_V1_PATH
 
 
 @dataclass(frozen=True)
@@ -39,6 +55,26 @@ def load_schema(path: str | Path = DEFAULT_SCHEMA_PATH) -> dict[str, Any]:
         return json.load(file)
 
 
+def resolve_schema_path(contract: Any, custom_schema_path: str | Path | None = None) -> Path | None:
+    """Determine the schema path based on explicit override or contract version."""
+    if custom_schema_path is not None:
+        return Path(custom_schema_path)
+
+    if not isinstance(contract, dict):
+        return SCHEMA_V1_PATH
+
+    version = contract.get("version")
+
+    if version == 1 or version == "1":
+        return SCHEMA_V1_PATH
+    elif version == 1.1 or version == "1.1":
+        return SCHEMA_V1_1_PATH
+    elif version is None:
+        return SCHEMA_V1_PATH
+
+    return None
+
+
 def validate_contract(
     contract_path: str | Path,
     schema_path: str | Path | None = None,
@@ -46,8 +82,8 @@ def validate_contract(
     """
     Validate one Agent Contract.
 
-    By default, the Contract is validated against the Agent Contract v1
-    schema bundled with this package.
+    By default, the Contract is validated against the schema matching its
+    declared version (v1 or v1.1) bundled with this package.
 
     A custom schema path may be supplied explicitly for development,
     testing, or experimental schema versions.
@@ -56,10 +92,6 @@ def validate_contract(
     Callers decide how validation results should be presented.
     """
     contract = load_contract(contract_path)
-
-    schema = load_schema(
-        DEFAULT_SCHEMA_PATH if schema_path is None else schema_path
-    )
 
     if contract is None:
         return ValidationResult(
@@ -71,6 +103,22 @@ def validate_contract(
                 ),
             ),
         )
+
+    resolved_path = resolve_schema_path(contract, schema_path)
+
+    if resolved_path is None:
+        ver = contract.get("version") if isinstance(contract, dict) else None
+        return ValidationResult(
+            valid=False,
+            errors=(
+                ValidationError(
+                    path="version",
+                    message=f"Unsupported specification version: {ver}",
+                ),
+            ),
+        )
+
+    schema = load_schema(resolved_path)
 
     validator = Draft202012Validator(schema)
 

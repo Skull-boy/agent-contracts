@@ -1,0 +1,68 @@
+version: 1.1
+
+system:
+  name: Automated Bug Patch System
+  purpose: Analyzes issue tickets, locates code bugs, and drafts pull requests for developer review
+  version: "1.0.0"
+
+domain: software
+
+capabilities:
+  - name: analyze_repository
+    description: Inspects codebase files and AST patterns
+  - name: draft_pull_request
+    description: Generates patch branch and opens draft pull request
+
+resources:
+  - name: git_repository
+    type: version_control
+    access: write
+
+inputs:
+  - name: issue_id
+    type: string
+    required: true
+
+outputs:
+  - name: pull_request_url
+    type: string
+
+permissions:
+  - resource: git_repository
+    actions:
+      - read
+      - write
+
+constraints:
+  - type: max_modified_files
+    maximum: 5
+
+side_effects:
+  - type: version_control_commit
+    resource: git_repository
+
+approvals:
+  - action: merge_pull_request
+    required: true
+    approver: lead_developer
+
+dependencies:
+  - name: github_api
+    type: external_api
+    required: true
+
+state:
+  persistence: session
+
+recovery:
+  strategy: rollback
+
+replay:
+  mode: non_idempotent
+
+observability:
+  level: audit
+
+risk:
+  level: medium
+  category: code_regression

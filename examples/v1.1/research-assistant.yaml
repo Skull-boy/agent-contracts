@@ -1,0 +1,80 @@
+version: 1.1
+
+system:
+  name: Scientific Literature Research Assistant
+  purpose: Searches scientific preprint repositories and synthesizes domain literature reviews
+  version: "1.2.0"
+
+domain: research
+
+capabilities:
+  - name: literature_synthesis
+    description: Summarizes key findings across multiple peer-reviewed papers
+
+resources:
+  - name: arxiv_api
+    type: external_api
+    access: read
+  - name: europe_pmc_api
+    type: external_api
+    access: read
+
+inputs:
+  - name: research_query
+    type: string
+    required: true
+  - name: max_papers
+    type: number
+    required: false
+
+outputs:
+  - name: literature_review
+    type: markdown_report
+  - name: citation_list
+    type: bibtex
+
+permissions:
+  - resource: arxiv_api
+    actions:
+      - search
+      - query
+  - resource: europe_pmc_api
+    actions:
+      - search
+      - query
+
+constraints:
+  - type: max_results
+    maximum: 50
+  - type: timeout
+    maximum: 30
+    unit: seconds
+
+side_effects: []
+approvals: []
+
+dependencies:
+  - name: arxiv_api
+    type: external_api
+    required: true
+  - name: europe_pmc_api
+    type: external_api
+    required: false
+
+state:
+  persistence: none
+
+recovery:
+  strategy: fallback
+  details: Falls back to local paper cache if remote API fails
+
+replay:
+  mode: idempotent
+
+observability:
+  level: basic
+  sinks: ["stdout"]
+
+risk:
+  level: low
+  category: misinformation_risk

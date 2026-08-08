@@ -1,5 +1,4 @@
 # Architecture
-
 **Status:** Draft
 **Applies to:** how this repository itself is organized — the structural counterpart to [`workflow-engineering.md`](./workflow-engineering.md)'s reasoning and [`WORKFLOW-CONTRACT-SPEC.md`](../WORKFLOW-CONTRACT-SPEC.md)'s field definitions
 
