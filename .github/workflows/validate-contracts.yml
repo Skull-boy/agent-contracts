@@ -1,16 +1,17 @@
-name: Validate Agent Contracts
+name: Validate Agent Contracts & Package
 
 on:
   push:
     branches:
       - main
+      - "feat/**"
   pull_request:
     branches:
       - main
 
 jobs:
-  validate-contracts:
-    name: Validate Contracts
+  build-and-test:
+    name: Build Wheel & Test Package
     runs-on: ubuntu-latest
 
     steps:
@@ -22,15 +23,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install validation dependencies
-        run: python -m pip install -r requirements-dev.txt
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build pytest PyYAML jsonschema
 
-      - name: Run validator tests
-        env:
-          PYTHONPATH: src
+      - name: Build wheel and source distribution
+        run: python -m build
+
+      - name: Install built wheel
+        run: python -m pip install dist/*.whl
+
+      - name: Run test suite on installed package
         run: python -m pytest -v
 
-      - name: Validate contracts
-        env:
-          PYTHONPATH: src
-        run: python scripts/validate_contracts.py
+      - name: Verify CLI executable
+        run: |
+          agent-contract --help
+          agent-contract init test_contract.yaml --name "CI System" --domain "software"
+          agent-contract validate test_contract.yaml
+          agent-contract lint test_contract.yaml

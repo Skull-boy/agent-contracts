@@ -1,0 +1,70 @@
+version: 1.1
+
+system:
+  name: Enterprise Invoice Synchronization Service
+  purpose: Synchronizes incoming vendor invoices between CRM and ERP databases
+  version: "1.0.0"
+
+domain: business
+
+capabilities:
+  - name: synchronize_invoices
+    description: Reconciles new CRM invoices into ERP database tables
+
+resources:
+  - name: crm_database
+    type: database
+    access: read
+  - name: erp_database
+    type: database
+    access: write
+
+inputs:
+  - name: sync_batch_id
+    type: string
+    required: true
+
+outputs:
+  - name: synced_count
+    type: number
+
+permissions:
+  - resource: crm_database
+    actions:
+      - read
+  - resource: erp_database
+    actions:
+      - write
+      - update
+
+constraints:
+  - type: batch_limit
+    maximum: 200
+
+side_effects:
+  - type: database_write
+    resource: erp_database
+
+approvals: []
+
+dependencies:
+  - name: enterprise_erp_api
+    type: api
+    required: true
+
+state:
+  persistence: persistent
+  storage: postgres_sync_db
+
+recovery:
+  strategy: retry
+
+replay:
+  mode: idempotent
+
+observability:
+  level: basic
+
+risk:
+  level: low
+  category: data_inconsistency

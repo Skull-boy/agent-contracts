@@ -1,0 +1,64 @@
+version: 1.1
+
+system:
+  name: Educational Study Tutor
+  purpose: Provides interactive concept explanations and practice problems for students
+  version: "1.0.0"
+
+domain: education
+
+capabilities:
+  - name: explain_concepts
+    description: Explains academic topics at target student grade level
+  - name: generate_practice_questions
+    description: Formulates quiz questions with step-by-step solutions
+
+resources:
+  - name: textbook_repository
+    type: pdf_store
+    access: read
+
+inputs:
+  - name: student_question
+    type: string
+    required: true
+  - name: grade_level
+    type: string
+    required: false
+
+outputs:
+  - name: explanation
+    type: markdown_text
+  - name: follow_up_quiz
+    type: json
+
+permissions:
+  - resource: textbook_repository
+    actions:
+      - read
+      - search
+
+constraints:
+  - type: rate_limit
+    maximum: 60
+    unit: requests_per_minute
+
+side_effects: []
+approvals: []
+dependencies: []
+
+state:
+  persistence: session
+
+recovery:
+  strategy: stop
+
+replay:
+  mode: idempotent
+
+observability:
+  level: basic
+
+risk:
+  level: low
+  category: hallucination_risk

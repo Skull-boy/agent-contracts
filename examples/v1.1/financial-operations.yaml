@@ -1,0 +1,83 @@
+version: 1.1
+
+system:
+  name: Corporate Financial Operations Assistant
+  purpose: Analyzes corporate accounts and initiates approved vendor wire transfers
+  version: "2.0.0"
+
+domain: finance
+
+capabilities:
+  - name: analyze_accounts
+    description: Inspects account balances and transaction histories
+  - name: initiate_transactions
+    description: Submits wire transfer requests to corporate banking API
+
+resources:
+  - name: corporate_account
+    type: bank_account
+    access: write
+
+inputs:
+  - name: invoice_id
+    type: string
+    required: true
+  - name: payment_amount
+    type: number
+    required: true
+
+outputs:
+  - name: transaction_receipt
+    type: json
+
+permissions:
+  - resource: corporate_account
+    actions:
+      - read
+      - initiate_transaction
+
+constraints:
+  - type: transaction_limit
+    maximum: 5000
+    currency: USD
+    description: Maximum single transaction amount
+
+side_effects:
+  - type: financial_transaction
+    resource: corporate_account
+    description: Deducts funds from corporate checking account
+
+approvals:
+  - action: initiate_transaction
+    required: true
+    approver: finance_controller
+    condition: amount > 1000
+
+dependencies:
+  - name: corporate_banking_api
+    type: api
+    required: true
+
+state:
+  persistence: persistent
+  storage: postgres_audit_db
+
+recovery:
+  strategy: human_escalation
+  details: Reverts pending transaction draft and alerts finance controller
+
+replay:
+  mode: prohibited
+  details: Financial transactions must never be automatically replayed
+
+observability:
+  level: audit
+  sinks: ["sox_compliance_log", "datadog"]
+
+security:
+  transport_security: "tls_1_3"
+  auth_required: true
+
+risk:
+  level: critical
+  category: financial_loss

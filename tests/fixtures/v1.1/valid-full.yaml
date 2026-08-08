@@ -1,0 +1,76 @@
+version: 1.1
+agent:
+  name: Clinical Assistant
+  purpose: Summarize medical records
+  version: "1.0.0"
+
+capabilities:
+  - name: summarize_records
+    description: Summarize clinical history
+  - explain_terms
+
+resources:
+  - name: patient_ehr
+    type: database
+    access: read
+
+inputs:
+  - name: patient_id
+    type: string
+    required: true
+
+outputs:
+  - name: summary_doc
+    type: document
+
+permissions:
+  - resource: patient_ehr
+    actions:
+      - read
+
+constraints:
+  - type: rate_limit
+    maximum: 60
+    unit: requests_per_minute
+
+side_effects:
+  - type: log_audit
+    resource: patient_ehr
+
+approvals:
+  - action: export_summary
+    required: true
+    approver: physician
+
+dependencies:
+  - name: ehr_api
+    type: api
+    required: true
+
+state:
+  persistence: session
+
+recovery:
+  strategy: human_escalation
+
+replay:
+  mode: idempotent
+
+observability:
+  level: audit
+  sinks: ["hipaa_log"]
+
+artifacts:
+  - name: summarizer_model
+    type: model
+    integrity_required: true
+
+security:
+  sandbox_required: true
+
+risk:
+  level: high
+
+implementation:
+  framework: langgraph
+  language: python

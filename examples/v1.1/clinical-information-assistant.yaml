@@ -1,0 +1,79 @@
+version: 1.1
+
+system:
+  name: Clinical Decision Information Assistant
+  purpose: Summarizes patient electronic health records for treating physicians
+  version: "1.0.0"
+
+domain: healthcare
+
+capabilities:
+  - name: summarize_clinical_history
+    description: Extracts and formats structured patient timelines from EHR data
+
+resources:
+  - name: ehr_fhir_store
+    type: database
+    access: read
+
+inputs:
+  - name: patient_id
+    type: string
+    required: true
+  - name: requesting_physician_npi
+    type: string
+    required: true
+
+outputs:
+  - name: clinical_summary
+    type: json_fhir_bundle
+
+permissions:
+  - resource: ehr_fhir_store
+    actions:
+      - read
+      - query
+
+constraints:
+  - type: hipaa_scope_limiter
+    allowed: ["assigned_patient_only"]
+
+side_effects: []
+
+approvals:
+  - action: export_summary
+    required: true
+    approver: attending_physician
+
+dependencies:
+  - name: hospital_fhir_server
+    type: api
+    required: true
+
+state:
+  persistence: session
+
+recovery:
+  strategy: human_escalation
+
+replay:
+  mode: idempotent
+
+observability:
+  level: audit
+  sinks: ["hipaa_audit_log"]
+
+artifacts:
+  - name: med_summarizer_v1
+    type: model
+    integrity_required: true
+    provenance_required: true
+
+security:
+  transport_security: "tls_1_3"
+  sandbox_required: true
+  auth_required: true
+
+risk:
+  level: high
+  category: privacy_breach
