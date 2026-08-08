@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agent_contracts import validate_contract
+from scyvera import validate_contract
 
 
 ROOT = Path(__file__).resolve().parent.parent

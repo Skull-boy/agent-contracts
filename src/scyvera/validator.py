@@ -13,7 +13,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 def _resolve_package_schema(relative_path: str) -> Path:
     """Resolve packaged schema path using importlib.resources with fallback."""
     try:
-        traversable = importlib.resources.files("agent_contracts").joinpath(relative_path)
+        traversable = importlib.resources.files("scyvera").joinpath(relative_path)
         p = Path(str(traversable))
         if p.exists():
             return p

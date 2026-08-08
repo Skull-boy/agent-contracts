@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agent_contracts.validator import SCHEMA_V1_PATH, SCHEMA_V1_1_PATH
+from scyvera.validator import SCHEMA_V1_PATH, SCHEMA_V1_1_PATH
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def test_schema_v1_sync():
     root_v1 = ROOT / "schemas" / "v1" / "contract.schema.json"
-    pkg_v1 = ROOT / "src" / "agent_contracts" / "schemas" / "v1" / "contract.schema.json"
+    pkg_v1 = ROOT / "src" / "scyvera" / "schemas" / "v1" / "contract.schema.json"
 
     assert root_v1.exists()
     assert pkg_v1.exists()
@@ -17,7 +17,7 @@ def test_schema_v1_sync():
 
 def test_schema_v1_1_sync():
     root_v1_1 = ROOT / "schemas" / "v1.1" / "contract.schema.json"
-    pkg_v1_1 = ROOT / "src" / "agent_contracts" / "schemas" / "v1.1" / "contract.schema.json"
+    pkg_v1_1 = ROOT / "src" / "scyvera" / "schemas" / "v1.1" / "contract.schema.json"
 
     assert root_v1_1.exists()
     assert pkg_v1_1.exists()

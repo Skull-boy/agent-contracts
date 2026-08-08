@@ -10,7 +10,7 @@ from .validator import validate_contract
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="agent-contract",
+        prog="scyvera",
         description="Validate and manage Agent Contract files.",
     )
 

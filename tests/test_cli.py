@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agent_contracts.cli import main
+from scyvera.cli import main
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -17,7 +17,7 @@ def test_cli_valid_contract_returns_zero(monkeypatch, capsys):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["agent-contract", "validate", str(contract)],
+        ["scyvera", "validate", str(contract)],
     )
 
     exit_code = main()
@@ -32,7 +32,7 @@ def test_cli_invalid_contract_returns_one(monkeypatch, capsys):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["agent-contract", "validate", str(contract)],
+        ["scyvera", "validate", str(contract)],
     )
 
     exit_code = main()
@@ -48,7 +48,7 @@ def test_cli_missing_file_returns_two(monkeypatch, capsys):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["agent-contract", "validate", str(contract)],
+        ["scyvera", "validate", str(contract)],
     )
 
     exit_code = main()
@@ -64,7 +64,7 @@ def test_cli_v1_1_valid_contract_returns_zero(monkeypatch, capsys):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["agent-contract", "validate", str(contract)],
+        ["scyvera", "validate", str(contract)],
     )
 
     exit_code = main()
@@ -80,7 +80,7 @@ def test_cli_explicit_schema_flag(monkeypatch, capsys):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["agent-contract", "validate", str(contract), "--schema", str(schema)],
+        ["scyvera", "validate", str(contract), "--schema", str(schema)],
     )
 
     exit_code = main()
@@ -95,7 +95,7 @@ def test_cli_init_generates_valid_v1_1_contract(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["agent-contract", "init", str(output_file), "--name", "Test Tutor"],
+        ["scyvera", "init", str(output_file), "--name", "Test Tutor"],
     )
 
     exit_code = main()
@@ -108,7 +108,7 @@ def test_cli_init_generates_valid_v1_1_contract(tmp_path, monkeypatch, capsys):
     # Now validate the generated contract file directly using CLI validate
     monkeypatch.setattr(
         "sys.argv",
-        ["agent-contract", "validate", str(output_file)],
+        ["scyvera", "validate", str(output_file)],
     )
     val_exit = main()
     val_out = capsys.readouterr().out

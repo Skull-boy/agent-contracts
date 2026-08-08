@@ -2,7 +2,7 @@ from pathlib import Path
 import tempfile
 import yaml
 
-from agent_contracts import Contract, validate_contract
+from scyvera import Contract, validate_contract
 
 
 def test_builder_minimal_contract():
