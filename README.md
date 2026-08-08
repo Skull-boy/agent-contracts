@@ -15,6 +15,7 @@ MCP and A2A standardize how agents communicate with tools and each other. `agent
 
 </div>
 
+
 ---
 
 ## 🧩 What This Actually Is
@@ -202,6 +203,18 @@ See [`examples/v1.1/`](./examples/v1.1) for runnable, validated v1.1 contracts a
 > [!IMPORTANT]
 > **Contract Declaration ≠ Security Verification ≠ Runtime Enforcement.**
 > An Agent Contract describes declared operational boundaries. It is not a sandbox, anti-malware scanner, or runtime enforcement proxy. Contract declarations provide structured input upon which external policy engines, verification scanners, and runtime isolation systems operate.
+
+---
+
+## 🗺️ Where the Spec Is Headed (v1.1)
+
+Contract v1 was designed and proven against coding/developer agents. That's now understood to be a starting substrate, not the ceiling — v1.1 is a deliberate audit-and-redesign effort to make the spec:
+
+- **Domain-independent** — usable for research, education, finance, business-workflow, and healthcare-workflow agents, not just coding agents
+- **Framework-independent** — already true in principle (n8n + LangGraph prove it), being stress-tested further
+- **Accessible to non-technical authors** — YAML/JSON is a representation format, not meant to be the only way to create a contract
+
+This is genuinely in the design/audit phase — classifying existing Contract v1 fields, testing them against non-coding agent archetypes, and only then extending the schema. Nothing in this section describes a shipped feature. Follow progress in [`implementations/rfcs/`](./implementations/rfcs) and open issues tagged `v1.1`.
 
 ---
 
