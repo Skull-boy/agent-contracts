@@ -1,6 +1,5 @@
 <div align="center">
-
-<img src="assets/logo.png" width="450" alt="agent-contracts"/>
+<img src="https://raw.githubusercontent.com/Skull-boy/agent-contracts/main/assets/scyvera.png" alt="Scyvera" width="320">
 
 # Scyvera
 

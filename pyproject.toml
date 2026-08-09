@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scyvera"
-version = "1.1.0"
+version = "1.1.1"
 description = "Framework-independent contracts and validation tooling for AI agents and automated workflows."
 readme = "README.md"
 requires-python = ">=3.10"
