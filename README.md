@@ -34,6 +34,17 @@ A framework-independent and domain-independent specification layer describing sy
 
 ---
 
+## 🛡️ Validation vs. Runtime Enforcement
+
+Scyvera provides two complementary governance layers:
+
+| Layer | Component | Responsibility | Trust Level |
+|---|---|---|---|
+| **Tier 1 & 2: Static Verification** | `validate_contract()`, `lint_contract()` | Validates that a `contract.yaml` is structurally and semantically well-formed against specification schemas. | Declaration conformance |
+| **Runtime Enforcement** | `ContractEnforcer` | Gates real-world Python calls against declared permissions and side effects using **Default-Deny** rules. Halts execution on approval points. | Execution boundary enforcement |
+
+---
+
 ## ⚡ Quickstart
 
 ### 1. Installation
@@ -76,7 +87,55 @@ scyvera validate contract.yaml --schema path/to/custom.schema.json
 
 ---
 
-## 🐍 Python API & Programmatic Contract Builder
+## 🔒 Runtime Enforcer Quickstart
+
+The `ContractEnforcer` protects your agent's execution boundaries in Python by enforcing **Default-Deny**: any undeclared permission or side effect raises `ContractViolationError`, and any action listed in `approval_points` raises `ApprovalPendingError`.
+
+```python
+from pathlib import Path
+from scyvera import ContractEnforcer, ContractViolationError, ApprovalPendingError
+
+# 1. Load, validate, and freeze the contract
+enforcer = ContractEnforcer.load("implementations/n8n/duplicate-issue-detector/contract.yaml")
+
+# 2. Gate sensitive tools and operations
+@enforcer.gate(action_name="github: issues:write", action_type="permission")
+def post_github_comment(issue_id: int, comment: str):
+    print(f"Posting comment to issue #{issue_id}: {comment}")
+    return True
+
+@enforcer.gate(action_name="aws_s3:read", action_type="permission")
+def read_s3_bucket():
+    return "s3_data"
+
+# 3. Allowed calls execute cleanly and log to audit trail
+post_github_comment(101, "Potential duplicate detected.")
+
+# 4. Undeclared actions are denied immediately (Default-Deny)
+try:
+    read_s3_bucket()
+except ContractViolationError as e:
+    print(f"Blocked by Scyvera: {e}")
+
+# 5. Inspect the immutable audit log
+for entry in enforcer.get_audit_log():
+    print(f"[{entry.timestamp}] {entry.decision} - {entry.action_name} ({entry.reason})")
+
+# 6. Verify file integrity on disk (Threat T5 defense)
+enforcer.verify_integrity()  # Raises ContractTamperError if contract.yaml was modified
+```
+
+---
+
+## ⚠️ What Scyvera Does Not Guarantee
+
+Scyvera provides structural verification and runtime gating, but security is an end-to-end discipline. Integrators must understand the following technical boundaries:
+
+1. **Gate Bypass (Threat T4)**: Scyvera enforces boundaries at the `@enforcer.gate(...)` decorator. In Python, the runtime cannot physically prevent code from directly calling an un-decorated internal function. Integrators should use `ContractEnforcer.assert_gated(fn)` within their integration test suites to verify that all external-facing tool call sites are wrapped.
+2. **Internal Third-Party Behavior / String Spoofing (Threat T6)**: Scyvera verifies that a declared intent (e.g. `github:issues:write`) matches an allowed permission in the contract. It does not perform dynamic bytecode analysis or network-packet inspection to guarantee that a decorated library function does not execute unauthorized background calls. The integrity of third-party dependencies remains the responsibility of dependency scanning and peer review.
+3. **Pre-Load File Tampering (Threat T5)**: The SHA-256 integrity check in `verify_integrity()` protects against file replacement AFTER load. It does not protect against a tampered `contract.yaml` being present BEFORE `ContractEnforcer.load()` is called. The deployment environment is responsible for protecting the contract file prior to load.
+
+---
 
 You can programmatically construct, inspect, serialize, and validate Agent Contracts in Python without manually writing YAML:
 
