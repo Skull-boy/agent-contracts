@@ -7,58 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0] - 2026-08-30
+## [1.0.0] — 2026-08-30
 
-### Added [STABLE]
-- **Runtime Enforcer Engine (`ContractEnforcer`)** [STABLE]:
-  - `ContractEnforcer.load(path: str | Path) -> ContractEnforcer`: Loads, validates, and deep-freezes contracts with SHA-256 integrity hash verification.
-  - `ContractEnforcer.gate(action_name: str, action_type: Literal["side_effect", "permission"])`: Decorator factory providing default-deny gating for synchronous and asynchronous functions.
-  - `ContractEnforcer.get_audit_log() -> list[AuditEntry]`: Returns a tamper-proof deep copy of all session authorization decisions.
-  - `ContractEnforcer.verify_integrity() -> bool`: Verifies that the contract file on disk has not been altered since load time.
-  - `ContractEnforcer.approve(action_name: str, token: str = "")`: Synchronous approval stub for manual confirmation flows.
-  - `ContractEnforcer.assert_gated(fn: Any) -> bool`: Utility to assert that a sensitive integration function is wrapped with an enforcer gate (Threat T4 mitigation).
-- **Core Exceptions Hierarchy** [STABLE]:
-  - `ContractViolationError(action_name, contract_path, suggestion)`: Raised on undeclared actions (Default-Deny).
-  - `ContractTamperError(message)`: Raised on attempted mutations of frozen contract objects or disk file mismatch.
-  - `ApprovalPendingError(action_name, approval_config)`: Raised when an action hits an approval requirement.
-  - `ContractVersionError(message)`: Raised on version constraint or invariant mismatches.
-  - `ContractValidationError(message, errors)`: Raised on schema or security constraint failures.
-- **Audit Logging** [STABLE]:
-  - `AuditEntry` frozen dataclass with fields: `timestamp`, `action_name`, `action_type`, `decision`, `reason`, `contract_field_reference`.
+### Added — Runtime Enforcer (Step 3)
+- `ContractEnforcer` class: load, freeze, gate, audit, integrity verification
+- `ContractEnforcer.gate(action_name, action_type)` decorator — default-deny enforcement of declared side_effects and permissions
+- `ContractEnforcer.verify_integrity()` — SHA-256 check detects contract file replacement after load (T5)
+- `ContractEnforcer.get_audit_log()` — returns deep-copy frozen AuditEntry list (T9)
+- `ContractVersionError` — raised on schema version mismatch (T10)
+- `ContractTamperError` — raised on frozen object mutation or disk file replacement (T5, T9)
+- `ApprovalPendingError` — raised when action hits an approval_point; approval channel routing is caller's responsibility (stub, documented)
+- `assert_gated(fn)` utility for integration test suites (T4)
+- T7: wildcard permissions rejected at schema level AND Python load time
+- T8: irreversible side effect + empty approval_points emits logging.WARNING via scyvera.enforcer logger
+- 59-test suite covering all threat models T1–T10
 
-### Security
-- Threat Mitigations implemented:
-  - **T4**: Gate bypass detection via `assert_gated(fn)`.
-  - **T5**: Runtime contract file replacement defense via SHA-256 hash tracking and immutable object freezing.
-  - **T7**: Load-time and schema-level prohibition of wildcard permissions (`*`, `all`, `any`).
-  - **T8**: Load-time warning for irreversible side effects without approval boundaries.
-  - **T9**: Tamper-proof audit logging with immutable entries and deep-copied log outputs.
-  - **T10**: Strict version cross-validation.
+### Stable Public API (semver-protected from v1.0.0)
+- ContractEnforcer.load / gate / get_audit_log / verify_integrity / assert_gated
+- ContractViolationError, ContractTamperError, ApprovalPendingError, ContractVersionError, AuditEntry
+
+### What scyvera does NOT guarantee (documented in README)
+- Cannot prevent gate bypass if integrator calls ungated function directly (T4 — known limitation)
+- Cannot verify that gated function's internal behavior matches its declared permission string (T6 — known limitation)
+- Integrity check protects AFTER load only, not before (T5)
 
 ---
 
-## [0.3.0] - 2026-08-30
+## [0.3.0] — 2026-08-30
 
-### Added
-- **Lifecycle Governance Specification (v1.1)**:
-  - Added `lifecycle` object to `WORKFLOW-CONTRACT-SPEC.md` and `schemas/v1.1/contract.schema.json`.
-  - Closed lifecycle mode taxonomy: `request-response`, `scheduled`, `persistent`.
-  - Mandatory `idle_behavior` description for persistent agents via JSON Schema `if/then` rules.
-  - Optional `irreversible: boolean` flag on side effects.
-  - `ContractVersion` enum (`V1 = "1"`, `V1_1 = "1.1"`) and explicit version detection in `detect_contract_version()`.
-  - `apply_lifecycle_defaults()` applying `{mode: request-response, initiation: human-only, resumability: stateless}` to v1 contracts with a transparency warning.
-- **Tier 2 Semantic Linter Additions**:
-  - `[AC301]` Vague idle behavior warning for persistent agents (Threat T2).
-  - `[AC302]` Irreversible side effect without approval boundary warning (Threat T8).
-- **RFC 0002**: Specification RFC for the Lifecycle field and migration path (`rfcs/0002-lifecycle-field.md`).
+### Added — Contract v1.1 Spec + lifecycle field (Step 2)
+- `lifecycle` field added to contract spec (optional, backward compatible)
+- v1.1 JSON schema at schemas/v1.1/contract.schema.json
+- Default applied by loader when lifecycle absent: {mode: request-response, initiation: human-only, resumability: stateless}
+- loader emits logging.WARNING when defaults are applied
+- `irreversible` boolean field on side_effects entries
+- RFC 0002 (lifecycle field) added to rfcs/
+- Three worked examples in spec: request-response, scheduled, persistent
+- T1/T2/T3 threat mitigations documented
+
+### Migration
+- All v1 contracts (no lifecycle field) remain valid
+- No breaking changes to validate_contract() or CLI
 
 ---
 
-## [0.2.0] - 2026-08-30
+## [0.2.0] — 2026-08-30
 
-### Fixed
-- **Canonical Filename Enforcement**:
-  - Enforced `contract.yaml` as the canonical filename across all tooling.
-  - Introduced `ContractFileNameError` raised when `.yml` is encountered with an actionable message.
-- **Repository Integrity Audit**:
-  - Audited all directory paths and verified implementation folders.
+### Fixed — Repository Cleanup (Step 1)
+- Canonical filename is now contract.yaml everywhere; contract.yml references removed
+- Loader raises actionable error on contract.yml: "Found contract.yml — rename to contract.yaml"
+- Backslash folder issue resolved (if it existed)
+
+### Migration
+- Rename any contract.yml files to contract.yaml
