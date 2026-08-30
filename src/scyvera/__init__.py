@@ -21,7 +21,7 @@ from .validator import (
     validate_contract,
 )
 
-__version__ = "1.0.0"
+__version__ = "1.1.2"
 
 __all__ = [
     "__version__",

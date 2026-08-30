@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scyvera"
-version = "1.0.0"
+version = "1.1.2"
 description = "Framework-independent contracts and validation tooling for AI agents and automated workflows."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
@@ -54,6 +55,7 @@ dev = [
 scyvera = "scyvera.cli:main"
 
 [project.urls]
+Homepage = "https://github.com/Skull-boy/agent-contracts"
 Repository = "https://github.com/Skull-boy/agent-contracts"
 Issues = "https://github.com/Skull-boy/agent-contracts/issues"
 

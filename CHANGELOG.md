@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.2] — 2026-08-30
+
+### Changed
+- Version bump with packaging corrections
+- pip install scyvera resolves to this release as latest stable
+- T8 warning now correctly emitted via logging module 
+  (scyvera.enforcer logger) instead of warnings.warn
+- T7 wildcard rejection enforced at JSON schema level in addition 
+  to Python load-time check — validate_contract() now catches 
+  wildcards independently of ContractEnforcer
+
+---
+
 ## [1.0.0] — 2026-08-30
 
 ### Added — Runtime Enforcer (Step 3)
