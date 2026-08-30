@@ -14,12 +14,63 @@
     { "required": ["workflow"] }
   ],
 
+  "if": {
+    "properties": {
+      "lifecycle": {
+        "properties": {
+          "mode": { "const": "persistent" }
+        }
+      }
+    },
+    "required": ["lifecycle"]
+  },
+  "then": {
+    "properties": {
+      "lifecycle": {
+        "required": ["mode", "idle_behavior"]
+      }
+    }
+  },
+
   "properties": {
     "version": {
       "oneOf": [
         { "type": "number", "const": 1.1 },
         { "type": "string", "const": "1.1" }
       ]
+    },
+
+    "contract_version": {
+      "type": "string",
+      "description": "Explicit version discriminator for schema selection (e.g. '1.1')"
+    },
+
+    "lifecycle": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["request-response", "persistent", "scheduled"],
+          "description": "Execution model of the system. Closed enum — new modes require a spec RFC."
+        },
+        "idle_behavior": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "What the system may do between triggers. Required when mode is persistent."
+        },
+        "initiation": {
+          "type": "string",
+          "enum": ["human-only", "schedule", "self", "agent"],
+          "description": "Who or what can trigger this system to act."
+        },
+        "resumability": {
+          "type": "string",
+          "enum": ["stateless", "context-snapshot", "replay-from-log"],
+          "description": "What 'restart' means for this system."
+        }
+      },
+      "additionalProperties": false
     },
 
     "system": {
@@ -135,18 +186,18 @@
     "permissions": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["resource", "actions"],
-        "properties": {
-          "resource": { "type": "string" },
-          "actions": {
-            "type": "array",
-            "items": { "type": "string" },
-            "minItems": 1
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_\\-]+:[a-zA-Z0-9_\\-:]+$",
+            "not": {
+              "enum": ["*", "all", "any"]
+            }
           },
-          "scope": { "type": "string" }
-        },
-        "additionalProperties": true
+          {
+            "type": "object"
+          }
+        ]
       }
     },
 
@@ -182,7 +233,12 @@
             "properties": {
               "type": { "type": "string" },
               "resource": { "type": "string" },
-              "description": { "type": "string" }
+              "description": { "type": "string" },
+              "irreversible": {
+                "type": "boolean",
+                "default": false,
+                "description": "Whether this side effect is irreversible. When true and approval_points is empty, a linter warning is emitted."
+              }
             },
             "additionalProperties": true
           }

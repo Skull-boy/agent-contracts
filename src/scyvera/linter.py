@@ -133,6 +133,51 @@ def lint_contract(contract_path: str | Path) -> LintResult:
             )
         )
 
+    # Rule AC301: Vague idle_behavior in persistent lifecycle
+    # T2 mitigation — idle_behavior must be specific, not an unlimited scope claim.
+    # Words that indicate claim inflation are flagged.
+    lifecycle = contract.get("lifecycle", {})
+    if isinstance(lifecycle, dict):
+        idle_behavior = lifecycle.get("idle_behavior", "")
+        if isinstance(idle_behavior, str) and idle_behavior:
+            _VAGUE_TERMS = ("anything", "whatever", "all", "unlimited", "any task")
+            lowered_idle = idle_behavior.lower()
+            for term in _VAGUE_TERMS:
+                if term in lowered_idle:
+                    warnings.append(
+                        LintWarning(
+                            rule_id="AC301",
+                            title="Vague Idle Behavior",
+                            message=(
+                                f"idle_behavior contains vague term '{term}'. "
+                                f"This field must be specific and bounded "
+                                f"(e.g. 'monitors GitHub notifications for repo mentions')."
+                            ),
+                            severity="warning",
+                        )
+                    )
+                    break  # One warning per idle_behavior, not one per term
+
+    # Rule AC302: Irreversible side effect without approval boundary
+    # T8 mitigation — warn when a side effect declares irreversible: true
+    # but the contract has no approval requirements.
+    approvals = contract.get("approvals", [])
+    for se in side_effects:
+        if isinstance(se, dict) and se.get("irreversible") is True:
+            if not approvals:
+                warnings.append(
+                    LintWarning(
+                        rule_id="AC302",
+                        title="Irreversible Side Effect Without Approval",
+                        message=(
+                            f"Side effect '{se.get('type', 'unknown')}' is marked irreversible "
+                            f"but no approval boundaries are specified in 'approvals'. "
+                            f"Consider adding an approval requirement."
+                        ),
+                        severity="warning",
+                    )
+                )
+
     return LintResult(
         valid_structure=True,
         warnings=tuple(warnings),

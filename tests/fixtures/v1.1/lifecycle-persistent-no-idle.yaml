@@ -1,0 +1,32 @@
+version: 1.1
+system:
+  name: persistent-no-idle
+  purpose: Testing contract that claims persistent mode but omits idle_behavior
+  version: "1.0.0"
+lifecycle:
+  mode: persistent
+  initiation: self
+  resumability: context-snapshot
+inputs:
+  - name: test_input
+    type: string
+    required: true
+outputs:
+  - name: test_output
+    type: document
+permissions:
+  - resource: test_resource
+    actions: [read]
+side_effects: []
+approvals: []
+dependencies: []
+state:
+  persistence: session
+recovery:
+  strategy: retry
+replay:
+  mode: idempotent
+observability:
+  level: basic
+risk:
+  level: low
