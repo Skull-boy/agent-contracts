@@ -98,3 +98,22 @@ def test_v1_1_workflow_identity_compatibility(tmp_path):
     result = validate_contract(f)
     assert result.valid is True
     assert result.errors == ()
+
+
+def test_v1_1_wildcard_permission_rejected_at_schema_level(tmp_path):
+    """Calling validate_contract() directly with permissions: ['*'] fails at the JSON schema level."""
+    contract_file = tmp_path / "contract.yaml"
+    contract_file.write_text(
+        """version: 1.1
+system:
+  name: wildcard-agent
+  purpose: Testing schema level wildcard rejection
+permissions:
+  - "*"
+""",
+        encoding="utf-8",
+    )
+    result = validate_contract(contract_file)
+    assert result.valid is False
+    assert len(result.errors) > 0
+    assert any("permissions.0" in err.path or "permissions" in err.path for err in result.errors)
