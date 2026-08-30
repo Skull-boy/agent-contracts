@@ -1,0 +1,44 @@
+version: 1.1
+system:
+  name: duplicate-issue-detector
+  purpose: Detect semantically duplicate GitHub issues
+  version: "1.0.0"
+lifecycle:
+  mode: request-response
+  initiation: human-only
+  resumability: stateless
+inputs:
+  - name: github_issue
+    type: webhook_payload
+    required: true
+outputs:
+  - name: duplicate_comment
+    type: github_comment
+permissions:
+  - resource: github_issues
+    actions: [read, write]
+  - resource: openai_embeddings
+    actions: [read]
+side_effects:
+  - type: comment
+    resource: github_issues
+    description: Posts a comment on the triggering issue if a duplicate is found
+approvals: []
+dependencies:
+  - name: GitHub API
+    type: api
+    required: true
+  - name: OpenAI API
+    type: api
+    required: true
+state:
+  persistence: persistent
+  storage: qdrant_collection
+recovery:
+  strategy: retry
+replay:
+  mode: idempotent
+observability:
+  level: basic
+risk:
+  level: low

@@ -1,0 +1,41 @@
+version: 1.1
+system:
+  name: competitor-feature-watcher
+  purpose: Periodically checks competitor product pages for new feature announcements
+  version: "1.0.0"
+lifecycle:
+  mode: scheduled
+  initiation: schedule
+  resumability: stateless
+inputs:
+  - name: competitor_urls
+    type: configuration
+    required: true
+outputs:
+  - name: feature_diff_report
+    type: document
+permissions:
+  - resource: competitor_websites
+    actions: [read]
+  - resource: internal_dashboard
+    actions: [write]
+side_effects:
+  - type: notification
+    resource: internal_dashboard
+    description: Updates the internal dashboard with newly detected competitor features
+approvals: []
+dependencies:
+  - name: HTTP client
+    type: library
+    required: true
+state:
+  persistence: persistent
+  storage: database
+recovery:
+  strategy: retry
+replay:
+  mode: idempotent
+observability:
+  level: basic
+risk:
+  level: low

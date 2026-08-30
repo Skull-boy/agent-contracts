@@ -32,6 +32,7 @@ Until that linter exists, the YAML file is still worth writing — it's the diff
 
 | Field | Type | Description |
 |---|---|---|
+| `lifecycle` | object | Execution model and trigger semantics. Required (default: `{mode: request-response}` for backward compatibility). |
 | `inputs` | list | What data enters the workflow, and from where (trigger payload, uploaded file, API response) |
 | `outputs` | list | What the workflow produces or returns, if anything |
 | `permissions` | list | Every external system accessed, and the exact scope (e.g. `github: issues:write`, never a bare `github: full-access`) |
@@ -43,54 +44,226 @@ Until that linter exists, the YAML file is still worth writing — it's the diff
 | `state` | string | What persists between runs, and where (a Google Sheet, a vector store, nothing) |
 | `observability` | list | What the workflow surfaces about its own execution — logs, digest messages, dashboards |
 
+### Lifecycle Field Specification
+
+Field: `lifecycle`
+Type: `object`
+Required: `yes` (in v1.1; default: `{mode: request-response, initiation: human-only, resumability: stateless}` for backward compatibility — existing contracts without this field are treated as request-response)
+
+Sub-fields:
+- `mode`: `request-response` | `persistent` | `scheduled`
+  - Defines the execution model of the agent. Closed enum — new modes require a spec RFC.
+- `idle_behavior`: `null` (for request-response/scheduled) | string description of what the agent may do between triggers (required when `mode: persistent`, max 500 chars). Must be bounded and specific.
+- `initiation`: `human-only` | `schedule` | `self` | `agent`
+  - Who/what can trigger this agent to act.
+- `resumability`: `stateless` | `context-snapshot` | `replay-from-log`
+  - What "restart" means for this agent.
+
 ---
 
-## Worked Example
+## Worked Examples
 
-Using the Semantic Duplicate Issue Detector as the reference implementation:
+### Example 1: Request-Response Agent (Duplicate Issue Detector)
 
 ```yaml
 # contract.yaml
-version: 1
-workflow: duplicate-issue-detector
+version: 1.1
+contract_version: "1.1"
+system:
+  name: duplicate-issue-detector
+  purpose: Detect semantically duplicate GitHub issues
+  version: "1.0.0"
+
+lifecycle:
+  mode: request-response
+  initiation: human-only
+  resumability: stateless
 
 inputs:
-  - GitHub issue title + body (from webhook trigger)
+  - name: github_issue
+    type: webhook_payload
+    required: true
 
 outputs:
-  - One comment on the triggering issue, only if a duplicate is found
+  - name: duplicate_comment
+    type: github_comment
 
 permissions:
-  - github: issues:write   # comment only — never close, label, or edit
-  - openai: embeddings:read
-  - qdrant: read+write on one collection
+  - resource: github_issues
+    actions: [read, write]
+  - resource: openai_embeddings
+    actions: [read]
+  - resource: qdrant_collection
+    actions: [read, write]
 
 side_effects:
-  - Posts one comment on the triggering issue, if similarity >= threshold
-  - Writes one vector to the Qdrant collection
+  - type: comment
+    resource: github_issues
+    description: Posts one comment on the triggering issue, if similarity >= threshold
+  - type: vector_upsert
+    resource: qdrant_collection
+    description: Writes one vector to the Qdrant collection
 
-approval_points: []   # intentionally empty — this workflow only ever comments,
-                       # never closes or merges, so no approval gate is required
+approval_points: []   # intentionally empty — comments only, no approval gate required
 
-recovery_strategy: >
-  If Qdrant is unreachable, the run fails loudly and visibly in n8n's
-  execution log. It does not silently skip the duplicate check.
+recovery:
+  strategy: retry
+  details: If Qdrant is unreachable, fails loudly and visibly in execution log.
 
-replay_semantics: >
-  Idempotent per issue — re-running on the same issue re-embeds and
-  re-checks, but the Qdrant upsert uses the issue number as point ID,
-  so it overwrites rather than duplicates.
+replay:
+  mode: idempotent
+  details: Re-running on same issue re-embeds and overwrites vector by issue number.
 
 dependencies:
-  - GitHub API
-  - OpenAI Embeddings API
-  - Qdrant instance
+  - name: GitHub API
+    type: api
+    required: true
+  - name: OpenAI Embeddings API
+    type: api
+    required: true
+  - name: Qdrant instance
+    type: service
+    required: true
 
-state: >
-  Persisted in a Qdrant collection — one vector per previously-seen issue.
+state:
+  persistence: persistent
+  storage: qdrant_collection
 
 observability:
-  - GitHub comment itself is the only execution signal (no separate log/digest)
+  level: basic
+  sinks: [github_comment]
+
+risk:
+  level: low
+```
+
+### Example 2: Scheduled Agent (Competitor Feature Watcher)
+
+```yaml
+# contract.yaml
+version: 1.1
+contract_version: "1.1"
+system:
+  name: competitor-feature-watcher
+  purpose: Periodically checks competitor product pages for feature changes
+  version: "1.0.0"
+
+lifecycle:
+  mode: scheduled
+  initiation: schedule
+  resumability: stateless
+
+inputs:
+  - name: competitor_urls
+    type: configuration
+    required: true
+
+outputs:
+  - name: feature_diff_report
+    type: document
+
+permissions:
+  - resource: competitor_websites
+    actions: [read]
+  - resource: internal_dashboard
+    actions: [write]
+
+side_effects:
+  - type: notification
+    resource: internal_dashboard
+    description: Updates internal dashboard with newly detected competitor features
+
+approval_points: []
+
+recovery:
+  strategy: retry
+
+replay:
+  mode: idempotent
+
+dependencies:
+  - name: HTTP client
+    type: library
+    required: true
+
+state:
+  persistence: persistent
+  storage: database
+
+observability:
+  level: basic
+
+risk:
+  level: low
+```
+
+### Example 3: Persistent Autonomous Agent (Headlong-style)
+
+```yaml
+# contract.yaml
+version: 1.1
+contract_version: "1.1"
+system:
+  name: headlong-persistent-agent
+  purpose: Autonomous agent that continuously monitors and responds to environment changes
+  version: "1.0.0"
+
+lifecycle:
+  mode: persistent
+  idle_behavior: Monitors GitHub notifications for mentions of the repository and queues responses for review
+  initiation: self
+  resumability: context-snapshot
+
+inputs:
+  - name: environment_events
+    type: stream
+    required: true
+
+outputs:
+  - name: research_report
+    type: document
+
+permissions:
+  - resource: github_api
+    actions: [read, write]
+  - resource: web_search
+    actions: [read]
+
+side_effects:
+  - type: comment
+    resource: github_api
+    description: Posts research findings as GitHub issue comments
+    irreversible: false
+
+approvals:
+  - action: publish_report
+    required: true
+    approver: human
+    condition: Before any external publication
+
+recovery:
+  strategy: human_escalation
+
+replay:
+  mode: non_idempotent
+
+dependencies:
+  - name: GitHub API
+    type: api
+    required: true
+  - name: Search Engine API
+    type: api
+    required: true
+
+state:
+  persistence: persistent
+  storage: local_context_snapshot
+
+observability:
+  level: audit
+
+risk:
+  level: medium
 ```
 
 ---

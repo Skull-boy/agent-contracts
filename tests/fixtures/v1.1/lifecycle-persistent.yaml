@@ -1,0 +1,49 @@
+version: 1.1
+system:
+  name: headlong-persistent-agent
+  purpose: Autonomous research agent that continuously monitors and responds to environment changes
+  version: "1.0.0"
+lifecycle:
+  mode: persistent
+  idle_behavior: Monitors GitHub notifications for mentions of the repository and queues responses for review
+  initiation: self
+  resumability: context-snapshot
+inputs:
+  - name: environment_events
+    type: stream
+    required: true
+outputs:
+  - name: research_report
+    type: document
+permissions:
+  - resource: github_api
+    actions: [read, write]
+  - resource: web_search
+    actions: [read]
+side_effects:
+  - type: comment
+    resource: github_api
+    description: Posts research findings as GitHub issue comments
+approvals:
+  - action: publish_report
+    required: true
+    approver: human
+    condition: Before any external publication
+dependencies:
+  - name: GitHub API
+    type: api
+    required: true
+  - name: Search Engine API
+    type: api
+    required: true
+state:
+  persistence: persistent
+  storage: local_context_snapshot
+recovery:
+  strategy: human_escalation
+replay:
+  mode: non_idempotent
+observability:
+  level: audit
+risk:
+  level: medium
