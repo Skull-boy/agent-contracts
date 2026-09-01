@@ -73,7 +73,23 @@
     },
     {
       "parameters": {
-        "jsCode": "const vector = $input.first().json.data[0].embedding;\nconst prev = $('Prepare Issue Text').first().json;\nreturn [{ json: { ...prev, vector } }];"
+        "method": "POST",
+        "url": "=REPLACE_OLLAMA_BASE_URL/api/embed",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"nomic-embed-text\", input: $json.combinedText }) }}",
+        "options": {}
+      },
+      "id": "embed-ollama-live",
+      "name": "Embed New Issue (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1040, -80],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst vector = response.data?.[0]?.embedding || response.embeddings?.[0];\nif (!Array.isArray(vector)) throw new Error('Embedding response did not contain a vector');\nconst prev = $('Prepare Issue Text').first().json;\nreturn [{ json: { ...prev, vector } }];"
       },
       "id": "extract-vector-live",
       "name": "Extract Vector",
@@ -237,7 +253,23 @@
     },
     {
       "parameters": {
-        "jsCode": "const vector = $input.first().json.data[0].embedding;\nconst prev = $('Prepare Issue Text (Backfill)').first().json;\nreturn [{ json: { ...prev, vector } }];"
+        "method": "POST",
+        "url": "=REPLACE_OLLAMA_BASE_URL/api/embed",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"nomic-embed-text\", input: $json.combinedText }) }}",
+        "options": {}
+      },
+      "id": "embed-ollama-backfill",
+      "name": "Embed Issue (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-820, 520],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst vector = response.data?.[0]?.embedding || response.embeddings?.[0];\nif (!Array.isArray(vector)) throw new Error('Embedding response did not contain a vector');\nconst prev = $('Prepare Issue Text (Backfill)').first().json;\nreturn [{ json: { ...prev, vector } }];"
       },
       "id": "extract-vector-backfill",
       "name": "Extract Vector (Backfill)",
@@ -281,9 +313,15 @@
       "main": [[{ "node": "Prepare Issue Text", "type": "main", "index": 0 }]]
     },
     "Prepare Issue Text": {
-      "main": [[{ "node": "Embed New Issue (OpenAI)", "type": "main", "index": 0 }]]
+      "main": [[
+        { "node": "Embed New Issue (OpenAI)", "type": "main", "index": 0 },
+        { "node": "Embed New Issue (Ollama)", "type": "main", "index": 0 }
+      ]]
     },
     "Embed New Issue (OpenAI)": {
+      "main": [[{ "node": "Extract Vector", "type": "main", "index": 0 }]]
+    },
+    "Embed New Issue (Ollama)": {
       "main": [[{ "node": "Extract Vector", "type": "main", "index": 0 }]]
     },
     "Extract Vector": {
@@ -317,9 +355,15 @@
       ]
     },
     "Prepare Issue Text (Backfill)": {
-      "main": [[{ "node": "Embed Issue (OpenAI)", "type": "main", "index": 0 }]]
+      "main": [[
+        { "node": "Embed Issue (OpenAI)", "type": "main", "index": 0 },
+        { "node": "Embed Issue (Ollama)", "type": "main", "index": 0 }
+      ]]
     },
     "Embed Issue (OpenAI)": {
+      "main": [[{ "node": "Extract Vector (Backfill)", "type": "main", "index": 0 }]]
+    },
+    "Embed Issue (Ollama)": {
       "main": [[{ "node": "Extract Vector (Backfill)", "type": "main", "index": 0 }]]
     },
     "Extract Vector (Backfill)": {
