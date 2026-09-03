@@ -9,6 +9,11 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   build-and-test:
     name: Build Wheel & Test Package
@@ -43,3 +48,87 @@ jobs:
           scyvera init test_contract.yaml --name "CI System" --domain "software"
           scyvera validate test_contract.yaml
           scyvera lint test_contract.yaml
+
+  validate-pr-contracts:
+    name: Governed Contract Validator Agent
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install PyYAML jsonschema .
+
+      - name: Identify changed YAML files
+        id: changed-yaml
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(yaml|yml)$' || true)
+          echo "Files to check:"
+          echo "$CHANGED_FILES"
+          # Convert to single-line spaced list
+          FILE_LIST=$(echo "$CHANGED_FILES" | tr '\n' ' ')
+          echo "files=$FILE_LIST" >> "$GITHUB_OUTPUT"
+
+      - name: Run Contract Validation
+        id: validation
+        run: |
+          if [ -n "${{ steps.changed-yaml.outputs.files }}" ]; then
+            python scripts/validate_pr_contracts.py --files ${{ steps.changed-yaml.outputs.files }} --output-md pr_report.md || echo "VALIDATION_FAILED=1" >> "$GITHUB_ENV"
+          else
+            echo "No YAML files modified in this pull request."
+            python scripts/validate_pr_contracts.py --output-md pr_report.md
+          fi
+          cat pr_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post PR Comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('pr_report.md')) {
+              const body = fs.readFileSync('pr_report.md', 'utf8');
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              });
+              const botComment = comments.find(comment =>
+                comment.body.includes('Governed Agent**: [`contract-validator`]')
+              );
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: body
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: body
+                });
+              }
+            }
+
+      - name: Advisory Status Check
+        run: |
+          if [ "$VALIDATION_FAILED" = "1" ]; then
+            echo "::warning title=Contract Validation Advisory::One or more contracts contain specification violations. Review the governance report."
+            # Note: per issue #33 constraints, do NOT hard block merge; warn and record advisory result.
+          fi
