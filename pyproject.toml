@@ -46,9 +46,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+github = [
+    "PyGithub>=2.0.0",
+]
+qdrant = [
+    "qdrant-client>=1.7.0",
+]
+all = [
+    "PyGithub>=2.0.0",
+    "qdrant-client>=1.7.0",
+]
 dev = [
     "pytest>=8.0",
     "build>=1.0",
+    "PyGithub>=2.0.0",
+    "qdrant-client>=1.7.0",
 ]
 
 [project.scripts]

@@ -150,7 +150,14 @@ def test_client_not_accessible_outside_gateway():
 
 def test_gateway_error_wraps_client_exception():
     """Mock PyGithub to raise GithubException — GatewayError is raised, not GithubException."""
-    from github.GithubException import GithubException
+    try:
+        from github.GithubException import GithubException
+    except ImportError:
+        class GithubException(Exception):  # type: ignore[no-redef]
+            def __init__(self, status=500, data="boom", headers=None):
+                super().__init__(data)
+                self.status = status
+                self.data = data
 
     enforcer = ContractEnforcer.load(FIXTURE)
     with patch("scyvera.gateway.Github") as MockGithub:
@@ -203,3 +210,28 @@ def test_audit_log_records_pending():
     pending = [e for e in audit if e.decision == "PENDING"]
     assert len(pending) >= 1
     assert any(e.action_name == "github.merge" for e in pending)
+
+
+# =============================================================================
+# Optional dependency fallback tests
+# =============================================================================
+
+
+def test_github_gateway_missing_dependency_raises_import_error():
+    """When PyGithub is not installed, initializing GitHubGateway raises ImportError."""
+    enforcer = ContractEnforcer.load(FIXTURE)
+    with patch("scyvera.gateway.Github", None):
+        with pytest.raises(ImportError) as exc_info:
+            GitHubGateway(enforcer, token="fake")
+        assert "PyGithub is required" in str(exc_info.value)
+        assert "scyvera[github]" in str(exc_info.value)
+
+
+def test_qdrant_gateway_missing_dependency_raises_import_error():
+    """When qdrant-client is not installed, initializing QdrantGateway raises ImportError."""
+    enforcer = ContractEnforcer.load(FIXTURE)
+    with patch("scyvera.gateway.QdrantClient", None):
+        with pytest.raises(ImportError) as exc_info:
+            QdrantGateway(enforcer, url="http://localhost:6333", api_key="fake")
+        assert "qdrant-client is required" in str(exc_info.value)
+        assert "scyvera[qdrant]" in str(exc_info.value)

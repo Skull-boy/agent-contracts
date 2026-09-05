@@ -33,14 +33,15 @@ A framework-independent and domain-independent specification layer describing sy
 
 ---
 
-## 🛡️ Validation vs. Runtime Enforcement
+## 🛡️ Governance & Enforcement Layers
 
-Scyvera provides two complementary governance layers:
+Scyvera provides three complementary governance layers:
 
 | Layer | Component | Responsibility | Trust Level |
 |---|---|---|---|
 | **Tier 1 & 2: Static Verification** | `validate_contract()`, `lint_contract()` | Validates that a `contract.yaml` is structurally and semantically well-formed against specification schemas. | Declaration conformance |
 | **Runtime Enforcement** | `ContractEnforcer` | Gates real-world Python calls against declared permissions and side effects using **Default-Deny** rules. Halts execution on approval points. | Execution boundary enforcement |
+| **Gateway Enforcement** | `BaseGateway`, `GitHubGateway`, `QdrantGateway` | Single enforcement boundary: holds credentials privately and gates every third-party API call, structurally preventing gate bypass. | Credential & API isolation |
 
 ---
 
@@ -48,12 +49,26 @@ Scyvera provides two complementary governance layers:
 
 ### 1. Installation
 
-Install locally or in your project virtualenv:
+Install the core package from PyPI:
 
 ```bash
 pip install scyvera
-# Or for local development:
-pip install -e .
+```
+
+Or install with optional gateway dependencies:
+
+```bash
+# With PyGithub for GitHubGateway
+pip install "scyvera[github]"
+
+# With qdrant-client for QdrantGateway
+pip install "scyvera[qdrant]"
+
+# With all gateway adapters
+pip install "scyvera[all]"
+
+# For local development:
+pip install -e ".[dev]"
 ```
 
 ### 2. Command-Line Interface (CLI)
@@ -126,11 +141,40 @@ enforcer.verify_integrity()  # Raises ContractTamperError if contract.yaml was m
 
 ---
 
+## 🚪 Gateway Enforcement Architecture (v1.1.3)
+
+In automated agent workflows, security boundaries fail if agent nodes can bypass enforcers by importing and calling API clients directly. Scyvera solves this with **Gateways** (`BaseGateway`, `GitHubGateway`, `QdrantGateway`):
+
+- **Single Enforcement Boundary**: API credentials and raw SDK clients (e.g. `PyGithub`, `qdrant-client`) are encapsulated privately within the gateway. No outside node holds credentials or raw clients.
+- **Structural Gating**: Every public method is decorated per-instance with `@enforcer.gate(...)`. Any undeclared or unapproved action halts execution immediately via `ContractViolationError` or `ApprovalPendingError`.
+- **Exception Normalization**: Client exceptions are caught and wrapped into `GatewayError` to ensure deterministic fault isolation.
+
+```python
+from scyvera import ContractEnforcer, GitHubGateway, GatewayError, ContractViolationError
+
+# 1. Load the contract enforcer
+enforcer = ContractEnforcer.load("contract.yaml")
+
+# 2. Instantiate gateway with injected enforcer and private credentials
+gateway = GitHubGateway(enforcer, token="ghp_...")
+
+# 3. Gated read operation (succeeds if declared in contract)
+issue = gateway.read_issue("owner/repo", issue_number=42)
+
+# 4. Gated mutating operation (enforces Default-Deny & approvals)
+try:
+    gateway.close_issue("owner/repo", issue_number=42)
+except ContractViolationError as e:
+    print(f"Blocked by Scyvera: {e}")
+```
+
+---
+
 ## ⚠️ What Scyvera Does Not Guarantee
 
-Scyvera provides structural verification and runtime gating, but security is an end-to-end discipline. Integrators must understand the following technical boundaries:
+Scyvera provides structural verification, runtime gating, and gateway isolation, but security is an end-to-end discipline. Integrators must understand the following technical boundaries:
 
-1. **Gate Bypass (Threat T4)**: Scyvera enforces boundaries at the `@enforcer.gate(...)` decorator. In Python, the runtime cannot physically prevent code from directly calling an un-decorated internal function. Integrators should use `ContractEnforcer.assert_gated(fn)` within their integration test suites to verify that all external-facing tool call sites are wrapped.
+1. **Gate Bypass (Threat T4)**: Scyvera enforces boundaries at the `@enforcer.gate(...)` decorator. To eliminate the risk of ungated bypass, applications should use Scyvera **Gateways** (`BaseGateway`, `GitHubGateway`, `QdrantGateway`), where credentials and raw SDK clients are kept strictly private inside the gateway. If invoking ungated custom functions directly, integrators should use `ContractEnforcer.assert_gated(fn)` in test suites.
 2. **Internal Third-Party Behavior / String Spoofing (Threat T6)**: Scyvera verifies that a declared intent (e.g. `github:issues:write`) matches an allowed permission in the contract. It does not perform dynamic bytecode analysis or network-packet inspection to guarantee that a decorated library function does not execute unauthorized background calls. The integrity of third-party dependencies remains the responsibility of dependency scanning and peer review.
 3. **Pre-Load File Tampering (Threat T5)**: The SHA-256 integrity check in `verify_integrity()` protects against file replacement AFTER load. It does not protect against a tampered `contract.yaml` being present BEFORE `ContractEnforcer.load()` is called. The deployment environment is responsible for protecting the contract file prior to load.
 
@@ -228,14 +272,25 @@ agent-contracts/
 │       ├── __init__.py
 │       ├── builder.py                  # Programmatic Contract Builder API
 │       ├── validator.py                # Multi-Version Validator Engine
-│       ├── cli.py                      # CLI Application (validate, init)
+│       ├── enforcer.py                 # Runtime Contract Enforcer
+│       ├── gateway.py                  # Gateway Enforcement Layer (GitHub, Qdrant)
+│       ├── exceptions.py               # Exception Hierarchy
+│       ├── linter.py                   # Semantic Contract Linter
+│       ├── cli.py                      # CLI Application (validate, init, lint)
 │       └── schemas/                    # Bundled Package Schemas
 ├── tests/
 │   ├── fixtures/                       # Test Fixture Files
-│   ├── test_validator.py              # v1 Validator Unit Tests
-│   ├── test_validator_v1_1.py         # v1.1 Validator Unit Tests
 │   ├── test_builder.py                # Programmatic Builder Unit Tests
-│   └── test_cli.py                    # CLI Unit Tests
+│   ├── test_cli.py                    # CLI Unit Tests
+│   ├── test_duplicate_issue_detector_workflow.py # Workflow Embedding Tests
+│   ├── test_enforcer.py               # Runtime Enforcer Tests (T1-T10)
+│   ├── test_filename_enforcement.py   # Filename Rule Tests (.yaml only)
+│   ├── test_gateway.py                # Gateway Enforcement Tests
+│   ├── test_lifecycle.py              # Lifecycle Validation Tests
+│   ├── test_linter.py                 # Semantic Linter Tests
+│   ├── test_schemas_sync.py           # Schema Synchronization Tests
+│   ├── test_validator.py              # v1 Validator Unit Tests
+│   └── test_validator_v1_1.py         # v1.1 Validator Unit Tests
 └── implementations/                    # Multi-Framework Reference Implementations
     ├── n8n/
     └── langgraph/
