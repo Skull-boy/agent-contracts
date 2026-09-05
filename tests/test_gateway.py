@@ -4,6 +4,7 @@ All external clients (PyGithub, qdrant-client) are mocked — no real API calls.
 Enforcer is real, loaded from the fixture contract, not mocked.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,7 +18,8 @@ from scyvera import (
     QdrantGateway,
 )
 
-FIXTURE = "tests/fixtures/github_contract.yaml"
+ROOT = Path(__file__).resolve().parent.parent
+FIXTURE = ROOT / "tests" / "fixtures" / "github_contract.yaml"
 
 
 # =============================================================================
