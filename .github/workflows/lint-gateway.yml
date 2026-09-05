@@ -1,0 +1,60 @@
+name: Lint Gateway Enforcement
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-gateway:
+    name: Ensure no raw client imports outside gateway
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for raw GitHub imports outside gateway
+        run: |
+          echo "Checking for raw Github imports outside src/scyvera/gateway.py (excluding tests/)..."
+          if grep -r "from github import Github" --include="*.py" src/ --exclude="gateway.py" 2>/dev/null; then
+            echo "FAIL: raw Github import 'from github import Github' found outside gateway"
+            exit 1
+          fi
+          if grep -r "import github" --include="*.py" src/ --exclude="gateway.py" 2>/dev/null; then
+            echo "FAIL: raw 'import github' found outside gateway"
+            exit 1
+          fi
+          echo "PASS: no raw Github imports outside gateway"
+
+      - name: Check for raw Qdrant imports outside gateway
+        run: |
+          echo "Checking for raw QdrantClient imports outside src/scyvera/gateway.py (excluding tests/)..."
+          if grep -r "from qdrant_client import" --include="*.py" src/ --exclude="gateway.py" 2>/dev/null; then
+            echo "FAIL: raw QdrantClient import 'from qdrant_client import' found outside gateway"
+            exit 1
+          fi
+          if grep -r "import qdrant_client" --include="*.py" src/ --exclude="gateway.py" 2>/dev/null; then
+            echo "FAIL: raw 'import qdrant_client' found outside gateway"
+            exit 1
+          fi
+          echo "PASS: no raw QdrantClient imports outside gateway"
+
+      - name: Check for direct Github instantiation outside gateway
+        run: |
+          echo "Checking for direct Github( instantiation outside gateway..."
+          if grep -r "Github(" --include="*.py" src/ --exclude="gateway.py" 2>/dev/null; then
+            echo "FAIL: direct Github( instantiation found outside gateway"
+            exit 1
+          fi
+          echo "PASS: no direct Github instantiation outside gateway"
+
+      - name: Verify tests are excluded (informational)
+        run: |
+          echo "Tests may import clients for mocking — excluded from enforcement"
+          grep -r "from github import Github" --include="*.py" tests/ 2>/dev/null && echo "tests/ contains mocked Github imports (allowed)" || echo "no test Github imports"
+          grep -r "from qdrant_client import" --include="*.py" tests/ 2>/dev/null && echo "tests/ contains mocked Qdrant imports (allowed)" || echo "no test Qdrant imports"

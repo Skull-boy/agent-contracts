@@ -1,0 +1,73 @@
+version: 1.1
+system:
+  name: governed-github-agent
+  purpose: Governed GitHub operations via gateway — fixture for gateway enforcement tests
+  version: 1.0.0
+lifecycle:
+  mode: request-response
+  initiation: human-only
+  resumability: stateless
+capabilities:
+  - name: github_read
+    description: Read GitHub issues and PRs
+  - name: github_merge
+    description: Merge pull requests with approval
+resources:
+  - name: github_repo
+    type: api
+    access: read
+  - name: qdrant_collection
+    type: database
+    access: read
+inputs:
+  - name: repo_name
+    type: string
+    required: true
+  - name: issue_number
+    type: integer
+    required: true
+outputs:
+  - name: result
+    type: string
+permissions:
+  - resource: github.read
+    actions: [read]
+  - resource: qdrant.search
+    actions: [search]
+side_effects:
+  - type: merge
+    resource: github
+    description: github.merge
+  - type: read
+    resource: github
+    description: github.read
+  - type: search
+    resource: qdrant
+    description: qdrant.search
+  - type: write
+    resource: qdrant
+    description: qdrant.write
+  - type: delete
+    resource: qdrant
+    description: qdrant.delete
+approvals:
+  - action: github.merge
+    required: true
+    approver: human
+dependencies:
+  - name: github_api
+    type: api
+    required: true
+  - name: qdrant_api
+    type: api
+    required: false
+state:
+  persistence: none
+recovery:
+  strategy: retry
+replay:
+  mode: idempotent
+observability:
+  level: basic
+risk:
+  level: low
