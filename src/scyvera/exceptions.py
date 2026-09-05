@@ -79,3 +79,20 @@ class ContractValidationError(Exception):
     def __init__(self, message: str, errors: tuple[Any, ...] = ()) -> None:
         self.errors = errors
         super().__init__(message)
+
+
+class GatewayError(Exception):
+    """Raised when an underlying gateway client operation fails.
+
+    Wraps the original third-party exception to prevent raw client
+    exceptions (PyGithub, Qdrant) from leaking outside the gateway
+    boundary. The gateway is the sole owner of credentials and clients.
+    """
+
+    def __init__(self, action: str, original_exception: Exception) -> None:
+        self.action: str = action
+        self.original_exception: Exception = original_exception
+        self.original: Exception = original_exception
+        super().__init__(
+            f"Gateway error for action '{action}': {original_exception}"
+        )

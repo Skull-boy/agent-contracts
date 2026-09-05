@@ -375,46 +375,50 @@ class ContractEnforcer:
     def gate(
         self,
         action_name: str,
-        action_type: Literal["side_effect", "permission"],
+        action_type: Literal["side_effect", "permission", "read"],
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Decorator factory to gate a function call against declared permissions or side effects.
 
         Args:
             action_name: The identifier of the action (e.g. 'github:issues:write' or 'comment').
-            action_type: Either 'side_effect' or 'permission'.
+            action_type: Either 'side_effect', 'permission', or 'read' (alias for permission).
 
         Returns:
             A decorator that intercepts execution, evaluates the contract, logs the audit
             entry, and either executes or raises a ContractViolationError / ApprovalPendingError.
         """
-        if action_type not in ("side_effect", "permission"):
+        if action_type not in ("side_effect", "permission", "read"):
             raise ValueError(
-                f"Invalid action_type '{action_type}'. Must be 'side_effect' or 'permission'."
+                f"Invalid action_type '{action_type}'. Must be 'side_effect', 'permission', or 'read'."
             )
+        # 'read' is an alias for 'permission' — read operations are gated as permissions.
+        effective_type: Literal["side_effect", "permission"] = (
+            "permission" if action_type == "read" else action_type  # type: ignore[assignment]
+        )
 
         def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             if inspect.iscoroutinefunction(fn):
                 @functools.wraps(fn)
                 async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-                    self._check_gate(action_name, action_type)
+                    self._check_gate(action_name, effective_type)
                     try:
                         result = await fn(*args, **kwargs)
-                        self._log_execution(action_name, action_type, success=True)
+                        self._log_execution(action_name, effective_type, success=True)
                         return result
                     except Exception as e:
-                        self._log_execution(action_name, action_type, success=False, error=str(e))
+                        self._log_execution(action_name, effective_type, success=False, error=str(e))
                         raise
                 wrapper = async_wrapper
             else:
                 @functools.wraps(fn)
                 def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-                    self._check_gate(action_name, action_type)
+                    self._check_gate(action_name, effective_type)
                     try:
                         result = fn(*args, **kwargs)
-                        self._log_execution(action_name, action_type, success=True)
+                        self._log_execution(action_name, effective_type, success=True)
                         return result
                     except Exception as e:
-                        self._log_execution(action_name, action_type, success=False, error=str(e))
+                        self._log_execution(action_name, effective_type, success=False, error=str(e))
                         raise
                 wrapper = sync_wrapper
 

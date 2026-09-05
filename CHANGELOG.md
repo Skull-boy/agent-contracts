@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.3] — 2026-09-05
+
+### Added
+- **Gateway Enforcement Layer (`BaseGateway`, `GitHubGateway`, `QdrantGateway`)**:
+  - Single enforcement boundary for external API operations and credential management.
+  - Per-instance `@enforcer.gate` wrapping with default-deny semantics.
+  - Optional dependency handling for `PyGithub` and `qdrant-client` to keep core package dependency-light.
+- **Gateway Exception Wrapping**:
+  - Introduced `GatewayError` to encapsulate third-party API client exceptions.
+- Added GitHub Actions workflow for gateway linting (`.github/workflows/lint-gateway.yml`).
+
+### Changed
+- `ContractEnforcer.gate()` now supports `"read"` as an action type alias for permission gating.
+
+---
+
 ## [1.1.2] — 2026-08-30
 
 ### Changed

@@ -13,10 +13,20 @@ permissions:
   - github: issues:read+write   # comment only — never close, label, or edit
   - openai: embeddings:read
   - qdrant: read+write on one collection
+  - github.read: read
+  - qdrant.search: search
 
 side_effects:
   - Posts one comment on the triggering issue, if similarity >= threshold
   - Writes one vector to the Qdrant collection (always, regardless of duplicate result)
+  - github.comment
+  - github.read
+  - github.close
+  - github.label
+  - github.merge
+  - qdrant.write
+  - qdrant.delete
+  - qdrant.search
 
 approval_points: []   # intentionally empty — this workflow only ever comments,
                        # never closes or merges, so no approval gate is required

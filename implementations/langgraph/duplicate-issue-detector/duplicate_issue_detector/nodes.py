@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import httpx
-from github import Github, GithubException
 from openai import OpenAI
+
+from scyvera import ContractEnforcer
+from scyvera.exceptions import GatewayError
+from scyvera.gateway import GitHubGateway
 
 from .state import State
 
@@ -17,13 +21,27 @@ _MAX_CHARS = 6000
 _SEARCH_LIMIT = 5
 
 
+def _get_enforcer() -> ContractEnforcer:
+    """Load the workflow contract enforcer.
+
+    The contract is resolved relative to this file so the gateway
+    always enforces the contract that ships with the workflow.
+    """
+    contract_path = Path(__file__).resolve().parent.parent / "contract.yaml"
+    return ContractEnforcer.load(contract_path)
+
+
 def detect(state: State) -> dict[str, Any]:
     """Fetch issue title + body from GitHub. Read-only, no side effects."""
     log.info("DETECT  #%d from %s/%s", state["issue_number"], state["repo_owner"], state["repo_name"])
     try:
-        repo = Github(state["github_token"]).get_repo(f"{state['repo_owner']}/{state['repo_name']}")
-        issue = repo.get_issue(number=state["issue_number"])
-    except GithubException as exc:
+        enforcer = _get_enforcer()
+        gateway = GitHubGateway(enforcer, token=state["github_token"])
+        issue = gateway.read_issue(
+            f"{state['repo_owner']}/{state['repo_name']}",
+            state["issue_number"],
+        )
+    except (GatewayError, Exception) as exc:
         log.error("DETECT  error: %s", exc)
         raise
 
@@ -107,9 +125,14 @@ def act(state: State) -> dict[str, Any]:
         "This is an automated suggestion — a maintainer will confirm."
     )
     try:
-        repo = Github(state["github_token"]).get_repo(f"{state['repo_owner']}/{state['repo_name']}")
-        repo.get_issue(number=state["issue_number"]).create_comment(body)
-    except GithubException as exc:
+        enforcer = _get_enforcer()
+        gateway = GitHubGateway(enforcer, token=state["github_token"])
+        gateway.post_comment(
+            f"{state['repo_owner']}/{state['repo_name']}",
+            state["issue_number"],
+            body,
+        )
+    except (GatewayError, Exception) as exc:
         log.error("ACT     error: %s", exc)
         raise
     log.info("ACT     comment posted")
