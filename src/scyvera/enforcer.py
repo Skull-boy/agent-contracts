@@ -54,11 +54,11 @@ from datetime import datetime, timezone
 import functools
 import hashlib
 import inspect
+import json
 import logging
 from pathlib import Path
 import re
-from typing import Any, Callable, Literal
-import warnings
+from typing import Any, Callable, Literal, Optional
 
 from .exceptions import (
     ApprovalPendingError,
@@ -66,6 +66,7 @@ from .exceptions import (
     ContractValidationError,
     ContractVersionError,
     ContractViolationError,
+    DeclarationValidationError,
 )
 from .validator import (
     LIFECYCLE_DEFAULTS,
@@ -186,9 +187,11 @@ class ContractEnforcer:
 
     def __init__(
         self,
-        contract_path: Path,
+        contract_path: Optional[Path],
         raw_contract: dict[str, Any],
         integrity_hash: str,
+        contract_source: str = "file",
+        sealed_declaration: Optional[dict[str, Any]] = None,
     ) -> None:
         self._contract_path = contract_path
         self._integrity_hash = integrity_hash
@@ -196,6 +199,8 @@ class ContractEnforcer:
         self._frozen_contract: Mapping[str, Any] = _deep_freeze(raw_contract)
         self._audit_log: list[AuditEntry] = []
         self._granted_approvals: set[str] = set()
+        self._contract_source: str = contract_source
+        self._sealed_declaration: Optional[dict[str, Any]] = sealed_declaration
 
     @property
     def integrity_hash(self) -> str:
@@ -208,9 +213,26 @@ class ContractEnforcer:
         return self._frozen_contract
 
     @property
-    def contract_path(self) -> Path:
-        """Path to the loaded contract file."""
+    def contract_path(self) -> Optional[Path]:
+        """Path to the loaded contract file. None for declaration contracts."""
         return self._contract_path
+
+    @property
+    def contract_source(self) -> str:
+        """Returns 'file' or 'declaration'."""
+        return self._contract_source
+
+    @property
+    def node_id(self) -> Optional[str]:
+        """Returns the node_id if declared, None otherwise.
+
+        File-based contracts have no node_id unless they
+        declare context_contract.node_id — return None for now.
+        Declaration-based contracts always have a node_id.
+        """
+        if self._contract_source == "declaration":
+            return self._sealed_declaration.get("node_id")
+        return None
 
     # -------------------------------------------------------------------------
     # Loader and Factory (T5, T7, T8, T10)
@@ -266,6 +288,8 @@ class ContractEnforcer:
             contract_path=contract_path,
             raw_contract=raw_copy,
             integrity_hash=integrity_hash,
+            contract_source="file",
+            sealed_declaration=None,
         )
 
     @classmethod
@@ -343,15 +367,236 @@ class ContractEnforcer:
                     )
 
     # -------------------------------------------------------------------------
+    # Declaration-based Factory (Phase 1)
+    # -------------------------------------------------------------------------
+
+    _NODE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]*-v[0-9]+$")
+    _VALID_LIFECYCLE_VALUES = frozenset({
+        "request-response", "persistent", "scheduled", "ephemeral", "triggered",
+    })
+    _DECLARATION_KNOWN_KEYS = frozenset({
+        "node_id", "permissions", "side_effects", "approval_points",
+        "lifecycle", "state", "recovery_strategy", "observability",
+    })
+
+    @classmethod
+    def from_declaration(cls, declaration: dict[str, Any]) -> ContractEnforcer:
+        """Create a fully governed ContractEnforcer from a runtime declaration dict.
+
+        The resulting enforcer has identical enforcement properties to a file-based
+        enforcer. gate() works. audit log works. verify_integrity() works.
+        The only difference is the source.
+
+        Args:
+            declaration: A dict describing the contract declaration. Required keys
+                are ``node_id`` (str matching ``^[a-z][a-z0-9-]*-v[0-9]+$``) and
+                ``permissions`` (list of str). Optional keys: ``side_effects``,
+                ``approval_points``, ``lifecycle``, ``state``, ``recovery_strategy``,
+                ``observability``.
+
+        Returns:
+            A sealed ContractEnforcer instance with contract_source="declaration".
+
+        Raises:
+            DeclarationValidationError: If any field is invalid or unknown keys
+                are present.
+        """
+        # --- Reject unknown keys ---
+        for key in declaration:
+            if key not in cls._DECLARATION_KNOWN_KEYS:
+                raise DeclarationValidationError(
+                    field=key,
+                    reason="unknown field in declaration",
+                )
+
+        # --- node_id (required) ---
+        node_id = declaration.get("node_id")
+        if node_id is None:
+            raise DeclarationValidationError(
+                field="node_id",
+                reason="missing required field",
+            )
+        if not isinstance(node_id, str):
+            raise DeclarationValidationError(
+                field="node_id",
+                reason=f"must be a string, got {type(node_id).__name__}",
+            )
+        if not cls._NODE_ID_PATTERN.match(node_id):
+            raise DeclarationValidationError(
+                field="node_id",
+                reason=(
+                    f"'{node_id}' does not match required pattern "
+                    f"'^[a-z][a-z0-9-]*-v[0-9]+$' "
+                    f"(examples: 'researcher-v1', 'audit-agent-v2')"
+                ),
+            )
+
+        # --- permissions (required) ---
+        if "permissions" not in declaration:
+            raise DeclarationValidationError(
+                field="permissions",
+                reason="missing required field",
+            )
+        permissions = declaration["permissions"]
+        if not isinstance(permissions, list):
+            raise DeclarationValidationError(
+                field="permissions",
+                reason=f"must be a list, got {type(permissions).__name__}",
+            )
+        _WILDCARDS = {"*", "all", "any"}
+        for i, perm in enumerate(permissions):
+            if not isinstance(perm, str):
+                raise DeclarationValidationError(
+                    field="permissions",
+                    reason=f"item at index {i} must be a string, got {type(perm).__name__}",
+                )
+            if not perm:
+                raise DeclarationValidationError(
+                    field="permissions",
+                    reason=f"item at index {i} is empty — each permission must be a non-empty string",
+                )
+            if perm.strip() in _WILDCARDS or "*" in perm:
+                raise DeclarationValidationError(
+                    field="permissions",
+                    reason=f"wildcard permission '{perm}' is prohibited (Threat T7)",
+                )
+
+        # --- side_effects (optional, default []) ---
+        side_effects = declaration.get("side_effects", [])
+        if not isinstance(side_effects, list):
+            raise DeclarationValidationError(
+                field="side_effects",
+                reason=f"must be a list, got {type(side_effects).__name__}",
+            )
+        for i, se in enumerate(side_effects):
+            if not isinstance(se, str):
+                raise DeclarationValidationError(
+                    field="side_effects",
+                    reason=f"item at index {i} must be a string, got {type(se).__name__}",
+                )
+            if se.strip() in _WILDCARDS or "*" in se:
+                raise DeclarationValidationError(
+                    field="side_effects",
+                    reason=f"wildcard side effect '{se}' is prohibited (Threat T7)",
+                )
+
+        # --- approval_points (optional, default []) ---
+        approval_points = declaration.get("approval_points", [])
+        if not isinstance(approval_points, list):
+            raise DeclarationValidationError(
+                field="approval_points",
+                reason=f"must be a list, got {type(approval_points).__name__}",
+            )
+        for i, ap in enumerate(approval_points):
+            if not isinstance(ap, (str, dict)):
+                raise DeclarationValidationError(
+                    field="approval_points",
+                    reason=f"item at index {i} must be a string or dict, got {type(ap).__name__}",
+                )
+            if isinstance(ap, dict) and "before" not in ap and "action" not in ap:
+                raise DeclarationValidationError(
+                    field="approval_points",
+                    reason=f"dict item at index {i} must have a 'before' or 'action' key",
+                )
+
+        # --- lifecycle (optional, default "triggered") ---
+        lifecycle = declaration.get("lifecycle", "triggered")
+        if not isinstance(lifecycle, str):
+            raise DeclarationValidationError(
+                field="lifecycle",
+                reason=f"must be a string, got {type(lifecycle).__name__}",
+            )
+        if lifecycle not in cls._VALID_LIFECYCLE_VALUES:
+            raise DeclarationValidationError(
+                field="lifecycle",
+                reason=(
+                    f"'{lifecycle}' is not a valid lifecycle value. "
+                    f"Valid values: {sorted(cls._VALID_LIFECYCLE_VALUES)}"
+                ),
+            )
+
+        # --- state (optional, default "stateless") ---
+        state = declaration.get("state", "stateless")
+        if not isinstance(state, str):
+            raise DeclarationValidationError(
+                field="state",
+                reason=f"must be a string, got {type(state).__name__}",
+            )
+
+        # --- recovery_strategy (optional) ---
+        recovery_strategy = declaration.get("recovery_strategy")
+        if recovery_strategy is not None and not isinstance(recovery_strategy, str):
+            raise DeclarationValidationError(
+                field="recovery_strategy",
+                reason=f"must be a string, got {type(recovery_strategy).__name__}",
+            )
+
+        # --- observability (optional) ---
+        observability = declaration.get("observability")
+        if observability is not None and not isinstance(observability, dict):
+            raise DeclarationValidationError(
+                field="observability",
+                reason=f"must be a dict, got {type(observability).__name__}",
+            )
+
+        # --- Deep copy and seal ---
+        sealed = copy.deepcopy(declaration)
+
+        content = json.dumps(sealed, sort_keys=True).encode()
+        integrity_hash = hashlib.sha256(content).hexdigest()
+
+        # Build the internal contract representation to match load() format.
+        # The enforcer's _is_action_declared() reads from
+        # self._frozen_contract["permissions"], ["side_effects"],
+        # ["approval_points"/"approvals"], and ["lifecycle"].
+        raw_contract: dict[str, Any] = {
+            "version": "1.1",
+            "system": {"name": node_id},
+            "permissions": list(permissions),
+            "side_effects": list(side_effects),
+            "approval_points": list(approval_points),
+            "lifecycle": {
+                "mode": lifecycle if lifecycle in ("request-response", "persistent", "scheduled") else "request-response",
+            },
+            "state": state,
+        }
+        if recovery_strategy is not None:
+            raw_contract["recovery_strategy"] = recovery_strategy
+        if observability is not None:
+            raw_contract["observability"] = observability
+
+        return cls(
+            contract_path=None,
+            raw_contract=raw_contract,
+            integrity_hash=integrity_hash,
+            contract_source="declaration",
+            sealed_declaration=sealed,
+        )
+
+    # -------------------------------------------------------------------------
     # Integrity Verification (Threat T5)
     # -------------------------------------------------------------------------
 
     def verify_integrity(self) -> bool:
-        """Verify that the contract file on disk has not been modified since load time.
+        """Verify that the contract source has not been modified since load/seal time.
+
+        For file contracts: re-reads the file and compares SHA-256 hash.
+        For declaration contracts: re-hashes the sealed declaration and compares.
 
         Raises:
-            ContractTamperError: If the file content hash has changed or file is missing.
+            ContractTamperError: If the content hash has changed or file is missing.
         """
+        if self._contract_source == "declaration":
+            content = json.dumps(self._sealed_declaration, sort_keys=True).encode()
+            current_hash = hashlib.sha256(content).hexdigest()
+            if current_hash != self._integrity_hash:
+                raise ContractTamperError(
+                    "Declaration contract has been tampered with "
+                    "after sealing"
+                )
+            return True
+
+        # File contract integrity check (existing behavior)
         if not self._contract_path.exists():
             raise ContractTamperError(
                 f"Contract file '{self._contract_path}' was removed from disk after load!"
@@ -556,9 +801,10 @@ class ContractEnforcer:
     def _log_execution(self, action_name: str, action_type: str, success: bool, error: str | None = None) -> None:
         """Log execution outcome for observability."""
         status = "COMPLETED" if success else f"FAILED: {error}"
+        source_label = self._contract_path.name if self._contract_path is not None else (self.node_id or "<declaration>")
         logger.debug(
             "Contract execution [%s]: action='%s', type='%s', status='%s'",
-            self._contract_path.name,
+            source_label,
             action_name,
             action_type,
             status,

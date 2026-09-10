@@ -96,3 +96,19 @@ class GatewayError(Exception):
         super().__init__(
             f"Gateway error for action '{action}': {original_exception}"
         )
+
+
+class DeclarationValidationError(Exception):
+    """Raised when a runtime contract declaration is invalid.
+
+    This is a creation-time error — raised when from_declaration()
+    receives a dict that fails validation. Distinct from
+    ContractViolationError which is a runtime enforcement error.
+    """
+
+    def __init__(self, field: str, reason: str) -> None:
+        self.field = field
+        self.reason = reason
+        super().__init__(
+            f"Invalid contract declaration — field '{field}': {reason}"
+        )
