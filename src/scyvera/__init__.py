@@ -7,6 +7,7 @@ from .exceptions import (
     ContractValidationError,
     ContractVersionError,
     ContractViolationError,
+    DeclarationValidationError,
     GatewayError,
 )
 from .gateway import BaseGateway, GitHubGateway, QdrantGateway
@@ -39,6 +40,7 @@ __all__ = [
     "ContractVersion",
     "ContractVersionError",
     "ContractViolationError",
+    "DeclarationValidationError",
     "GatewayError",
     "GitHubGateway",
     "LIFECYCLE_DEFAULTS",
