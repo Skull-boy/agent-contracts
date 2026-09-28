@@ -201,6 +201,7 @@ class ContractEnforcer:
         self._granted_approvals: set[str] = set()
         self._contract_source: str = contract_source
         self._sealed_declaration: Optional[dict[str, Any]] = sealed_declaration
+        self._registry_entry_id: Optional[str] = None
 
     @property
     def integrity_hash(self) -> str:
@@ -233,6 +234,11 @@ class ContractEnforcer:
         if self._contract_source == "declaration":
             return self._sealed_declaration.get("node_id")
         return None
+
+    @property
+    def registry_entry_id(self) -> Optional[str]:
+        """Return the registry entry_id if this enforcer has been registered, None otherwise."""
+        return self._registry_entry_id
 
     # -------------------------------------------------------------------------
     # Loader and Factory (T5, T7, T8, T10)
@@ -612,6 +618,29 @@ class ContractEnforcer:
             )
 
         return True
+
+    # -------------------------------------------------------------------------
+    # Registry Integration (Phase 2)
+    # -------------------------------------------------------------------------
+
+    def register(self, registry: Any) -> Any:
+        """Register this enforcer's contract into the given registry.
+
+        Returns the RegistryEntry created (or the existing entry
+        if this contract hash was already registered).
+
+        Stores the entry_id so the enforcer knows its registry
+        identity: self._registry_entry_id = entry.entry_id
+
+        Args:
+            registry: A ContractRegistry instance.
+
+        Returns:
+            The RegistryEntry for this contract.
+        """
+        entry = registry.register(self)
+        self._registry_entry_id = entry.entry_id
+        return entry
 
     # -------------------------------------------------------------------------
     # Runtime Gate Decorator (Principles 1, 2, 4, 5)
