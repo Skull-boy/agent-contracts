@@ -112,3 +112,18 @@ class DeclarationValidationError(Exception):
         super().__init__(
             f"Invalid contract declaration — field '{field}': {reason}"
         )
+
+
+class RegistryError(Exception):
+    """Raised when a contract registry operation fails.
+
+    Covers: corrupt registry file, duplicate hash registration,
+    registry path not writable, malformed registry entry on read.
+    """
+
+    def __init__(self, operation: str, reason: str) -> None:
+        self.operation = operation
+        self.reason = reason
+        super().__init__(
+            f"Registry error during '{operation}': {reason}"
+        )

@@ -9,8 +9,10 @@ from .exceptions import (
     ContractViolationError,
     DeclarationValidationError,
     GatewayError,
+    RegistryError,
 )
 from .gateway import BaseGateway, GitHubGateway, QdrantGateway
+from .registry import ContractRegistry, RegistryEntry
 from .linter import LintResult, LintWarning, lint_contract
 from .validator import (
     LIFECYCLE_DEFAULTS,
@@ -35,6 +37,7 @@ __all__ = [
     "Contract",
     "ContractEnforcer",
     "ContractFileNameError",
+    "ContractRegistry",
     "ContractTamperError",
     "ContractValidationError",
     "ContractVersion",
@@ -47,6 +50,8 @@ __all__ = [
     "LintResult",
     "LintWarning",
     "QdrantGateway",
+    "RegistryEntry",
+    "RegistryError",
     "SCHEMA_V1_PATH",
     "SCHEMA_V1_1_PATH",
     "SystemIdentity",
