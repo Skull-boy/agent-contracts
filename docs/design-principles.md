@@ -1,5 +1,5 @@
 # Agent Contracts Design Principles
-Status: Draft
+Status: Active (Normative Principles)
 Specification: Agent Contracts v1.1
 
 ---

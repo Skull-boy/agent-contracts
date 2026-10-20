@@ -23,7 +23,9 @@ This document formalizes the runtime threat model, security invariants, architec
 ### Threat T4: Gate Bypass
 - **Description**: A developer or compromised agent imports and calls an underlying execution function directly without routing through the `@enforcer.gate(...)` decorator.
 - **Mitigation & Invariant**:
-  - Python's dynamic runtime cannot physically seal function call sites across modules.
+  - Python's dynamic runtime cannot physically seal function call sites across arbitrary user modules.
+  - **Gateway Layer Isolation**: Scyvera provides Gated Gateways (`BaseGateway`, `GitHubGateway`, `QdrantGateway`). Credentials and raw SDK clients are kept strictly private inside the gateway; external nodes have no access to raw clients or tokens, making bypass structurally impossible.
+  - **CI Enforcement**: The `.github/workflows/lint-gateway.yml` workflow actively fails the build if raw client imports or direct instantiations appear outside `gateway.py`.
   - **Tooling**: Scyvera provides `ContractEnforcer.assert_gated(fn)`, which checks the presence of runtime gating metadata (`__scyvera_gated__`). If an unwrapped function is detected, it raises `ContractViolationError`.
   - **Integration Guidance**: CI test suites should run `assert_gated(fn)` across all external integration endpoints.
 
@@ -31,8 +33,9 @@ This document formalizes the runtime threat model, security invariants, architec
 - **Description**: An agent with local file system write access modifies `contract.yaml` on disk after startup to inject broad permissions, then triggers a reload.
 - **Mitigation & Invariant**:
   - At load time, `ContractEnforcer.load()` immediately computes and stores a SHA-256 digest (`integrity_hash`).
+  - For dynamic contracts created via `ContractEnforcer.from_declaration()`, the input dictionary is deep-copied and immediately sealed with a SHA-256 hash at construction time.
   - The in-memory contract is deep-frozen into immutable dictionary/list wrappers (`_deep_freeze`), making in-memory mutation raise `ContractTamperError`.
-  - Calling `enforcer.verify_integrity()` re-computes the file hash on disk and raises `ContractTamperError` if any byte on disk has changed.
+  - Calling `enforcer.verify_integrity()` re-computes the file hash on disk (or re-hashes the sealed declaration) and raises `ContractTamperError` if any byte has changed.
 
 ### Threat T6: Permission String Spoofing
 - **Description**: An action is decorated as `@enforcer.gate("github:issues:write", "permission")`, but the function body secretly executes `github:repo:admin` or deletes repositories.

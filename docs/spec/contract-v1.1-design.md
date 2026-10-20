@@ -1,8 +1,11 @@
 # Agent Contracts v1.1 — Design Specification
 
-Status: Draft
-Specification Version: 1.1
-Project: Agent Contracts
+> [!NOTE]
+> **Historical Design Specification**: This document served as the foundational design specification for Agent Contracts v1.1. The design decisions outlined here (including domain independence, the ACxxx semantic rule taxonomy, and the v1.1 model) have been accepted and formally implemented in `schemas/v1.1/contract.schema.json` and the `scyvera` package. For current normative documentation, see [`docs/contract-model-v1.1.md`](../contract-model-v1.1.md) and [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md).
+
+- **Status:** Implemented (Historical Design Document)
+- **Specification Version:** 1.1
+- **Project:** Agent Contracts
 
 ---
 

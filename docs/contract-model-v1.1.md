@@ -1,5 +1,5 @@
 # Agent Contracts v1.1 — Contract Model
-Status: Draft
+Status: Active (Normative Specification)
 Specification Version: 1.1
 Project: Agent Contracts
 
@@ -1027,36 +1027,23 @@ This separation allows Agent Contracts to evolve from structural validation into
 
 # 36. Current Scope and Status
 
-Version 1.1 focuses on establishing a strong, domain-independent Contract Model.
+Version 1.1 establishes a complete, domain-independent Contract Model for intelligent systems.
 
-The immediate implementation priorities are:
-
-1. Define the normative v1.1 JSON Schema.
-2. Implement structural validation.
-3. Add semantic validation where appropriate.
-4. Update the test suite.
-5. Create domain-neutral example Contracts.
-6. Preserve framework and implementation independence.
-7. Maintain a simple authoring experience.
-8. Prepare the model for future policy, evidence, security, and runtime-governance layers.
-
-Runtime enforcement, artifact security, provenance, advanced policy evaluation, and domain-specific governance are future capabilities unless explicitly incorporated into a later specification.
-
-This document defines the **draft v1.1 Contract Model**. It is a design artifact and is not itself the normative JSON Schema.
-
-The next implementation stage is to translate this model into:
+The core specification has been formally translated into normative machine-readable JSON Schema:
 
 ```text
-schemas/v1.1/contract.schema.json
+src/scyvera/schemas/v1.1/contract.schema.json
 ```
 
-and then update:
+and implemented across the Scyvera ecosystem:
 
-```text
-validator
-tests
-CLI
-example contracts
-```
+1. **Structural Validation Engine**: Multi-version schema validator (`validate_contract`).
+2. **Semantic Linter**: Tier 2 consistency analyzer evaluating ACxxx taxonomy (`lint_contract`).
+3. **Runtime Enforcement**: `ContractEnforcer` engine with default-deny execution gating, cryptographic contract sealing (`_integrity_hash`), and immutable audit logging.
+4. **Dynamic Declarations**: Code-declared contracts (`ContractEnforcer.from_declaration()`) with deep validation and sealing.
+5. **Gateway Isolation**: Dedicated API boundaries (`BaseGateway`, `GitHubGateway`, `QdrantGateway`) preventing gate bypass.
+6. **Contract Registry**: Versioned, append-only, JSONL persistent store (`ContractRegistry`) for historical traceability and time-travel audit.
+7. **CLI Tooling**: `scyvera validate`, `scyvera lint`, and `scyvera init` for contract lifecycle management.
+8. **Domain-Neutral Examples**: Validated reference contracts across education, research, finance, and healthcare in `examples/v1.1/`.
 
-The JSON Schema MUST follow the semantics established by this Contract Model rather than independently introducing new concepts.
+Future directions include interactive asynchronous approval channel dispatch, automated AST capability inference, and multi-agent contract handoffs.

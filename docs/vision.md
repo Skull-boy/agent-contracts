@@ -44,7 +44,15 @@ These challenges are independent of the frameworks, programming languages, or mo
 
 # 3. Why Existing Approaches Are Not Enough
 
-(To be written)
+Existing software and governance practices attempt to address agent behavior through several mechanisms, each with critical shortcomings:
+
+- **Prompts and System Instructions**: Prompts convey behavioral intent to an LLM, but they are advisory, nondeterministic, and susceptible to jailbreaks, prompt injection, and drift. A prompt cannot guarantee an operational constraint or provide an audit trail.
+- **Source Code Inspection**: While code reveals what an agent can theoretically execute, extracting operational boundaries from disparate functions, async tasks, and third-party SDK calls is labor-intensive and unscalable for auditors, risk managers, and downstream policy engines.
+- **Informal Documentation (READMEs)**: Prose descriptions frequently drift from implementation reality. A README claiming an agent "only reads data" provides no machine-checkable commitment when someone later adds a write step.
+- **Framework-Specific Configurations**: Graph configs (e.g. in LangGraph, CrewAI, or n8n) describe node connectivity within a proprietary runtime, but they cannot be evaluated uniformly across organizations employing multiple heterogeneous agent runtimes.
+- **OS and Cloud IAM Policies**: Cloud IAM and container controls restrict infrastructure permissions, but they lack awareness of agentic concepts such as semantic capabilities, prompt-level inputs, multi-step approval boundaries, and human sign-off gates.
+
+Agent Contracts bridges this gap by providing an explicit, machine-checkable, and framework-independent operational boundary that sits between informal prose and raw infrastructure controls.
 
 ---
 
