@@ -1,6 +1,14 @@
+> [!NOTE]
+> **Historical RFC Document (Accepted & Implemented)**  
+> This RFC proposed the repository restructuring from `workflows/` to `implementations/n8n/` and the adoption of the contract model. This restructuring has been fully executed. For the active specification and repository architecture, see [`docs/achitecture.md`](../../docs/achitecture.md) and [`README.md`](../../README.md).
+
+---
+
+# RFC 01: Contract Model & Repository Restructure
+
 ## What
 
-Proposing a restructure of this repository's internal layout to match the direction laid out in [`docs/workflow-engineering.md`](./docs/workflow-engineering.md) and [`WORKFLOW-CONTRACT-SPEC.md`](./WORKFLOW-CONTRACT-SPEC.md). Note: the repo has already been renamed from `n8n_workflows` to `agent-contracts` to reflect this direction — this RFC is about the *internal folder structure* underneath that new name, a separate decision from the rename itself.
+Proposing a restructure of this repository's internal layout to match the direction laid out in [`docs/workflow-engineering.md`](../../docs/workflow-engineering.md) and [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md). Note: the repo has already been renamed from `n8n_workflows` to `agent-contracts` to reflect this direction — this RFC is about the *internal folder structure* underneath that new name, a separate decision from the rename itself.
 
 **Proposed structure:**
 
@@ -43,7 +51,7 @@ u/Bino5150 u/Responsible-Beat2137 — tagging you both directly, since this is e
 
 1. `git mv workflows implementations/n8n` — preserves file history, doesn't break git blame
 2. Add redirect notes in the old locations is not possible via git mv alone — instead, the root README's Repository Structure section gets updated in the same PR, and a note gets added to this issue once merged so anyone with an old link can find the new path
-3. Each workflow's Contract migration (tracked separately in #<link the existing "Migrate existing workflow Contracts to v1 spec" issue>) continues independently of this move — moving folders and upgrading Contract format are separate concerns
+3. Each workflow's Contract migration (tracked separately in issue discussions) continues independently of this move — moving folders and upgrading Contract format are separate concerns
 
 ## Not in scope for this RFC
 

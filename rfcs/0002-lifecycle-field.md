@@ -1,10 +1,16 @@
+> [!NOTE]
+> **RFC Status: Accepted & Implemented (Schema & Defaults)**  
+> The `lifecycle` field schema, closed enums, and v1 backward-compatibility defaults are implemented in `schemas/v1.1/contract.schema.json` and `src/scyvera/validator.py`. Threat T2 idle behavior validation is enforced via rule `AC301` in `src/scyvera/linter.py`. Sliding-window invocation tracking (Threat T1 mitigation) is planned on the roadmap.
+
+---
+
 # RFC 0002: Lifecycle Field for Agent Contracts v1.1
 
-- **Status**: Accepted
+- **Status**: Accepted (Implemented in v1.1)
 - **Author**: Scyvera Core Team / Agent Contracts Working Group
 - **Created**: 2026-08-30
 - **Target Spec**: Agent Contracts v1.1
-- **JSON Schema**: `schemas/v1.1/contract.schema.json`
+- **JSON Schema**: [`schemas/v1.1/contract.schema.json`](../schemas/v1.1/contract.schema.json)
 
 ---
 
