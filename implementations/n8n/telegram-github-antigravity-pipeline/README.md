@@ -124,6 +124,6 @@ branch    notify you
 
 ---
 
-## 📄 License
+## 📄 Governance and License
 
-Distributed under the repository's [MIT License](../../LICENSE).
+Governed by [`contract.yaml`](./contract.yaml). Part of the [agent-contracts](../../../) repository. Distributed under the repository's [MIT License](../../../LICENSE).

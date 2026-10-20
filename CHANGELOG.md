@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Contract Registry (`ContractRegistry`, `RegistryEntry`, `RegistryError`) (Phase 2)**:
+  - Versioned, append-only, JSON-lines persistent store for registered contracts (`.scyvera/registry.jsonl`).
+  - Idempotent registration on duplicate SHA-256 hash.
+  - Automatic version incrementing per `node_id`.
+  - Query APIs: `get_latest(node_id)`, `get_by_hash(contract_hash)`, `get_history(node_id)`, `get_at_time(node_id, timestamp)`, `list_nodes()`, `size()`, `has_hash(contract_hash)`.
+  - Atomic writes using temporary file pattern to guarantee durability.
+  - Fail-closed error handling raising `RegistryError` on corrupt or unreadable files.
+- **Dynamic Contract Declarations (`ContractEnforcer.from_declaration()`) (Phase 1)**:
+  - Create fully governed `ContractEnforcer` instances from in-memory Python dictionaries without requiring a `contract.yaml` file on disk.
+  - Deep copy and cryptographic sealing with SHA-256 integrity hash at creation time.
+  - Strict declaration validation (`DeclarationValidationError`) rejecting unknown fields, invalid `node_id` formatting, empty permissions, and wildcard injection (Threat T7).
+  - Full feature parity with file-based enforcers: `@enforcer.gate(...)`, `verify_integrity()`, audit logs, and `approve()` work identically.
+- **Enforcer Registration Integration**:
+  - `ContractEnforcer.register(registry)` method to register an enforcer's contract directly into a registry and store `registry_entry_id`.
+  - Added `node_id`, `contract_source`, and `registry_entry_id` properties to `ContractEnforcer`.
+- **Expanded Test Suite**:
+  - Added comprehensive test suites: `tests/test_declaration.py` (Phase 1) and `tests/test_registry.py` (Phase 2), bringing total tests to 128 passing tests.
+
 ---
 
 ## [1.1.3] — 2026-09-05

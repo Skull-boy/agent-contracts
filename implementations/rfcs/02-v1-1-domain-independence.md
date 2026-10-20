@@ -1,7 +1,13 @@
+> [!NOTE]
+> **Historical RFC Document (Accepted & Implemented)**  
+> This RFC defined the requirement and validation process for domain independence in Contract v1.1. The v1.1 contract model, schema, and Python runtime have since been implemented and shipped. For the active specification, see [`docs/contract-model-v1.1.md`](../../docs/contract-model-v1.1.md) and [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md).
+
+---
+
 # RFC 02 — Contract v1.1: Domain Independence
 
-**Status:** Proposed / In Progress
-**Author:** [Shinjan Das](https://github.com/Skull-boy)
+**Status:** Accepted & Implemented  
+**Author:** [Shinjan Das](https://github.com/Skull-boy)  
 **Depends on:** [RFC 01 — Contract Model](./01-contract-model.md)
 
 ---

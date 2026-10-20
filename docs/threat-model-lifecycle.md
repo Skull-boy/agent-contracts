@@ -15,9 +15,14 @@ An agent author or malicious agent implementation declares `mode: request-respon
 - Downstream systems assume stateless teardown between runs while in-memory state or persistence leaks across executions.
 
 ### Mitigation Strategy
-1. **Invocation Frequency Tracking (Runtime Enforcer)**: The `ContractEnforcer` in Scyvera tracks invocation frequency using a sliding time window (default: 60 seconds). If an agent declaring `mode: request-response` and `initiation: human-only` is invoked more than $N$ times (default: $N=20$) within the sliding window without external initiation reset, the enforcer logs a high-severity governance warning: `LIFECYCLE_DOWNGRADE_WARNING`.
-2. **Heuristic Rationale**: A sliding window of 60 seconds with an invocation threshold of 20 allows normal burst retries and batch human operations while catching automated continuous polling loops.
-3. **Audit Visibility**: Every invocation record in `AuditEntry` records whether the invocation was within expected lifecycle cadence.
+
+#### Available Now
+- **Schema & Invariant Enforcement**: The loader and validator require explicit lifecycle declarations for v1.1 contracts and enforce strict mode constraints (e.g. `idle_behavior` required for persistent mode).
+- **Default-Deny Gating**: Actions outside the declared permissions and side effects are blocked regardless of invocation rate.
+
+#### Roadmap (Planned, not yet implemented)
+- **Invocation Frequency Tracking (Runtime Enforcer)**: Planned enhancement for `ContractEnforcer` to track invocation frequency using a sliding time window (e.g. 60 seconds). If an agent declaring `mode: request-response` and `initiation: human-only` is invoked repeatedly (e.g. >20 times) within the window without external reset, the enforcer will emit a high-severity `LIFECYCLE_DOWNGRADE_WARNING` log entry.
+- **Cadence Audit Logging**: Future integration to record invocation cadence metrics directly in `AuditEntry`.
 
 ---
 

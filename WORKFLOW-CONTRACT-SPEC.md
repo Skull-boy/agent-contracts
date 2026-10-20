@@ -1,78 +1,122 @@
-# Workflow Contract Specification — v1
+# Workflow & Agent Contract Specification
 
-**Status:** Draft
-**Applies to:** every workflow in this repository, across every implementation (n8n, LangGraph, or otherwise)
+**Status:** Active  
+**Versions:** v1 (Legacy) / v1.1 (Current)  
+**Applies to:** Every workflow and agent implementation in this repository, across all frameworks (n8n, LangGraph, Python, or otherwise).
 
 ---
 
-## Why this exists
+## 1. Why Contracts Exist
 
 Documentation describes. Contracts commit.
 
-A README can say a workflow "only comments on GitHub issues." That's a claim — true until someone edits the workflow and forgets to update the prose next to it. A Contract is different: it's a fixed-shape declaration of what a workflow is allowed to do, written so a human *or a tool* can check whether the actual implementation matches what it claims.
+A README can say an agent "only comments on GitHub issues." That is an informal prose claim — true until someone edits the code and forgets to update the text. An **Agent Contract** is different: it is a fixed-shape, machine-readable declaration of what a system is authorized to do, what external resources it accesses, what authority it requires, what constraints apply, and what side effects it produces.
 
-This spec defines that fixed shape.
-
----
-
-## Format
-
-Every workflow ships a Contract in two forms:
-
-1. **Human-readable** — a `## Contract` section in the workflow's `README.md`, using the fields below
-2. **Machine-readable** — a `contract.yaml` file in the same folder, same fields, structured for tooling to eventually validate against the actual `workflow.json`
-
-The Markdown version is for people. The YAML version is what makes "contracts commit" true instead of aspirational — a future linter can check a workflow's actual HTTP/credential nodes against its declared `permissions` and flag a mismatch, the same way a type checker catches a lie in a function signature.
-
-Until that linter exists, the YAML file is still worth writing — it's the difference between a promise and a promise written down in a form that *could* be checked.
+The specification provides a structured format that humans, policy engines, and runtime enforcement tools can evaluate against actual behavior.
 
 ---
 
-## Required Fields
+## 2. Specification Versions & Formats
 
-| Field | Type | Description |
-|---|---|---|
-| `lifecycle` | object | Execution model and trigger semantics. Required (default: `{mode: request-response}` for backward compatibility). |
-| `inputs` | list | What data enters the workflow, and from where (trigger payload, uploaded file, API response) |
-| `outputs` | list | What the workflow produces or returns, if anything |
-| `permissions` | list | Every external system accessed, and the exact scope (e.g. `github: issues:write`, never a bare `github: full-access`) |
-| `side_effects` | list | Every action the workflow can take in the world — comments posted, files written, messages sent, records updated. If it's not listed here, the workflow shouldn't do it. |
-| `approval_points` | list | Where a human must explicitly approve before the workflow proceeds. An empty list is a real, intentional claim — it means nothing here requires approval, not that the author forgot to fill it in. |
-| `recovery_strategy` | string | What happens when a dependency fails mid-run: retry, fail loudly, fail silently and log, partial-completion behavior |
-| `replay_semantics` | string | Is it safe to run this workflow again on the same input? Idempotent, append-only, or unsafe-to-repeat — state explicitly |
-| `dependencies` | list | External services/APIs/credentials required to run at all |
-| `state` | string | What persists between runs, and where (a Google Sheet, a vector store, nothing) |
-| `observability` | list | What the workflow surfaces about its own execution — logs, digest messages, dashboards |
+### Canonical Filename
+The canonical contract filename is **`contract.yaml`**. Contract files using the `.yml` extension are actively rejected by the loader and validator (`ContractFileNameError`) to enforce ecosystem consistency.
 
-### Lifecycle Field Specification
+### Representation Formats
+1. **Machine-readable YAML** — `contract.yaml` residing alongside the implementation or in standalone contract repositories.
+2. **Dynamic Runtime Declarations** — Python dictionary declarations passed to `ContractEnforcer.from_declaration()`, sealed cryptographically with SHA-256 at creation time.
+3. **Human-readable Documentation** — A `## Contract` table in each implementation's `README.md`.
 
-Field: `lifecycle`
-Type: `object`
-Required: `yes` (in v1.1; default: `{mode: request-response, initiation: human-only, resumability: stateless}` for backward compatibility — existing contracts without this field are treated as request-response)
-
-Sub-fields:
-- `mode`: `request-response` | `persistent` | `scheduled`
-  - Defines the execution model of the agent. Closed enum — new modes require a spec RFC.
-- `idle_behavior`: `null` (for request-response/scheduled) | string description of what the agent may do between triggers (required when `mode: persistent`, max 500 chars). Must be bounded and specific.
-- `initiation`: `human-only` | `schedule` | `self` | `agent`
-  - Who/what can trigger this agent to act.
-- `resumability`: `stateless` | `context-snapshot` | `replay-from-log`
-  - What "restart" means for this agent.
+### Versioning History
+- **Contract v1**: Established the foundational operational fields for developer/workflow automation (inputs, outputs, permissions, side effects, approval points, recovery strategy, replay semantics, dependencies, state, observability).
+- **Agent Contract v1.1**: Expanded to full domain independence (research, education, finance, healthcare, software), introduced structured `system` identity, formal `lifecycle` execution modes, structured `recovery`, `replay`, `approvals`, `constraints`, `risk`, `domain`, and artifact trust declarations.
 
 ---
 
-## Worked Examples
+## 3. Specification Fields
 
-### Example 1: Request-Response Agent (Duplicate Issue Detector)
+### Core Specification Fields (v1 & v1.1)
+
+| Field | Version | Type | Description |
+|---|---|---|---|
+| `version` / `contract_version` | v1 / v1.1 | string / number | Specification version discriminator (`"1"` or `"1.1"`). |
+| `system` | v1.1 | object | System identity: `name` (required), `purpose`, and `version`. (Legacy aliases: `agent`, `workflow`). |
+| `domain` | v1.1 | string | Operational application domain (e.g. `software`, `research`, `education`, `finance`, `healthcare`). |
+| `lifecycle` | v1.1 | object | Execution model and trigger semantics (`mode: request-response \| persistent \| scheduled`, `initiation`, `resumability`, `idle_behavior`). |
+| `capabilities` | v1.1 | list | High-level semantic ability claims (e.g. `search_documents`, `analyze_code`). |
+| `inputs` | v1 / v1.1 | list | Data payloads, event streams, or parameters entering the system. |
+| `outputs` | v1 / v1.1 | list | Data payloads, structured artifacts, or return objects produced by the system. |
+| `permissions` | v1 / v1.1 | list | Granular external resource scopes and action authorizations (e.g. `{resource: "github_issues", actions: ["read", "write"]}`). Prohibits wildcards (`*`, `all`, `any`). |
+| `constraints` | v1.1 | list | Quantitative limits placed on authorized behavior (rate limits, transaction caps, allowed ranges). |
+| `side_effects` | v1 / v1.1 | list | Externally observable changes caused by system operations (comments posted, database records modified, emails sent). Supports `irreversible: true`. |
+| `approval_points` / `approvals` | v1 / v1.1 | list | Checkpoints where human confirmation is required prior to execution. An empty list (`[]`) is an explicit claim that no human approval is required. |
+| `recovery` / `recovery_strategy` | v1 / v1.1 | object / string | Failure recovery behavior (`retry`, `stop`, `rollback`, `human_escalation`, `fallback`). |
+| `replay` / `replay_semantics` | v1 / v1.1 | object / string | Execution safety when re-run on identical inputs (`idempotent`, `non_idempotent`, `conditional`, `prohibited`). |
+| `dependencies` | v1 / v1.1 | list | External APIs, models, databases, or services required for execution. |
+| `state` | v1 / v1.1 | object / string | Persistence tier (`none`, `session`, `persistent`, `ephemeral`), storage mechanism, and scope. |
+| `observability` | v1 / v1.1 | object / list | Logging level (`none`, `basic`, `audit`, `verbose`) and notification sinks. |
+| `risk` | v1.1 | object | Risk level assessment (`low`, `medium`, `high`, `critical`) and hazard category. |
+| `artifacts` | v1.1 | list | External artifacts (models, datasets) with declared integrity and provenance requirements. |
+
+---
+
+## 4. Lifecycle Field Specification (v1.1)
+
+The `lifecycle` block formalizes how an agent or workflow executes:
 
 ```yaml
-# contract.yaml
-version: 1.1
+lifecycle:
+  mode: request-response     # request-response | persistent | scheduled
+  initiation: human-only     # human-only | schedule | self | agent
+  resumability: stateless   # stateless | context-snapshot | replay-from-log
+  idle_behavior: null        # string (required when mode is persistent, max 500 chars)
+```
+
+- **`mode`**: Closed enum defining the execution model.
+  - `request-response`: Bounded run triggered by an event, prompt, or webhook; tears down after execution.
+  - `scheduled`: Triggered periodically by a clock or cron schedule.
+  - `persistent`: Continuously active daemon or agent that maintains background monitoring or self-directed tasks. Requires an explicit, bounded `idle_behavior` description (enforced by schema and Rule AC301).
+- **Backward Compatibility**: If a v1.1 contract omits `lifecycle`, the loader applies defaults (`{mode: "request-response", initiation: "human-only", resumability: "stateless"}`) and emits a warning advising the author to make lifecycle explicit.
+
+---
+
+## 5. Tooling and Enforcement Ecosystem
+
+Unlike early drafts of this specification, comprehensive tooling is implemented in the `scyvera` package:
+
+1. **Static Schema Validation (`validate_contract`)**: Validates contracts against JSON Schema Draft 2020-12 definitions (`schemas/v1/contract.schema.json` and `schemas/v1.1/contract.schema.json`).
+2. **Semantic Linter (`lint_contract`)**: Tier 2 consistency analyzer evaluating rules:
+   - `AC101`: Unbounded write permissions without declared side effects.
+   - `AC103`: Capabilities duplicating operational permission verbs.
+   - `AC201`: High-risk systems without approval gates.
+   - `AC301`: Vague or unbounded `idle_behavior` strings.
+   - `AC302`: Irreversible side effects without approval boundaries.
+   - `AC401`: Required dependencies without recovery strategies.
+   - `AC601`: Unobserved side effects.
+3. **Runtime Enforcement Engine (`ContractEnforcer`)**:
+   - `ContractEnforcer.load(path)`: Loads and freezes contract files, computing a SHA-256 hash.
+   - `ContractEnforcer.from_declaration(dict)`: Dynamically compiles and cryptographically seals in-memory contract declarations.
+   - `@enforcer.gate(action_name, action_type)`: Default-deny execution decorator for Python functions.
+   - `enforcer.verify_integrity()`: Validates that the contract source has not been modified after load/seal.
+   - `enforcer.get_audit_log()`: Produces tamper-proof, deep-copied audit entries.
+4. **Gateway Boundary Layer (`BaseGateway`, `GitHubGateway`, `QdrantGateway`)**: Encapsulates third-party clients and credentials behind gated methods, structurally preventing gate bypass.
+5. **Contract Registry (`ContractRegistry`)**: Versioned, append-only, JSONL persistent record of all registered contracts supporting point-in-time audit queries (`get_at_time`).
+
+---
+
+## 6. Worked Examples
+
+### Example 1: Minimal Request-Response System (v1.1)
+
+```yaml
+version: "1.1"
 contract_version: "1.1"
+
 system:
   name: duplicate-issue-detector
-  purpose: Detect semantically duplicate GitHub issues
+  purpose: Detects semantically duplicate GitHub issues
   version: "1.0.0"
+
+domain: software
 
 lifecycle:
   mode: request-response
@@ -99,20 +143,21 @@ permissions:
 side_effects:
   - type: comment
     resource: github_issues
-    description: Posts one comment on the triggering issue, if similarity >= threshold
+    description: Posts one comment on the triggering issue if similarity exceeds threshold
+    irreversible: false
   - type: vector_upsert
     resource: qdrant_collection
-    description: Writes one vector to the Qdrant collection
+    description: Upserts issue embedding vector into Qdrant
 
-approval_points: []   # intentionally empty — comments only, no approval gate required
+approval_points: []   # Intentionally empty — comment-only, non-destructive
 
 recovery:
   strategy: retry
-  details: If Qdrant is unreachable, fails loudly and visibly in execution log.
+  details: If Qdrant is unreachable, fails loudly and visibly in execution log
 
 replay:
   mode: idempotent
-  details: Re-running on same issue re-embeds and overwrites vector by issue number.
+  details: Re-running on same issue re-embeds and overwrites vector by issue number
 
 dependencies:
   - name: GitHub API
@@ -137,109 +182,49 @@ risk:
   level: low
 ```
 
-### Example 2: Scheduled Agent (Competitor Feature Watcher)
+### Example 2: Persistent Autonomous Agent (v1.1)
 
 ```yaml
-# contract.yaml
-version: 1.1
+version: "1.1"
 contract_version: "1.1"
+
 system:
-  name: competitor-feature-watcher
-  purpose: Periodically checks competitor product pages for feature changes
+  name: repository-sentinel
+  purpose: Autonomous agent that continuously monitors repository activity and queues security digests
   version: "1.0.0"
 
-lifecycle:
-  mode: scheduled
-  initiation: schedule
-  resumability: stateless
-
-inputs:
-  - name: competitor_urls
-    type: configuration
-    required: true
-
-outputs:
-  - name: feature_diff_report
-    type: document
-
-permissions:
-  - resource: competitor_websites
-    actions: [read]
-  - resource: internal_dashboard
-    actions: [write]
-
-side_effects:
-  - type: notification
-    resource: internal_dashboard
-    description: Updates internal dashboard with newly detected competitor features
-
-approval_points: []
-
-recovery:
-  strategy: retry
-
-replay:
-  mode: idempotent
-
-dependencies:
-  - name: HTTP client
-    type: library
-    required: true
-
-state:
-  persistence: persistent
-  storage: database
-
-observability:
-  level: basic
-
-risk:
-  level: low
-```
-
-### Example 3: Persistent Autonomous Agent (Headlong-style)
-
-```yaml
-# contract.yaml
-version: 1.1
-contract_version: "1.1"
-system:
-  name: headlong-persistent-agent
-  purpose: Autonomous agent that continuously monitors and responds to environment changes
-  version: "1.0.0"
+domain: software
 
 lifecycle:
   mode: persistent
-  idle_behavior: Monitors GitHub notifications for mentions of the repository and queues responses for review
+  idle_behavior: Monitors GitHub notifications for repository mentions and security advisories
   initiation: self
   resumability: context-snapshot
 
 inputs:
-  - name: environment_events
-    type: stream
+  - name: notification_stream
+    type: event_stream
     required: true
 
 outputs:
-  - name: research_report
+  - name: security_digest
     type: document
 
 permissions:
   - resource: github_api
     actions: [read, write]
-  - resource: web_search
-    actions: [read]
 
 side_effects:
   - type: comment
     resource: github_api
-    description: Posts research findings as GitHub issue comments
+    description: Posts security review digest to internal tracking issue
     irreversible: false
 
 approvals:
-  - action: publish_report
+  - action: publish_digest
     required: true
     approver: human
-    condition: Before any external publication
+    condition: Before publishing alerts externally
 
 recovery:
   strategy: human_escalation
@@ -249,9 +234,6 @@ replay:
 
 dependencies:
   - name: GitHub API
-    type: api
-    required: true
-  - name: Search Engine API
     type: api
     required: true
 
@@ -268,34 +250,9 @@ risk:
 
 ---
 
-## Contracts vs. Patterns — two different layers
+## 7. Contracts vs. Patterns
 
-A **Contract** describes one specific implementation's behavior. A **Pattern** (see `patterns/`) describes the reusable shape underneath it — `detect → judge → approve → act`, for example — independent of any framework.
+- **Pattern** (see `patterns/`): Framework-agnostic description of an abstract workflow shape (e.g. `detect → judge → approve → act` or `monitor → alert → escalate`).
+- **Contract** (`contract.yaml`): Concrete declaration of one specific implementation's operational boundaries (exact permissions, credentials, resources, and side effects).
 
-A pattern can have many Contracts implementing it (an n8n version, a LangGraph version), each with its own permissions and side effects, because the same abstract shape can be wired up differently. Don't conflate the two: a Contract is concrete and framework-specific; a Pattern is abstract and framework-agnostic.
-
----
-
-## Versioning & Change Process
-
-This is v1. Fields may be added in v2, but existing v1 fields will not be silently redefined — a field's meaning, once shipped, is stable.
-
-To propose a change:
-1. Open an issue tagged `contract-rfc`
-2. Include at least one worked example showing the proposed field/change applied to a real workflow in this repo
-3. A change is only accepted once at least one existing workflow's Contract has been updated to demonstrate it works in practice — a proposal with no worked example doesn't get merged, no matter how reasonable it sounds in the abstract
-
-This mirrors the project's own founding lesson: several independent people converged on the same missing pieces through real discussion, not one person designing in isolation. The RFC process is that lesson turned into a mechanism.
-
----
-
-## Migration Note
-
-Workflows documented before this spec existed (the original four in this repository) currently have a Contract-shaped section in their README using an earlier, five-field informal version (`Inputs / Permissions Required / Side Effects / Approval Points / Recovery Behavior`). These are not wrong — they're a subset of v1. Each should be upgraded to the full v1 field set (and given a `contract.yaml`) as a small, individually-trackable issue rather than one large rewrite.
-
----
-
-## Non-Goals for v1
-
-- **No enforcement tooling yet.** A linter that validates `contract.yaml` against the actual `workflow.json` is a real future goal, not part of this version. v1 is the schema the linter will eventually check against.
-- **No cross-framework contract translation.** A LangGraph implementation of the same pattern writes its own Contract; this spec doesn't attempt to auto-translate one framework's contract into another's.
+A single Pattern can have multiple independent implementations across different frameworks (such as n8n and LangGraph), each governed by its own Contract.

@@ -1,5 +1,5 @@
 # Agent Contracts Terminology
-Status: Draft
+Status: Active (Normative Glossary)
 Specification: Agent Contracts v1.1
 
 ---
@@ -121,4 +121,52 @@ A Contract Version MUST be explicitly identifiable.
 For example:
 
 ```yaml
-version: 1
+version: "1.1"
+contract_version: "1.1"
+```
+
+---
+
+## 6. Runtime Enforcement
+
+**Runtime Enforcement** is the active interception and gating of an agent's code execution, tool invocations, and external side effects against its declared contract.
+
+Unlike passive documentation, runtime enforcement operates on **default-deny**: any action not explicitly declared in the contract is rejected with a `ContractViolationError`, and any action requiring human confirmation is halted with an `ApprovalPendingError`.
+
+---
+
+## 7. Contract Enforcer
+
+A **Contract Enforcer** (`ContractEnforcer`) is the execution gatekeeper that loads, validates, cryptographically seals, and enforces an Agent Contract in memory at runtime.
+
+It provides function gating decorators (`@enforcer.gate`), post-load integrity verification (`verify_integrity()`), and tamper-proof audit trail logging (`get_audit_log()`).
+
+---
+
+## 8. Gateway
+
+A **Gateway** (`BaseGateway`, `GitHubGateway`, `QdrantGateway`) is an architectural enforcement boundary that isolates third-party API clients and credentials from agent logic.
+
+By ensuring that external API tokens and client instances are held privately within the gateway class, and that every method is gated by an injected `ContractEnforcer`, gate bypass is structurally prevented at the integration layer.
+
+---
+
+## 9. Contract Registry
+
+A **Contract Registry** (`ContractRegistry`) is a versioned, append-only, persistent record of every contract that has governed an agent in a deployment environment.
+
+It records contract hashes, source declarations, registration timestamps, and version histories, enabling point-in-time time-travel queries (`get_at_time()`) to establish cryptographic provenance for governance and compliance.
+
+---
+
+## 10. Integrity Hash
+
+An **Integrity Hash** is the SHA-256 cryptographic digest computed over the canonical representation of a contract file or dynamic runtime declaration at the moment of loading or creation.
+
+It serves as a tamper detection seal against post-load tampering or disk modification.
+
+---
+
+## 11. Audit Log
+
+An **Audit Log** is an immutable, chronological sequence of structured records (`AuditEntry`) produced by a Contract Enforcer, documenting every enforcement decision (allowed, denied, or pending human approval) along with timestamps, action names, and contract field references.

@@ -47,19 +47,17 @@ Documentation describes. Contracts commit.
 
 A README can say a workflow "only comments on GitHub issues" — a claim, true until someone edits the workflow and forgets to update the sentence next to it. A **Contract** is a fixed-shape declaration of what a workflow is allowed to do: its permissions, its side effects, where a human has to approve before anything irreversible happens, what happens when a dependency fails. Written so a human — and eventually a tool — can check whether the implementation actually matches what it claims.
 
-This isn't hypothetical. Every workflow in this repository is expected to ship one, and the [Semantic Duplicate Issue Detector](../workflows/duplicate-issue-detector) is the first fully worked example — Contract written, checked against the real implementation, not just described in prose.
+This isn't hypothetical. Every workflow in this repository is expected to ship one, and the [Semantic Duplicate Issue Detector](../implementations/n8n/duplicate-issue-detector/) was the first fully worked example — Contract written, checked against the real implementation, not just described in prose.
 
 ---
 
 ## Why do patterns outlive frameworks?
 
-This is the part of this document we can't yet prove, and we want to be honest about that rather than pretend otherwise.
+A Pattern like `detect → judge → approve → act`, once its Contract is well-specified, can be rebuilt in LangGraph, n8n, OpenAI Agents, Semantic Kernel, or whatever comes after them — because the *pattern* isn't tied to a specific tool, only a particular *implementation* of it is.
 
-The claim: a Pattern like `detect → judge → approve → act`, once its Contract is well-specified, should be rebuildable in LangGraph, OpenAI Agents, Semantic Kernel, or whatever comes after them — because the *pattern* isn't tied to n8n, only today's *implementation* of it is.
+This was initially a founding hypothesis. It is now demonstrated in this repository: the Semantic Duplicate Issue Detector exists in both [n8n](../implementations/n8n/duplicate-issue-detector/) and [LangGraph](../implementations/langgraph/duplicate-issue-detector/). Both implementations instantiate the exact same four-stage pattern (`detect → judge → approve → act`), declare equivalent permissions and side effects, and adhere to identical contract invariants, despite running on completely different engines.
 
-We believe this. We haven't demonstrated it yet. Every implementation in this repository today is n8n. The real test of this claim is a second-framework implementation of an existing pattern — and until that exists, "patterns outlive frameworks" is a hypothesis this repository is organized around, not a fact it has already proven.
-
-If you build that second implementation, you're not adding a folder. You're the first real evidence for or against the core idea this repository is betting on.
+Patterns outlive frameworks because operational boundaries and safety constraints belong to the task and the organization, not to the orchestration library.
 
 ---
 
@@ -100,4 +98,4 @@ This document explains *why*. [`WORKFLOW-CONTRACT-SPEC.md`](../WORKFLOW-CONTRACT
 
 - **This is not a roadmap.** It doesn't list what ships when — see the repository's issues and RFCs for that.
 - **This is not a specification.** It defines no checkable format itself; `WORKFLOW-CONTRACT-SPEC.md` does that.
-- **This is not a finished claim.** The "patterns outlive frameworks" section is a stated hypothesis, not a demonstrated result — this document changes when the evidence changes, including the parts of it that are still unproven today.
+- **This is an evolving document.** As additional runtime integrations, framework adapters, and governance patterns are built, this document will be updated to reflect empirical evidence from production.

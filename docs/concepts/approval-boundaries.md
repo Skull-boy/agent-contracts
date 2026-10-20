@@ -1,7 +1,7 @@
 # Concept: Approval Boundaries
 
-**Part of:** [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md) — the `approval_points` field
-**Status:** Draft
+**Part of:** [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md) — `approval_points` (v1) and `approvals` (v1.1)  
+**Status:** Active
 
 ---
 
@@ -44,6 +44,16 @@ A workflow that sends a Slack message saying "I'm about to do X" and proceeds re
 ## Worked example
 
 From the Telegram → GitHub → Antigravity pipeline: the boundary sits after a coding agent proposes a fix and before that fix is pushed to a real branch. The human reviews the diff on Telegram; only an explicit approval reply resumes the workflow toward the `git push` side effect. Rejecting it, or simply not responding, means the fix never leaves the local working state.
+
+---
+
+## Runtime Enforcement in Scyvera
+
+In the `scyvera` runtime engine, approval boundaries are enforced by `ContractEnforcer`:
+1. When a gated action matches an entry in `approval_points` (v1) or `approvals` (v1.1), `ContractEnforcer` halts execution immediately and raises `ApprovalPendingError`.
+2. Execution cannot proceed until manual approval is recorded via `enforcer.approve(action_name)`.
+3. Every pending and granted approval creates an immutable record in the audit log (`AuditEntry`).
+4. Additionally, semantic rule `AC201` flags high- or critical-risk contracts that declare no approval boundaries, and rule `AC302` flags irreversible side effects (`irreversible: true`) lacking approvals.
 
 ---
 
