@@ -1,7 +1,7 @@
 # Concept: Replay Semantics
 
-**Part of:** [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md) — the `replay_semantics` field
-**Status:** Draft
+**Part of:** [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md) — `replay_semantics` (v1) and `replay` (v1.1)  
+**Status:** Active
 
 ---
 
@@ -17,20 +17,32 @@ Workflows re-run for reasons outside their own design. A webhook fires twice bec
 
 ---
 
-## The three states, precisely
+## The four replay modes in v1.1
 
-**Idempotent.** Running twice on the same input produces the same end state as running once. Not "produces the same output" — the same *state*, including everything the workflow wrote anywhere. This is the strongest and most desirable guarantee, but it has to be engineered, not assumed.
+In the v1.1 specification (`contract-model-v1.1.md`), `replay.mode` is a closed enum:
 
-**Append-only.** Running twice adds a second record alongside the first, rather than overwriting or erroring. Safe in the sense that nothing gets corrupted, but not free — a second run means duplicate entries somewhere, and anything downstream reading that data needs to already expect duplicates.
-
-**Unsafe-to-repeat.** Running twice does something actively wrong — a second comment where only one was intended, a second charge, a state transition that doesn't make sense to apply twice. A workflow in this category should say so explicitly, and ideally should have a guard elsewhere in its Contract (an approval boundary, a pre-check) that prevents an accidental second run from ever reaching the unsafe step.
+- **`idempotent`**: Running twice on the same input produces the exact same end state as running once. Not "produces the same output" — the same *state*, including everything the workflow wrote anywhere. This is the strongest and most desirable guarantee, but it must be engineered, not assumed.
+- **`non_idempotent`**: Running twice adds side effects (e.g. append-only logs, duplicate records, multiple counter increments) rather than overwriting. Safe in the sense that existing state is not destroyed, but downstream consumers must expect duplicates.
+- **`conditional`**: Safe to re-run only if specific pre-conditions are satisfied (e.g., entity is still in a draft state, or idempotency keys have not expired).
+- **`prohibited`**: Running twice executes an unsafe, destructive, or conflicting operation (e.g. a second financial transaction, duplicate git push, or invalid state transition). Blind replay is strictly prohibited.
 
 ---
 
 ## How idempotency is actually achieved, not just claimed
 
-Writing `replay_semantics: idempotent` in a Contract is a claim. It's only true if something concrete backs it — almost always a stable identifier used as the key for any write, so a second write with the same key overwrites rather than duplicates.
+Writing `mode: idempotent` in a Contract is a claim. It's only true if something concrete backs it — almost always a stable identifier used as the key for any write, so a second write with the same key overwrites rather than duplicates.
 
+In v1.1 (preferred structured format):
+```yaml
+replay:
+  mode: idempotent
+  details: >
+    Idempotent per issue — re-running on the same issue re-embeds and
+    re-checks, but the Qdrant upsert uses the issue number as point ID,
+    so it overwrites rather than duplicates.
+```
+
+In v1 (legacy string format):
 ```yaml
 replay_semantics: >
   Idempotent per issue — re-running on the same issue re-embeds and
@@ -42,22 +54,24 @@ The mechanism is named, not just the outcome. "Idempotent" alone is an assertion
 
 ---
 
-## Worked example: an implementation that is deliberately not idempotent
+## Worked example: an implementation with prohibited replay
 
-Not every workflow should claim idempotency it doesn't have. The GitHub Debugger Agent's commit step, once it pushes a fix, is not safe to blindly re-run on the same trigger — a second run against an already-fixed file could produce a redundant or conflicting commit. Its Contract should say so plainly, rather than default to claiming idempotency because that sounds like the more impressive answer:
+Not every workflow should claim idempotency it doesn't have. The GitHub Debugger Agent's commit step, once it pushes a fix, is not safe to blindly re-run on the same trigger — a second run against an already-fixed file could produce a redundant or conflicting commit. Its Contract states this clearly:
 
 ```yaml
-replay_semantics: >
-  Unsafe to repeat past the commit step. Re-running after a fix has
-  already been pushed may produce a conflicting or redundant commit.
-  The approval boundary before push is the safeguard — a human
-  reviewing the diff a second time is expected to notice and decline.
+replay:
+  mode: prohibited
+  details: >
+    Prohibited past the commit step. Re-running after a fix has
+    already been pushed may produce a conflicting or redundant commit.
+    The approval boundary before push is the safeguard — a human
+    reviewing the diff a second time is expected to notice and decline.
 ```
 
-An honest "unsafe-to-repeat, mitigated by an approval boundary" is a stronger Contract than an unearned "idempotent."
+An honest "prohibited, mitigated by an approval boundary" is a stronger Contract than an unearned "idempotent."
 
 ---
 
 ## Relationship to other concepts
 
-Replay semantics and [`recovery.md`](./recovery.md) interact directly: a retry-based recovery strategy is only safe to actually retry if the replayed step is idempotent or append-only. A `recovery_strategy` that retries an `unsafe-to-repeat` step is a contradiction inside the same Contract — the two fields should never disagree with each other.
+Replay semantics and [`recovery.md`](./recovery.md) interact directly: a retry-based recovery strategy is only safe to actually retry if the replayed step is `idempotent` or `non_idempotent`. A `recovery` strategy that automatically retries an action marked `prohibited` without human approval is a severe flaw — the two fields must never contradict each other. See [`approval-boundaries.md`](./approval-boundaries.md) for gating non-idempotent or prohibited actions.

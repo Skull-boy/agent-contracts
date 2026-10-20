@@ -1,7 +1,7 @@
 # Concept: Permissions
 
-**Part of:** [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md) — the `permissions` field
-**Status:** Draft
+**Part of:** [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md) — the `permissions` field  
+**Status:** Active
 
 ---
 
@@ -21,6 +21,19 @@ A permission entry has to be specific enough that granting it and reading it bac
 
 ## The shape of a permission entry
 
+In v1.1 (preferred structured format):
+```yaml
+permissions:
+  - resource: github_issues
+    actions: [read, write]
+    scope: repository
+  - resource: openai_embeddings
+    actions: [read]
+  - resource: qdrant_collection
+    actions: [read, write]
+```
+
+In v1 (legacy format):
 ```yaml
 permissions:
   - github: issues:write   # comment only — never close, label, or edit
@@ -30,9 +43,9 @@ permissions:
 
 Three things every entry should make clear:
 
-1. **The system** — which external service
-2. **The scope** — the narrowest access level that actually satisfies the workflow's declared `side_effects`, not the broadest one the platform happens to offer
-3. **What's explicitly excluded**, when the scope name alone doesn't make it obvious — `github: issues:write` is ambiguous on its own about whether it can close an issue; the comment resolves it
+1. **The resource** — which external entity or dataset is targeted
+2. **The actions** — the narrowest action verbs (e.g. `read`, `write`, `delete`, `query`) that actually satisfy the declared `side_effects`
+3. **The scope** — optional operational boundary (e.g. `repository`, `session`, `tenant`)
 
 ---
 
@@ -45,24 +58,44 @@ Write `side_effects` first. Every permission listed should exist because somethi
 
 ---
 
-## Never a bare platform default
+## Never a bare platform default (Threat T7 Prohibition)
 
-Never write `github: full-access`, `openai: all`, or an equivalent catch-all as a permission entry. If a workflow genuinely needs broad access across many resource types, that's a signal to look harder at whether it's actually one workflow or several bundled together — not a reason to write a vague permission and move on.
+Never write `github: full-access`, `openai: all`, or wildcards like `*`, `all`, or `any` as a permission entry.
+
+In Scyvera:
+- **Schema Validation**: The JSON Schema rejects wildcards via regex pattern matching (`^[a-zA-Z0-9_\-]+:[a-zA-Z0-9_\-:]+$`).
+- **Load-Time Check (Threat T7)**: `ContractEnforcer.load()` and `ContractEnforcer.from_declaration()` actively inspect all permission items and raise `ContractValidationError` or `DeclarationValidationError` if `*`, `all`, or `any` is supplied.
+- **Semantic Linter (Rule AC101)**: `lint_contract()` raises a warning if a write permission (e.g. `actions: [write]`) is declared without any corresponding declared side effect.
+
+---
+
+## Runtime Enforcement: Default-Deny
+
+At runtime in Python, `ContractEnforcer` gates every decorated call:
+```python
+@enforcer.gate("github_issues:write", "permission")
+def post_comment(...):
+    ...
+```
+If `github_issues:write` is not declared in the loaded contract, `ContractViolationError` is raised immediately. Scyvera denies unauthorized actions loudly by default rather than warning or silently skipping.
 
 ---
 
 ## Worked example
 
-From the Semantic Duplicate Issue Detector:
+From the Semantic Duplicate Issue Detector (v1.1 format):
 
 ```yaml
 permissions:
-  - github: issues:write   # comment only — never close, label, or edit
-  - openai: embeddings:read
-  - qdrant: read+write on one collection
+  - resource: github_issues
+    actions: [read, write]
+  - resource: openai_embeddings
+    actions: [read]
+  - resource: qdrant_collection
+    actions: [read, write]
 ```
 
-Each line traces to a specific side effect: the GitHub scope exists because it posts a comment (and nothing else — the parenthetical exists precisely to rule out the broader things `issues:write` could otherwise be read to allow); the OpenAI scope exists because it embeds issue text; the Qdrant scope exists because it reads and writes vectors to exactly one collection, not the whole instance.
+Each entry traces to a specific side effect: the GitHub permission exists because it posts a comment; the OpenAI permission exists because it embeds issue text; the Qdrant permission exists because it reads and writes vectors to exactly one collection.
 
 ---
 

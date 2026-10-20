@@ -1,7 +1,7 @@
 # Concept: Side Effects
 
-**Part of:** [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md) — the `side_effects` field
-**Status:** Draft
+**Part of:** [`WORKFLOW-CONTRACT-SPEC.md`](../../WORKFLOW-CONTRACT-SPEC.md) — the `side_effects` field  
+**Status:** Active
 
 ---
 
@@ -23,15 +23,39 @@ This is stated as a constraint on the implementation, not just a description of 
 
 ## Specific enough to be falsifiable
 
-"Posts to GitHub" is not a side effect entry — it's a category. A real entry names the exact action and the exact condition under which it happens:
+"Posts to GitHub" is not a side effect entry — it's a category. A real entry names the exact action, resource, and condition under which it happens.
 
+In v1.1 (preferred structured format):
+```yaml
+side_effects:
+  - type: notification
+    resource: github_issues
+    description: Posts one comment on the triggering issue if similarity >= threshold
+    irreversible: false
+  - type: data_modification
+    resource: qdrant_collection
+    description: Writes one vector to the duplicate_issues collection
+    irreversible: false
+```
+
+In v1 (legacy string format):
 ```yaml
 side_effects:
   - Posts one comment on the triggering issue, if similarity >= threshold
   - Writes one vector to the Qdrant collection
 ```
 
-Read this and you know: at most one comment, only conditionally, and exactly one database write, unconditionally. Nothing else. A reviewer — human or, eventually, a linter checking this against the real `workflow.json` — can verify each line against the actual implementation node by node.
+Read this and you know: at most one comment, only conditionally, and exactly one database write, unconditionally. Nothing else. A reviewer — or Scyvera's linter and runtime enforcer — can verify each entry against the actual implementation node by node.
+
+---
+
+## Static Linter Enforcement & Threat Mitigations
+
+In Scyvera, `side_effects` is statically validated by `scyvera.lint_contract()` against three core governance rules:
+
+1. **Rule AC101 (`Unbounded Write Permission`)**: If a contract grants write permissions (`actions: [write, create, update, delete, initiate_transaction]`) on a resource, but no corresponding `side_effects` are declared for that resource, the linter warns of an unbounded write permission.
+2. **Rule AC302 (`Irreversible Side Effect Without Approval` - Threat T8 Mitigation)**: If any side effect entry declares `irreversible: true` but the contract specifies no approval boundaries in `approvals`, the linter emits a warning. Irreversible operations (such as permanently deleting data or sending financial transfers) must never be permitted without an approval checkpoint.
+3. **Rule AC601 (`Unobserved Side Effect`)**: If external side effects are declared, but `observability.level` is set to `none`, the linter warns that state mutations will occur without audit visibility.
 
 ---
 
@@ -49,24 +73,35 @@ A side effect that requires no permission wasn't actually a side effect (it didn
 
 ## Worked example
 
-From the Semantic Duplicate Issue Detector, the full picture these other docs have referenced piecemeal:
+From the Semantic Duplicate Issue Detector (v1.1 format):
 
 ```yaml
 side_effects:
-  - Posts one comment on the triggering issue, if similarity >= threshold
-  - Writes one vector to the Qdrant collection
+  - type: notification
+    resource: github_issues
+    description: Posts one comment on the triggering issue if similarity >= threshold
+    irreversible: false
+  - type: data_modification
+    resource: qdrant_collection
+    description: Writes one vector to the duplicate_issues collection
+    irreversible: false
 
 permissions:
-  - github: issues:write   # comment only — never close, label, or edit
-  - qdrant: read+write on one collection
+  - resource: github_issues
+    actions: [read, write]
+    scope: repository
+  - resource: qdrant_collection
+    actions: [read, write]
 
-approval_points: []   # justified: neither side effect is destructive or
-                       # irreversible — a comment can be deleted, a vector
-                       # write is idempotent and harmless to redo
+approvals: []   # justified: neither side effect is destructive or
+                 # irreversible — a comment can be deleted, a vector
+                 # write is idempotent and harmless to redo
 
-replay_semantics: >
-  Idempotent per issue — the Qdrant upsert uses the issue number as
-  point ID, so a second run overwrites rather than duplicates.
+replay:
+  mode: idempotent
+  details: >
+    Idempotent per issue — the Qdrant upsert uses the issue number as
+    point ID, so a second run overwrites rather than duplicates.
 ```
 
 Every other field in this Contract exists to answer a question this one raises. That's the test for whether a `side_effects` list is doing its job: does it generate the rest of the Contract, or did the rest of the Contract get written independently and happen to agree with it?
