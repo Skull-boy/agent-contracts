@@ -1,115 +1,115 @@
-# Contributing to n8n_workflows
+# Contributing to Agent Contracts
 
-Thanks for considering a contribution — this repo grows through community-submitted workflows, so every addition genuinely helps. This guide covers how to submit one properly.
+Thanks for considering a contribution — this repository grows through community-submitted contracts, framework reference implementations, specification proposals, and governance tooling in `scyvera`.
 
 ---
 
 ## 📌 Ground Rules
 
-- **Never push directly to `main`.** All changes — new workflows, fixes, doc updates — go through a feature branch and a pull request. `main` only receives merges after review.
-- Every workflow must be self-contained in its own folder under `workflows/`.
-- Every workflow must include a `workflow.json` **and** its own `README.md`.
-- No real credentials, tokens, chat IDs, webhook URLs, or personal data in anything you commit — see [Security Note](#-security-note) below.
+- **Never push directly to `main`.** All changes — new implementations, python code, doc updates, schemas — go through a feature branch and a pull request. `main` only receives merges after review.
+- **Canonical naming is `contract.yaml`** — never use `contract.yml`. The loader and schema reject `.yml` extensions.
+- **Every implementation declares a Contract** — any workflow or agent implementation must include a valid `contract.yaml` alongside its code or workflow definition.
+- **Run the test suite** — all Python tests must pass (`pytest tests/ -v`).
+- **No real credentials, tokens, chat IDs, webhook URLs, or personal data** in anything you commit. Use clear placeholders (`REPLACE_ME`, `YOUR_KEY`, etc.).
 
 ---
 
 ## 🧭 Contribution Workflow
 
-### 1. Fork the repository
+### 1. Fork and Clone the Repository
 Click **Fork** on GitHub, then clone your fork locally:
 ```bash
-git clone https://github.com/<your-username>/n8n_workflows.git
-cd n8n_workflows
+git clone https://github.com/<your-username>/agent-contracts.git
+cd agent-contracts
 ```
 
-### 2. Create a feature branch
-Never commit to `main` — always branch off it first:
+### 2. Set Up Development Environment
+Install development dependencies:
 ```bash
-git checkout -b feature-<short-description>
+pip install -e ".[dev]"
+```
+
+Verify that the test suite passes:
+```bash
+pytest tests/ -v
+```
+
+### 3. Create a Feature Branch
+Always branch off `main`:
+```bash
+git checkout -b feature/<short-description>
 ```
 Examples:
 ```bash
-git checkout -b feature-slack-standup-bot
-git checkout -b feature-fix-debugger-agent-readme
+git checkout -b feature/langgraph-research-assistant
+git checkout -b feature/enforcer-metrics
 ```
 
-### 3. Add your workflow
-Structure it like this:
+### 4. Areas to Contribute
+
+#### A. Python Package (`src/scyvera/`)
+If improving or extending the core governance layer:
+- **`enforcer.py`**: Runtime enforcement engine (`ContractEnforcer.load`, `ContractEnforcer.from_declaration`, `@gate`).
+- **`gateway.py`**: Gated gateway clients (`BaseGateway`, `GitHubGateway`, `QdrantGateway`). Remember: all raw client imports and credentials must live strictly inside `gateway.py` to pass `.github/workflows/lint-gateway.yml`.
+- **`registry.py`**: Versioned, append-only contract registry (`ContractRegistry`).
+- **`validator.py` & `linter.py`**: Structural JSON Schema validator and Tier 2 semantic linter.
+- **`cli.py`**: Command-line interface (`scyvera validate`, `scyvera lint`, `scyvera init`).
+
+#### B. Implementations (`implementations/<framework>/<name>/`)
+Structure new agent or workflow implementations like this:
+```text
+implementations/
+└── <framework>/
+    └── <name>/
+        ├── contract.yaml    # Mandatory machine-readable contract
+        ├── README.md        # Documentation with ## Contract section
+        └── <source files>   # workflow.json, python files, or graph definitions
 ```
-workflows/
-└── your-workflow-name/
-    ├── workflow.json
-    └── README.md
-```
-
-Your workflow's `README.md` should cover:
-- **What it does** — one or two sentences
-- **Prerequisites** — n8n version, any credentials/API keys needed, external services used
-- **Setup steps** — how to import and configure it
-- **Placeholders used** — list every `REPLACE_ME`-style value someone needs to fill in before running it
-
-### 4. Scrub secrets before committing
-Open your exported `workflow.json` and check for:
-- API keys, tokens, or webhook secrets
-- Real chat IDs, user IDs, or email addresses
-- Real repo names or file paths that reveal private info
-
-Replace anything sensitive with a clear placeholder (`REPLACE_ME`, `YOUR_CHAT_ID`, `YOUR_REPO_NAME`, etc.) before it ever reaches a commit.
-
-### 5. Commit your changes
-Write clear, specific commit messages:
+Validate your contract with the CLI:
 ```bash
-git add .
-git commit -m "Add Slack standup reminder workflow"
+scyvera validate implementations/<framework>/<name>/contract.yaml
+scyvera lint implementations/<framework>/<name>/contract.yaml
 ```
 
-### 6. Push your branch
-```bash
-git push origin feature-<short-description>
-```
-**Do not push to `main`** — pushing your feature branch is the correct and only path.
+#### C. Domain-Neutral Examples (`examples/v1.1/`)
+Reference contracts illustrating governance patterns across education, research, finance, healthcare, etc. Every example must validate cleanly against `schemas/v1.1/contract.schema.json`.
 
-### 7. Open a Pull Request
-On GitHub, open a PR from your feature branch into `main`. In the PR description, include:
-- What the workflow does
-- What you tested it against
-- Any known limitations
-
-The PR will be reviewed before merging — nothing lands on `main` without review, including changes from maintainers.
+#### D. Specification RFCs (`rfcs/`)
+Proposed changes to the contract specification model follow the RFC process:
+1. Open an issue tagged `rfc` to discuss motivation and trade-offs.
+2. Submit a formal RFC document in `rfcs/` following the numbered template.
+3. Include at least one worked example proving the proposed field or change.
 
 ---
 
 ## ✅ PR Review Checklist
 
-Before requesting review, confirm:
-- [ ] Workflow lives in its own folder under `workflows/`
-- [ ] `workflow.json` imports cleanly into a fresh n8n instance
-- [ ] `README.md` included and covers setup, prerequisites, and placeholders
+Before opening a pull request, confirm:
+- [ ] All tests pass: `pytest tests/ -v`
+- [ ] Gateway lint passes (no raw SDK imports outside `gateway.py`): verify against `tests/test_gateway.py`
+- [ ] All `contract.yaml` files pass schema validation (`scyvera validate <path>`)
+- [ ] Canonical naming: every contract uses `contract.yaml` (never `.yml`)
 - [ ] No real credentials, tokens, or personal data anywhere in the diff
-- [ ] Commit messages are clear and descriptive
-- [ ] Branch is up to date with `main` (rebase or merge `main` in if it's drifted)
+- [ ] Commit messages follow conventional commit style (`feat:`, `fix:`, `docs:`, etc.)
+- [ ] Branch is up to date with `main`
 
 ---
 
 ## 🐛 Reporting Issues
 
-Found a bug in an existing workflow, or have an idea for a new one? Open an [Issue](../../issues) describing:
-- Which workflow is affected (or the new workflow you're proposing)
-- What's wrong / what you'd like to see
-- Steps to reproduce, if reporting a bug
+Found a bug or have an idea? Open an [Issue](https://github.com/Skull-boy/agent-contracts/issues) describing:
+- What happened vs. what you expected
+- Steps to reproduce, with sample contract or code
+- Environment (Python version, OS, `scyvera` package version)
 
 ---
 
-## 🔒 Security Note
+## 🔒 Security Vulnerability Reporting
 
-If you discover a workflow accidentally published with a real credential or secret, please **do not open a public issue** — instead, contact the maintainer directly so it can be scrubbed and, if needed, the exposed credential rotated before it's discussed publicly.
-
----
-
-## 🙌 Code of Conduct
-
-Be respectful, be constructive, and assume good faith. This is a community resource — treat it like one.
+If you discover a security vulnerability or accidental credential exposure in an example, please **do not open a public issue**. Contact the maintainer directly so it can be mitigated responsibly.
 
 ---
 
-Thanks again for contributing — every workflow added makes this a more useful resource for the next person who finds it.
+## 📄 Code of Conduct
+
+Be respectful, be constructive, and assume good faith. This is a collaborative open-source community.

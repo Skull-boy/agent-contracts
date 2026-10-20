@@ -7,41 +7,40 @@
 
 MCP and A2A standardize how agents communicate with tools and each other. `Scyvera` defines the layer above: what an intelligent system can do, what resources it can access, what authority it requires, what constraints apply, what side effects it produces, and how it is governed.
 
-![License](https://img.shields.io/github/license/Skull-boy/agent-contracts)
-![Stars](https://img.shields.io/github/stars/Skull-boy/agent-contracts)
-![Issues](https://img.shields.io/github/issues/Skull-boy/agent-contracts)
-![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
+[![License](https://img.shields.io/github/license/Skull-boy/agent-contracts)](./LICENSE)
+[![Tests](https://img.shields.io/badge/tests-128%20passed-brightgreen)](#-running-tests)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](./CONTRIBUTING.md)
 
 </div>
-
 
 ---
 
 ## 🧩 What This Actually Is
 
-`Scyvera` provides a machine-readable specification and Python tooling layer for defining the operational boundary of intelligent or automated systems.
+`Scyvera` provides a machine-readable specification and Python governance layer for defining and enforcing the operational boundary of intelligent or automated systems.
 
 It is **NOT**:
 - another agent framework
 - an LLM wrapper
 - an orchestration library
 - a coding-agent framework
-- a security sandbox or malware scanner
+- an OS-level sandbox or anti-malware scanner
 
 It **IS**:
-A framework-independent and domain-independent specification layer describing system identity, capabilities, resources, inputs, outputs, permissions, constraints, side effects, approvals, dependencies, state persistence, failure recovery, replay semantics, observability, artifact trust declarations, and risk.
+A framework-independent and domain-independent governance layer describing and enforcing system identity, capabilities, resources, inputs, outputs, permissions, constraints, side effects, approvals, dependencies, state persistence, failure recovery, replay semantics, observability, and risk.
 
 ---
 
-## 🛡️ Governance & Enforcement Layers
+## 🛡️ Governance & Enforcement Architecture
 
-Scyvera provides three complementary governance layers:
+Scyvera provides four complementary governance layers:
 
 | Layer | Component | Responsibility | Trust Level |
 |---|---|---|---|
-| **Tier 1 & 2: Static Verification** | `validate_contract()`, `lint_contract()` | Validates that a `contract.yaml` is structurally and semantically well-formed against specification schemas. | Declaration conformance |
-| **Runtime Enforcement** | `ContractEnforcer` | Gates real-world Python calls against declared permissions and side effects using **Default-Deny** rules. Halts execution on approval points. | Execution boundary enforcement |
-| **Gateway Enforcement** | `BaseGateway`, `GitHubGateway`, `QdrantGateway` | Single enforcement boundary: holds credentials privately and gates every third-party API call, structurally preventing gate bypass. | Credential & API isolation |
+| **Tier 1 & 2: Static Verification** | `validate_contract()`, `lint_contract()` | Validates that a `contract.yaml` is structurally and semantically well-formed against JSON schemas and semantic rules (ACxxx taxonomy). | Declaration conformance |
+| **Runtime Enforcement Engine** | `ContractEnforcer` (`load()`, `from_declaration()`) | Gates Python calls against declared permissions and side effects using **Default-Deny** semantics. Intercepts execution on approval boundaries (`ApprovalPendingError`). Cryptographically seals contracts with SHA-256. | Execution boundary enforcement |
+| **Gateway Boundary Isolation** | `BaseGateway`, `GitHubGateway`, `QdrantGateway` | Single enforcement boundary: holds credentials privately and gates every external API call, structurally preventing gate bypass. | Credential & API isolation |
+| **Contract Registry** | `ContractRegistry`, `RegistryEntry` | Append-only, versioned, persistent store of all contracts governed by Scyvera. Answers what contract governed which agent at any historical moment (`get_at_time()`). | Cryptographic provenance & audit |
 
 ---
 
@@ -55,7 +54,7 @@ Install the core package from PyPI:
 pip install scyvera
 ```
 
-Or install with optional gateway dependencies:
+Or install with optional gateway adapters:
 
 ```bash
 # With PyGithub for GitHubGateway
@@ -75,7 +74,7 @@ pip install -e ".[dev]"
 
 #### Create a starter Contract template (v1.1)
 ```bash
-scyvera init contract.yaml --name "Research Assistant"
+scyvera init contract.yaml --name "Research Assistant" --domain "research"
 ```
 
 Interactive wizard mode:
@@ -94,26 +93,28 @@ Output:
 PASS  contract.yaml
 ```
 
-Override with a custom JSON Schema file:
+#### Semantic Linting (Tier 2 consistency)
 ```bash
-scyvera validate contract.yaml --schema path/to/custom.schema.json
+scyvera lint contract.yaml
 ```
 
 ---
 
-## 🔒 Runtime Enforcer Quickstart
+## 🔒 Runtime Enforcer
 
-The `ContractEnforcer` protects your agent's execution boundaries in Python by enforcing **Default-Deny**: any undeclared permission or side effect raises `ContractViolationError`, and any action listed in `approval_points` raises `ApprovalPendingError`.
+The `ContractEnforcer` protects your agent's execution boundaries in Python by enforcing **Default-Deny**: any undeclared permission or side effect raises `ContractViolationError`, and any action requiring approval raises `ApprovalPendingError`.
+
+### File-Based Contract Gating
 
 ```python
 from pathlib import Path
 from scyvera import ContractEnforcer, ContractViolationError, ApprovalPendingError
 
-# 1. Load, validate, and freeze the contract
+# 1. Load, validate, and freeze contract.yaml from disk
 enforcer = ContractEnforcer.load("implementations/n8n/duplicate-issue-detector/contract.yaml")
 
 # 2. Gate sensitive tools and operations
-@enforcer.gate(action_name="github: issues:write", action_type="permission")
+@enforcer.gate(action_name="github_issues:write", action_type="permission")
 def post_github_comment(issue_id: int, comment: str):
     print(f"Posting comment to issue #{issue_id}: {comment}")
     return True
@@ -139,15 +140,44 @@ for entry in enforcer.get_audit_log():
 enforcer.verify_integrity()  # Raises ContractTamperError if contract.yaml was modified
 ```
 
+### Dynamic Runtime Declarations (No YAML File Required)
+
+For agents created dynamically at runtime, Scyvera supports code-declared contracts with the exact same enforcement guarantees:
+
+```python
+from scyvera import ContractEnforcer, DeclarationValidationError
+
+# Declare contract directly in Python — sealed cryptographically at creation
+enforcer = ContractEnforcer.from_declaration({
+    "node_id": "researcher-v1",
+    "permissions": ["arxiv:read", "database:read"],
+    "side_effects": ["database:write"],
+    "approval_points": ["database:write"],
+    "lifecycle": "request-response",
+    "state": "stateless",
+})
+
+print(f"Sealed SHA-256 Digest: {enforcer.integrity_hash}")
+print(f"Contract Source: {enforcer.contract_source}")  # 'declaration'
+
+# Enforces identical default-deny rules
+@enforcer.gate("arxiv:read", "permission")
+def fetch_papers(topic: str):
+    return ["paper1", "paper2"]
+
+fetch_papers("quantum computing")  # Executes and logs to audit trail
+```
+
 ---
 
-## 🚪 Gateway Enforcement Architecture (v1.1.3)
+## 🚪 Gateway Enforcement Architecture
 
-In automated agent workflows, security boundaries fail if agent nodes can bypass enforcers by importing and calling API clients directly. Scyvera solves this with **Gateways** (`BaseGateway`, `GitHubGateway`, `QdrantGateway`):
+In agent architectures, security boundaries fail if agents can bypass enforcers by importing and calling raw API clients directly. Scyvera solves this with **Gateways** (`BaseGateway`, `GitHubGateway`, `QdrantGateway`):
 
 - **Single Enforcement Boundary**: API credentials and raw SDK clients (e.g. `PyGithub`, `qdrant-client`) are encapsulated privately within the gateway. No outside node holds credentials or raw clients.
 - **Structural Gating**: Every public method is decorated per-instance with `@enforcer.gate(...)`. Any undeclared or unapproved action halts execution immediately via `ContractViolationError` or `ApprovalPendingError`.
 - **Exception Normalization**: Client exceptions are caught and wrapped into `GatewayError` to ensure deterministic fault isolation.
+- **CI Linting**: Scyvera includes a GitHub Actions workflow (`.github/workflows/lint-gateway.yml`) that scans the codebase and fails the build if any raw API client is imported outside `gateway.py`.
 
 ```python
 from scyvera import ContractEnforcer, GitHubGateway, GatewayError, ContractViolationError
@@ -170,15 +200,44 @@ except ContractViolationError as e:
 
 ---
 
-## ⚠️ What Scyvera Does Not Guarantee
+## 🏛️ Contract Registry
 
-Scyvera provides structural verification, runtime gating, and gateway isolation, but security is an end-to-end discipline. Integrators must understand the following technical boundaries:
+The `ContractRegistry` provides a versioned, append-only, persistent record of every contract that has governed any agent in your ecosystem. It answers: *"What contract governed this agent at this exact moment, and has that contract ever changed?"*
 
-1. **Gate Bypass (Threat T4)**: Scyvera enforces boundaries at the `@enforcer.gate(...)` decorator. To eliminate the risk of ungated bypass, applications should use Scyvera **Gateways** (`BaseGateway`, `GitHubGateway`, `QdrantGateway`), where credentials and raw SDK clients are kept strictly private inside the gateway. If invoking ungated custom functions directly, integrators should use `ContractEnforcer.assert_gated(fn)` in test suites.
-2. **Internal Third-Party Behavior / String Spoofing (Threat T6)**: Scyvera verifies that a declared intent (e.g. `github:issues:write`) matches an allowed permission in the contract. It does not perform dynamic bytecode analysis or network-packet inspection to guarantee that a decorated library function does not execute unauthorized background calls. The integrity of third-party dependencies remains the responsibility of dependency scanning and peer review.
-3. **Pre-Load File Tampering (Threat T5)**: The SHA-256 integrity check in `verify_integrity()` protects against file replacement AFTER load. It does not protect against a tampered `contract.yaml` being present BEFORE `ContractEnforcer.load()` is called. The deployment environment is responsible for protecting the contract file prior to load.
+```python
+from scyvera import ContractEnforcer, ContractRegistry
+
+# 1. Initialize registry backed by persistent JSON-lines file
+registry = ContractRegistry(".scyvera/registry.jsonl")
+
+# 2. Register an agent enforcer (idempotent on duplicate contract hash)
+enforcer = ContractEnforcer.from_declaration({
+    "node_id": "triage-agent-v1",
+    "permissions": ["github:read"],
+    "side_effects": ["github:comment"],
+})
+entry = enforcer.register(registry)
+
+print(f"Registered Version: {entry.version}")
+print(f"Registry Entry ID: {entry.entry_id}")
+print(f"Integrity Hash: {entry.contract_hash}")
+
+# 3. Query the latest contract for an agent
+latest_entry = registry.get_latest("triage-agent-v1")
+
+# 4. Time-travel audit query: get contract active at an exact historical timestamp
+historical_entry = registry.get_at_time(
+    node_id="triage-agent-v1",
+    timestamp="2026-10-20T12:00:00+00:00",
+)
+
+# 5. Inspect full version history for a node
+history = registry.get_history("triage-agent-v1")
+```
 
 ---
+
+## 🛠️ Programmatic Contract Builder
 
 You can programmatically construct, inspect, serialize, and validate Agent Contracts in Python without manually writing YAML:
 
@@ -206,95 +265,21 @@ result = contract.validate()
 
 if result.valid:
     print("Contract is valid!")
-    # Save to file
     contract.save("contract.yaml")
 else:
     for err in result.errors:
         print(f"Error at {err.path}: {err.message}")
 ```
 
-Validate an existing YAML file programmatically:
-```python
-from scyvera import validate_contract
-
-result = validate_contract("contract.yaml")
-print(f"Valid: {result.valid}")
-```
-
 ---
 
-## 📋 Every Implementation Documents a Contract
+## ⚠️ What Scyvera Does Not Guarantee
 
-Instead of prose documentation alone, systems in this repository specify:
+Scyvera provides structural verification, runtime gating, gateway isolation, and registry provenance, but security is an end-to-end discipline:
 
-- **Identity & Purpose** — system identity, operational scope, and system version
-- **Capabilities** — semantic ability claims
-- **Resources** — data stores, APIs, entities, or systems accessed
-- **Inputs & Outputs** — data entering and produced by the system
-- **Permissions** — exact authorized `{resource, actions[]}` combinations
-- **Constraints** — quantitative limits (e.g. rate limits, transaction caps)
-- **Side Effects** — externally observable mutations
-- **Approvals** — explicit human or expert approval gates
-- **Dependencies** — required external services, models, APIs
-- **State, Recovery, Replay, Observability** — persistence, failure strategy, idempotency, and audit evidence
-- **Artifact Security & Risk** — model/data artifact trust requirements and risk level classification
-
----
-
-## 📂 Repository Structure
-
-```text
-agent-contracts/
-├── README.md
-├── WORKFLOW-CONTRACT-SPEC.md
-├── CONTRIBUTING.md
-├── CONTRIBUTORS.md
-├── LICENSE
-├── pyproject.toml
-├── docs/
-│   ├── contract-model-v1.1.md          # Normative v1.1 Specification
-│   ├── vision.md                       # Strategic Project Vision
-│   ├── design-principles.md            # Normative Design Principles
-│   └── terminology.md                  # Specification Terminology
-├── schemas/
-│   ├── v1/                             # Contract v1 JSON Schema
-│   │   └── contract.schema.json
-│   └── v1.1/                           # Contract v1.1 JSON Schema
-│       └── contract.schema.json
-├── examples/
-│   └── v1.1/                           # Domain-Neutral Examples (v1.1)
-│       ├── education-tutor.yaml
-│       ├── research-assistant.yaml
-│       ├── financial-operations.yaml
-│       └── clinical-information-assistant.yaml
-├── src/
-│   └── scyvera/                # Python Package
-│       ├── __init__.py
-│       ├── builder.py                  # Programmatic Contract Builder API
-│       ├── validator.py                # Multi-Version Validator Engine
-│       ├── enforcer.py                 # Runtime Contract Enforcer
-│       ├── gateway.py                  # Gateway Enforcement Layer (GitHub, Qdrant)
-│       ├── exceptions.py               # Exception Hierarchy
-│       ├── linter.py                   # Semantic Contract Linter
-│       ├── cli.py                      # CLI Application (validate, init, lint)
-│       └── schemas/                    # Bundled Package Schemas
-├── tests/
-│   ├── fixtures/                       # Test Fixture Files
-│   ├── test_builder.py                # Programmatic Builder Unit Tests
-│   ├── test_cli.py                    # CLI Unit Tests
-│   ├── test_duplicate_issue_detector_workflow.py # Workflow Embedding Tests
-│   ├── test_enforcer.py               # Runtime Enforcer Tests (T1-T10)
-│   ├── test_filename_enforcement.py   # Filename Rule Tests (.yaml only)
-│   ├── test_gateway.py                # Gateway Enforcement Tests
-│   ├── test_lifecycle.py              # Lifecycle Validation Tests
-│   ├── test_linter.py                 # Semantic Linter Tests
-│   ├── test_schemas_sync.py           # Schema Synchronization Tests
-│   ├── test_validator.py              # v1 Validator Unit Tests
-│   └── test_validator_v1_1.py         # v1.1 Validator Unit Tests
-└── implementations/                    # Multi-Framework Reference Implementations
-    ├── n8n/
-    └── langgraph/
-```
+1. **Gate Bypass at Call Sites (Threat T4)**: Scyvera enforces boundaries at the `@enforcer.gate(...)` decorator. To eliminate the risk of ungated bypass, applications should use Scyvera **Gateways** (`BaseGateway`, `GitHubGateway`, `QdrantGateway`), where credentials and raw SDK clients are kept strictly private. If invoking custom functions directly, integrators should use `ContractEnforcer.assert_gated(fn)` in integration test suites.
+2. **Internal Third-Party Behavior / String Spoofing (Threat T6)**: Scyvera verifies that a declared intent (e.g. `github:issues:write`) matches an allowed permission in the contract. It does not perform dynamic bytecode analysis or network-packet inspection to guarantee that a third-party library does not execute unauthorized background network calls.
+3. **Pre-Load File Tampering (Threat T5)**: The SHA-256 integrity check in `verify_integrity()` protects against file replacement AFTER load. It does not protect against a tampered `contract.yaml` present BEFORE `ContractEnforcer.load()` is called. For dynamic contracts created in-memory, `from_declaration()` seals the dictionary immediately upon construction.
 
 ---
 
@@ -311,23 +296,100 @@ See [`examples/v1.1/`](./examples/v1.1) for runnable, validated v1.1 contracts a
 
 ---
 
-## 🔐 Security & Governance Boundary Notice
+## 📂 Repository Structure
 
-> [!IMPORTANT]
-> **Contract Declaration ≠ Security Verification ≠ Runtime Enforcement.**
-> An Agent Contract describes declared operational boundaries. It is not a sandbox, anti-malware scanner, or runtime enforcement proxy. Contract declarations provide structured input upon which external policy engines, verification scanners, and runtime isolation systems operate.
+```text
+agent-contracts/
+├── README.md                           # Main project documentation
+├── WORKFLOW-CONTRACT-SPEC.md           # Formal specification (v1 and v1.1)
+├── CHANGELOG.md                        # Version history and releases
+├── CONTRIBUTING.md                     # Contribution guidelines and testing
+├── CONTRIBUTORS.md                     # Project contributors
+├── LICENSE                             # MIT License
+├── pyproject.toml                      # Build and packaging configuration
+├── docs/
+│   ├── contract-model-v1.1.md          # Normative v1.1 Specification Model
+│   ├── contract-reference.md           # Contract Field Reference Cheatsheet
+│   ├── design-principles.md            # Normative Design Principles
+│   ├── threat-model-enforcer.md        # Runtime Threat Model (T4–T10)
+│   ├── threat-model-lifecycle.md       # Lifecycle Governance Threat Model (T1–T3)
+│   ├── terminology.md                  # Specification Terminology
+│   ├── achitecture.md                  # Repository Architectural Model
+│   ├── vision.md                       # Strategic Project Vision
+│   ├── workflow-engineering.md         # Engineering Philosophy
+│   └── concepts/                       # Concept deep-dives
+│       ├── approval-boundaries.md
+│       ├── permissions.md
+│       ├── recovery.md
+│       ├── replay-semantics.md
+│       └── side-effects.md
+├── examples/v1.1/                      # Validated v1.1 Domain Examples
+│   ├── clinical-information-assistant.yaml
+│   ├── education-tutor.yaml
+│   ├── financial-operations.yaml
+│   └── research-assistant.yaml
+├── src/scyvera/                        # Python Governance Package
+│   ├── __init__.py                     # Public API exports
+│   ├── builder.py                      # Programmatic Contract Builder API
+│   ├── cli.py                          # CLI Application (validate, init, lint)
+│   ├── enforcer.py                     # Runtime Contract Enforcer & Dynamic Declarations
+│   ├── exceptions.py                   # Custom Exception Hierarchy
+│   ├── gateway.py                      # Gated Gateway Layer (Base, GitHub, Qdrant)
+│   ├── linter.py                       # Tier 2 Semantic Linter (ACxxx taxonomy)
+│   ├── registry.py                     # Versioned Append-Only Contract Registry
+│   ├── validator.py                    # Multi-Version Schema Validation Engine
+│   └── schemas/                        # Bundled JSON Schemas (v1 and v1.1)
+│       ├── v1/contract.schema.json
+│       └── v1.1/contract.schema.json
+├── tests/                              # Pytest test suite (128 passing tests)
+│   ├── fixtures/                       # Test fixture files
+│   ├── test_builder.py
+│   ├── test_cli.py
+│   ├── test_declaration.py            # Dynamic Declaration & Sealing Tests
+│   ├── test_duplicate_issue_detector_workflow.py
+│   ├── test_enforcer.py               # Runtime Enforcer Tests (T1–T10)
+│   ├── test_filename_enforcement.py
+│   ├── test_gateway.py                # Gateway Boundary Tests
+│   ├── test_lifecycle.py
+│   ├── test_linter.py
+│   ├── test_registry.py               # Contract Registry Tests
+│   ├── test_schemas_sync.py
+│   ├── test_validator.py
+│   └── test_validator_v1_1.py
+└── implementations/                    # Multi-Framework Implementations
+    ├── n8n/                            # Reference n8n workflows
+    └── langgraph/                      # LangGraph reference implementation
+```
 
 ---
 
-## 🗺️ Where the Spec Is Headed (v1.1)
+## 🗺️ Implementation Status & Roadmap
 
-Contract v1 was designed and proven against coding/developer agents. That's now understood to be a starting substrate, not the ceiling — v1.1 is a deliberate audit-and-redesign effort to make the spec:
+### Available Now
+- **Agent Contracts v1 & v1.1 Specifications**: Machine-readable schemas for system identity, capabilities, permissions, constraints, side effects, approvals, dependencies, lifecycle, recovery, replay, observability, and risk.
+- **Static Validation Engine**: CLI and Python API (`validate_contract`) validating against bundled JSON Schemas.
+- **Semantic Linter**: Tier 2 consistency rules (`lint_contract`) detecting unbounded write permissions (AC101), high-risk systems without approval gates (AC201), vague idle behavior (AC301), and irreversible actions (AC302).
+- **Runtime Enforcer (`ContractEnforcer`)**: Default-deny execution gating (`@enforcer.gate`), post-load SHA-256 integrity checks, and tamper-proof audit trails.
+- **Dynamic Declarations**: Runtime contract synthesis (`ContractEnforcer.from_declaration()`) with cryptographic sealing and strict validation.
+- **Gated Gateways**: Isolated external API boundaries (`BaseGateway`, `GitHubGateway`, `QdrantGateway`) and CI lint checks enforcing credential privacy.
+- **Contract Registry**: Versioned, append-only, JSONL contract store (`ContractRegistry`) with point-in-time time-travel queries.
+- **Cross-Framework Implementations**: Proven parity between n8n and LangGraph reference implementations.
 
-- **Domain-independent** — usable for research, education, finance, business-workflow, and healthcare-workflow agents, not just coding agents
-- **Framework-independent** — already true in principle (n8n + LangGraph prove it), being stress-tested further
-- **Accessible to non-technical authors** — YAML/JSON is a representation format, not meant to be the only way to create a contract
+### Roadmap (Planned, not yet implemented)
+- **Asynchronous Approval Channels**: Interactive approval dispatch via Telegram, Slack, email, or webhook callbacks (currently halts via `ApprovalPendingError` for host application handling).
+- **Automated AST Capability Inference**: Static code analysis adapters that scan Python AST or workflow JSON to infer undeclared permissions automatically.
+- **Multi-Agent Contract Negotiation**: Handshake protocols for verifying contracts during agent-to-agent delegation.
+- **Sliding-Window Invocation Throttling**: Automatic detection and alerting for lifecycle downgrade attacks at runtime.
 
-This is genuinely in the design/audit phase — classifying existing Contract v1 fields, testing them against non-coding agent archetypes, and only then extending the schema. Nothing in this section describes a shipped feature. Follow progress in [`implementations/rfcs/`](./implementations/rfcs) and open issues tagged `v1.1`.
+---
+
+## 🧪 Running Tests
+
+Run the full 128-test test suite:
+
+```bash
+pytest tests/ -v
+```
 
 ---
 
@@ -341,4 +403,4 @@ Contributions are welcome — new domain profiles, framework reference implement
 
 Distributed under the MIT License — see [LICENSE](./LICENSE) for details.
 
-Built and maintained by [Shinjan Das](https://github.com/Skull-boy) and open-source contributors — see [CONTRIBUTORS.md](./CONTRIBUTORS.md).
+Maintained by [Shinjan Das](https://github.com/Skull-boy) and open-source contributors — see [CONTRIBUTORS.md](./CONTRIBUTORS.md).
