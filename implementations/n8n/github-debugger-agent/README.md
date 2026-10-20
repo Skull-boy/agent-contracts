@@ -95,4 +95,4 @@ The workflow runs as a linear 4-phase pipeline:
 
 ---
 
-Part of the [n8n_workflows](../../) collection. See the [root README](../../README.md) for the full workflow index, and [CONTRIBUTING.md](../../CONTRIBUTING.md) for how to submit changes.
+Part of the [agent-contracts](../../../) repository. Governed by [`contract.yaml`](./contract.yaml). See the [root README](../../../README.md) for the repository index and [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines.
