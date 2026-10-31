@@ -5,9 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] — 2026-10-31
 
-### Added
+### Added — Contract Registry, Dynamic Declarations & Gate Integrity (unreleased → released)
 - **Contract Registry (`ContractRegistry`, `RegistryEntry`, `RegistryError`) (Phase 2)**:
   - Versioned, append-only, JSON-lines persistent store for registered contracts (`.scyvera/registry.jsonl`).
   - Idempotent registration on duplicate SHA-256 hash.
@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Query APIs: `get_latest(node_id)`, `get_by_hash(contract_hash)`, `get_history(node_id)`, `get_at_time(node_id, timestamp)`, `list_nodes()`, `size()`, `has_hash(contract_hash)`.
   - Atomic writes using temporary file pattern to guarantee durability.
   - Fail-closed error handling raising `RegistryError` on corrupt or unreadable files.
+- **Fail-Closed Gate Integrity (Threat T5 hardening)**:
+  - `ContractEnforcer.gate()` now runs `verify_integrity()` before declaration checks; tampered or replaced contracts deny the action with an audited `DENIED` audit entry and raise `ContractTamperError` with recovery guidance instead of executing.
+- **Governance Documentation & Distribution Roadmap (RFC 0003)**:
+  - `docs/roadmap.md` — phased, task-gated implementation plan (P0–P4) with a locked glossary.
+  - `rfcs/0003-harness-distribution-eval-and-integrity.md` — hash-chained registry, self-check, tiered conformance checking, trace-based eval harness, guardrail DSL, attested distribution artifacts.
+  - `docs/threat-model-distribution.md` — distribution-layer threats T11–T14 (dependency confusion, contract substitution, registry history rewrite, symlink abuse).
+  - `docs/architecture.md` renamed from the misspelled `achitecture.md`; README documentation tree refreshed.
 - **Dynamic Contract Declarations (`ContractEnforcer.from_declaration()`) (Phase 1)**:
   - Create fully governed `ContractEnforcer` instances from in-memory Python dictionaries without requiring a `contract.yaml` file on disk.
   - Deep copy and cryptographic sealing with SHA-256 integrity hash at creation time.
@@ -24,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ContractEnforcer.register(registry)` method to register an enforcer's contract directly into a registry and store `registry_entry_id`.
   - Added `node_id`, `contract_source`, and `registry_entry_id` properties to `ContractEnforcer`.
 - **Expanded Test Suite**:
-  - Added comprehensive test suites: `tests/test_declaration.py` (Phase 1) and `tests/test_registry.py` (Phase 2), bringing total tests to 128 passing tests.
+  - Added comprehensive test suites: `tests/test_declaration.py` (Phase 1) and `tests/test_registry.py` (Phase 2), bringing total tests to 141 passing tests.
 
 ---
 

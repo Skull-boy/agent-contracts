@@ -8,7 +8,7 @@
 MCP and A2A standardize how agents communicate with tools and each other. `Scyvera` defines the layer above: what an intelligent system can do, what resources it can access, what authority it requires, what constraints apply, what side effects it produces, and how it is governed.
 
 [![License](https://img.shields.io/github/license/Skull-boy/agent-contracts)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-128%20passed-brightgreen)](#-running-tests)
+[![Tests](https://img.shields.io/badge/tests-141%20passed-brightgreen)](#-running-tests)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](./CONTRIBUTING.md)
 
 </div>
@@ -398,7 +398,7 @@ Existing known-future capabilities (async approval channels, AST capability infe
 
 ## 🧪 Running Tests
 
-Run the full 128-test test suite:
+Run the full 141-test test suite:
 
 ```bash
 pytest tests/ -v
