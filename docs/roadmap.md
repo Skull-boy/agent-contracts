@@ -53,6 +53,21 @@ This is the **single source of truth** for what to build next, in what order, an
 
 ---
 
+## Phase 2A — Adoption Funnel (RFC 0004, adoption-first)
+
+These tasks do **not** depend on M2.1–M2.3 (they share module layout and test conventions only). They ship *before* the rest of Phase 2 deliberately: `scyvera audit` is the product's front door.
+
+| Task | Deliverable | Acceptance | Tests |
+|---|---|---|---|
+| **M2.0a** | **Audit scan engine** (`src/scyvera/audit.py` + `audit_rules.py`): AUxxx rule registry, per-file pure scanners, determinism, skip list, size caps, binary sniff, symlink refusal (T14-consistent) | `scyvera audit . --json` emits `report_version: 1` report; output deterministic across runs; read-only (no writes) | `tests/test_audit.py`: fixture corpus in `tests/fixtures/audit/`, determinism byte-identical re-run, no-write guarantee, cross-platform `.ps1`/`.sh` severity |
+| **M2.0b** | **Blast Radius Report rendering**: terminal format (band-first), `--badge` shields.io snippet, `--fail-under <score>` CI gate exit code | Badge emits band only (score-free, per RFC 0004 §4); `--fail-under` honored | `tests/test_audit_report.py`: render determinism, badge content, exit-code gating |
+| **M2.0c** | **Auto-contract draft** (`--generate <contract.yaml>`): findings-derived v1.1 draft (resources/permissions/side_effects/approvals), `--force` overwrite guard | Every generated draft PASSes `validate_contract` + `lint_contract` with zero warnings; `system.name` from repo dir; no overwrite without `--force` | `tests/test_audit_generate.py`: schema-accuracy dogfood sweep over full fixture corpus |
+| **M2.7** | **Policy Packs MVP**: `packs/<name>.yaml` with 6 golden packs (`dev-agent`, `github-safe`, `finance-ops`, `research-assistant`, `email-triage`, `devops-safe`), `--pack <name>` merge semantics, packaged in wheel | Every pack passes Tier 0 + lint in CI (`tests/test_packs.py` sweep); pack wins on conflict with heuristic-derived entries; local-only (no network fetch in v1) | `tests/test_packs.py` |
+
+**Gate:** Phase 2A DoD = "a user with zero contract knowledge runs `scyvera audit .` in their repo, gets a shareable Blast Radius report and a schema-valid contract draft in two minutes." Dogfood requirement: `scyvera audit .` on this repo reports band `Shielded` in CI.
+
+---
+
 ## Phase 2 — Conformance & Evals (RFC 0003 §C3, §C4)
 
 | Task | Deliverable | Acceptance | Tests |
@@ -82,7 +97,18 @@ This is the **single source of truth** for what to build next, in what order, an
 
 ---
 
-## Phase 4 — Revisiting the Enforcer for Harness-Native Agents (post-Phases 1–3, optional)
+## Growth & Community Lane (cross-phase, RFC 0004 + positioning)
+
+| Task | Deliverable | Acceptance |
+|---|---|---|
+| **G1** | README hero rewrite ("set once, enforced everywhere, provable forever") + animated GIF of a blocked agent action + audit badge in a prominent position | Hero states positioning sentence; GIF under 2 MB |
+| **G2** | Launch film via `/brag` skill: 60s loopable clip (agent tries force-push → denied → receipt URL) | Video published to brag-output/ and linked from README |
+| **G3** | Showcase gallery + "contract/pack of the month" curation ritual (docs/community/SHOWCASE.md) | Gallery seeded with the 6 golden packs and 3 cross-domain examples |
+| **G4** | Contributor ladder docs: "add a policy pack" as the recommended first PR path in CONTRIBUTING.md | CONTRIBUTING includes pack template + CI expectations |
+
+---
+
+## Phase 4 - Revisiting the Enforcer for Harness-Native Agents (post-Phases 1-3, optional)
 
 | Task | Deliverable | Acceptance |
 |---|---|---|
@@ -96,7 +122,9 @@ This is the **single source of truth** for what to build next, in what order, an
 
 | Phase | Scope | Tasks Complete | DoD Summary |
 |---|---|---|---|
-| **P0** | Release Hygiene | 3/3 | v1.2.0 released (M0.1–M0.3 done) |
+| **P0** | Release Hygiene | 3/3 | v1.2.0 released |
+| **P2A** | Adoption Funnel (RFC 0004) | 0/4 | `scyvera audit` front door live |
+| **Growth** | Flywheel ops (RFC 0004 + positioning) | 0/4 | Launch film + packs gallery live |
 | **P1** | Core Hardening (C1, C2) | 0/5 | Provable chain, self-verifiable install, T12/T14 pinned |
 | **P2** | Conformance & Evals (C3, C4) + Guardrails (C5) | 0/6 | `scyvera check` end-to-end |
 | **P3** | Distribution (C6) | 0/5 | Skill/plugin installable + attested |
