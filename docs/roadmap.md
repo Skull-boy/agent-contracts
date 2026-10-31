@@ -31,7 +31,7 @@ This is the **single source of truth** for what to build next, in what order, an
 
 | Task | Deliverable | Acceptance | Tests |
 |---|---|---|---|
-| **M0.1** | Update `CHANGELOG.md` "Unreleased" → promoted to `1.2.0-rc1` in `pyproject.toml` | CHANGELOG and pyproject agree | `pytest tests/` passes; `python -m build` succeeds |
+| **M0.1** | Update `CHANGELOG.md` "Unreleased" → promoted to `1.2.0` in `pyproject.toml` | CHANGELOG and pyproject agree | `pytest tests/` passes; build succeeds — **done 2026-10-31 (release v1.2.0)** |
 | **M0.2** | Regenerate docs table in README (`docs/` tree, `examples/v1.1/` list, `patterns/`) | README matches reality, all links resolve | manual check — **done 2026-10-31** |
 | **M0.3** | Rename the repository architecture doc to `docs/architecture.md` (was a misspelled filename referenced from README and `implementations/rfcs/01`) | Zero stale references to the old filename remain | `grep -r` for the old name returns nothing — **done 2026-10-31** |
 
@@ -96,7 +96,7 @@ This is the **single source of truth** for what to build next, in what order, an
 
 | Phase | Scope | Tasks Complete | DoD Summary |
 |---|---|---|---|
-| **P0** | Release Hygiene | 2/3 | Clean v1.2.0 tag (M0.1 remains) |
+| **P0** | Release Hygiene | 3/3 | v1.2.0 released (M0.1–M0.3 done) |
 | **P1** | Core Hardening (C1, C2) | 0/5 | Provable chain, self-verifiable install, T12/T14 pinned |
 | **P2** | Conformance & Evals (C3, C4) + Guardrails (C5) | 0/6 | `scyvera check` end-to-end |
 | **P3** | Distribution (C6) | 0/5 | Skill/plugin installable + attested |
