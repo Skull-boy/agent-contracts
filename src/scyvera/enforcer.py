@@ -597,15 +597,16 @@ class ContractEnforcer:
             current_hash = hashlib.sha256(content).hexdigest()
             if current_hash != self._integrity_hash:
                 raise ContractTamperError(
-                    "Declaration contract has been tampered with "
-                    "after sealing"
+                    "Declaration contract has been tampered with after sealing. "
+                    "Reload the contract or restart the agent to recover."
                 )
             return True
 
         # File contract integrity check (existing behavior)
         if not self._contract_path.exists():
             raise ContractTamperError(
-                f"Contract file '{self._contract_path}' was removed from disk after load!"
+                f"Contract file '{self._contract_path}' was removed from disk after load! "
+                "Reload the contract or restart the agent to recover."
             )
 
         current_bytes = self._contract_path.read_bytes()
@@ -614,7 +615,8 @@ class ContractEnforcer:
         if current_hash != self._integrity_hash:
             raise ContractTamperError(
                 f"Contract file '{self._contract_path}' has been tampered with on disk! "
-                f"Load-time hash: {self._integrity_hash}, Current hash: {current_hash}."
+                f"Load-time hash: {self._integrity_hash}, Current hash: {current_hash}. "
+                "Reload the contract or restart the agent to recover."
             )
 
         return True
@@ -707,10 +709,34 @@ class ContractEnforcer:
         """Perform pre-execution contract evaluation."""
         now = datetime.now(timezone.utc).isoformat()
 
+        # Step 0: Verify integrity first (Threat T5 — fail closed on tamper)
+        try:
+            self.verify_integrity()
+        except ContractTamperError:
+            now = datetime.now(timezone.utc).isoformat()
+            entry = AuditEntry(
+                timestamp=now,
+                action_name=action_name,
+                action_type=action_type,
+                decision="DENIED",
+                reason="Contract was tampered with; gate denied.",
+                contract_field_reference="integrity_hash",
+            )
+            self._audit_log.append(entry)
+            raise
+
         # Step 1: Check declaration (Default-Deny)
         is_declared, field_ref = self._is_action_declared(action_name, action_type)
         if not is_declared:
             # Principle 2: Default-deny loud violation
+            # Determine contract path string: use node_id for declarations, file name for file contracts
+            if self._contract_source == "declaration":
+                cpath = self.node_id or "<declaration>"
+            elif self._contract_path is not None:
+                cpath = self._contract_path.name
+            else:
+                cpath = "<unknown>"
+            suggestion = "side_effects" if action_type == "side_effect" else "permissions"
             entry = AuditEntry(
                 timestamp=now,
                 action_name=action_name,
@@ -720,10 +746,9 @@ class ContractEnforcer:
                 contract_field_reference=field_ref,
             )
             self._audit_log.append(entry)
-            suggestion = "side_effects" if action_type == "side_effect" else "permissions"
             raise ContractViolationError(
                 action_name=action_name,
-                contract_path=str(self._contract_path),
+                contract_path=cpath,
                 suggestion=suggestion,
             )
 

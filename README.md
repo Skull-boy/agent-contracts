@@ -312,9 +312,11 @@ agent-contracts/
 │   ├── contract-reference.md           # Contract Field Reference Cheatsheet
 │   ├── design-principles.md            # Normative Design Principles
 │   ├── threat-model-enforcer.md        # Runtime Threat Model (T4–T10)
+│   ├── threat-model-distribution.md    # Distribution Threat Model (T11–T14)
 │   ├── threat-model-lifecycle.md       # Lifecycle Governance Threat Model (T1–T3)
+│   ├── roadmap.md                      # Implementation Roadmap & Task Sequencing
 │   ├── terminology.md                  # Specification Terminology
-│   ├── achitecture.md                  # Repository Architectural Model
+│   ├── architecture.md                 # Repository Architectural Model
 │   ├── vision.md                       # Strategic Project Vision
 │   ├── workflow-engineering.md         # Engineering Philosophy
 │   └── concepts/                       # Concept deep-dives
@@ -324,10 +326,18 @@ agent-contracts/
 │       ├── replay-semantics.md
 │       └── side-effects.md
 ├── examples/v1.1/                      # Validated v1.1 Domain Examples
+│   ├── business-automation.yaml
 │   ├── clinical-information-assistant.yaml
 │   ├── education-tutor.yaml
 │   ├── financial-operations.yaml
-│   └── research-assistant.yaml
+│   ├── research-assistant.yaml
+│   └── software-development-agent.yaml
+├── patterns/                           # Reusable Contract Patterns
+│   ├── detect-judge-approve-act.md
+│   └── monitor-alert-escalate.md
+├── rfcs/                               # Specification RFCs
+│   ├── 0002-lifecycle-field.md         # Lifecycle Field (v1.1, Implemented)
+│   └── 0003-harness-distribution-eval-and-integrity.md   # Distribution & Integrity Layer (Proposed)
 ├── src/scyvera/                        # Python Governance Package
 │   ├── __init__.py                     # Public API exports
 │   ├── builder.py                      # Programmatic Contract Builder API
@@ -376,10 +386,13 @@ agent-contracts/
 - **Cross-Framework Implementations**: Proven parity between n8n and LangGraph reference implementations.
 
 ### Roadmap (Planned, not yet implemented)
-- **Asynchronous Approval Channels**: Interactive approval dispatch via Telegram, Slack, email, or webhook callbacks (currently halts via `ApprovalPendingError` for host application handling).
-- **Automated AST Capability Inference**: Static code analysis adapters that scan Python AST or workflow JSON to infer undeclared permissions automatically.
-- **Multi-Agent Contract Negotiation**: Handshake protocols for verifying contracts during agent-to-agent delegation.
-- **Sliding-Window Invocation Throttling**: Automatic detection and alerting for lifecycle downgrade attacks at runtime.
+The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md); the next development wave is formalized in [RFC 0003 — Harness Distribution, Conformance Evaluation & Integrity Layer](./rfcs/0003-harness-distribution-eval-and-integrity.md). Headlines:
+
+- **Phase 1 — Core Hardening**: hash-chained `ContractRegistry` (tamper-evident provenance, T13), contract identity pinning against symlink escape and prompt-injection substitution (T12/T14), package self-integrity attestation (T11).
+- **Phase 2 — Conformance & Evals**: tiered `scyvera check` (structural → static → runtime-trace) with adapters for n8n and LangGraph, a runtime-trace eval harness, and an additive optional `guardrails` schema slice (fail-closed, budgets, rate limits).
+- **Phase 3 — Distribution**: `scyvera-harness` skill for OpenCode / Claude / Codex / Gemini, attested releases (Sigstore signature + SBOM), and `scyvera self-check` against signed manifests.
+
+Existing known-future capabilities (async approval channels, AST capability inference, multi-agent negotiation, sliding-window invocation throttling) are tracked as Phase 4 tasks in the roadmap.
 
 ---
 

@@ -43,3 +43,10 @@ dist/
 # Local analysis / MCP tooling
 graphify-out/
 opencode.json
+skills-lock.json
+.agents
+brag-output
+
+# Generated assurance reports / stray test artifacts
+.assurance/
+test.wav
