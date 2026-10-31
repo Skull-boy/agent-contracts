@@ -1,6 +1,6 @@
 > [!NOTE]
 > **Historical RFC Document (Accepted & Implemented)**  
-> This RFC proposed the repository restructuring from `workflows/` to `implementations/n8n/` and the adoption of the contract model. This restructuring has been fully executed. For the active specification and repository architecture, see [`docs/achitecture.md`](../../docs/achitecture.md) and [`README.md`](../../README.md).
+> This RFC proposed the repository restructuring from `workflows/` to `implementations/n8n/` and the adoption of the contract model. This restructuring has been fully executed. For the active specification and repository architecture, see [`docs/architecture.md`](../../docs/architecture.md) and [`README.md`](../../README.md).
 
 ---
 
