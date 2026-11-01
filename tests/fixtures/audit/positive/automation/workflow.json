@@ -1,0 +1,15 @@
+{
+  "name": "positive-http",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://example.invalid/hook"
+      },
+      "name": "Notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 0]
+    }
+  ],
+  "connections": {}
+}

@@ -1,0 +1,13 @@
+name: read-all
+
+on: [workflow_dispatch]
+
+permissions: read-all
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show ref
+        # Negative fixture for AU-CI-001: no write-all and no secrets.
+        run: echo "$GITHUB_REF"

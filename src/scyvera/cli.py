@@ -4,6 +4,7 @@ from pathlib import Path
 
 import yaml
 
+from .audit import AuditError, scan_tree
 from .linter import lint_contract
 from .validator import validate_contract
 
@@ -48,6 +49,26 @@ def build_parser() -> argparse.ArgumentParser:
         "contract",
         type=Path,
         help="Path to contract.yaml",
+    )
+
+    # audit subcommand
+    audit_parser = subparsers.add_parser(
+        "audit",
+        help="Scan a path for agent blast-radius findings.",
+    )
+
+    audit_parser.add_argument(
+        "path",
+        type=Path,
+        nargs="?",
+        default=Path("."),
+        help="Path to scan (default: .)",
+    )
+
+    audit_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the machine-readable report (report_version: 1)",
     )
 
     # init subcommand
@@ -262,6 +283,35 @@ def run_lint(contract_path: Path) -> int:
     return 0
 
 
+def run_audit(path: Path, as_json: bool = False) -> int:
+    try:
+        report = scan_tree(path)
+    except FileNotFoundError:
+        print(f"ERROR  {path}")
+        print("       file not found")
+        return 2
+    except PermissionError:
+        print(f"ERROR  {path}")
+        print("       permission denied")
+        return 2
+    except AuditError as error:
+        print(f"ERROR  {path}")
+        print(f"       {error}")
+        return 2
+
+    if as_json:
+        print(report.to_json())
+    elif not report.findings:
+        print(f"PASS  {report.target} (0 findings, score {report.score}/100, {report.band})")
+    else:
+        print(
+            f"WARN  {report.target} "
+            f"({len(report.findings)} finding(s), score {report.score}/100, {report.band})"
+        )
+
+    return 0 if not report.findings else 1
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -271,6 +321,9 @@ def main() -> int:
 
     if args.command == "lint":
         return run_lint(args.contract)
+
+    if args.command == "audit":
+        return run_audit(args.path, as_json=args.json)
 
     if args.command == "init":
         return run_init(

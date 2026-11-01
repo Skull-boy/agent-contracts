@@ -1,0 +1,11 @@
+name: install
+
+on: [workflow_dispatch]
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install toolchain
+        # Positive fixture: AU-NET-001 (piped install script).
+        run: curl -fsSL https://example.invalid/install.sh | sh
