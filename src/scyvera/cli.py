@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -6,6 +7,7 @@ import yaml
 
 from .audit import AuditError, scan_tree
 from .linter import lint_contract
+from .report import render_badge, render_report
 from .validator import validate_contract
 
 
@@ -55,6 +57,15 @@ def build_parser() -> argparse.ArgumentParser:
     audit_parser = subparsers.add_parser(
         "audit",
         help="Scan a path for agent blast-radius findings.",
+        description=(
+            "Scan [path] (default `.`) with the AUxxx rule registry and print "
+            "the Blast Radius Report. Reads only: never writes any file."
+        ),
+        epilog=(
+            "exit codes: 0 ok, 1 findings or threshold breach, "
+            "2 usage/IO error"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     audit_parser.add_argument(
@@ -62,13 +73,35 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         nargs="?",
         default=Path("."),
-        help="Path to scan (default: .)",
+        help="Directory or file to scan (default: .)",
     )
 
     audit_parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit the machine-readable report (report_version: 1)",
+        help=(
+            "Emit the machine-readable report (report_version: 1) and "
+            "nothing else"
+        ),
+    )
+
+    audit_parser.add_argument(
+        "--badge",
+        action="store_true",
+        help=(
+            "Append a shields.io Blast Radius badge (band only, no score); "
+            "with --json, adds a top-level \"badge\" key"
+        ),
+    )
+
+    audit_parser.add_argument(
+        "--fail-under",
+        metavar="SCORE",
+        default=None,
+        help=(
+            "Exit 1 when the Blast Radius score is below SCORE "
+            "(an integer from 0 to 100)"
+        ),
     )
 
     # init subcommand
@@ -283,7 +316,45 @@ def run_lint(contract_path: Path) -> int:
     return 0
 
 
-def run_audit(path: Path, as_json: bool = False) -> int:
+def _parse_fail_under(raw: str | None) -> int | None:
+    """Return a valid 0–100 threshold, or ``None`` when absent or invalid.
+
+    Only an optional sign followed by ASCII digits is accepted, so inputs
+    such as ``"1_0"`` (which :func:`int` would otherwise accept) are rejected
+    with the same actionable one-line error as ``"abc"``.
+    """
+    if raw is None:
+        return None
+    candidate = raw.strip()
+    digits = candidate[1:] if candidate[:1] in {"+", "-"} else candidate
+    if not digits or not digits.isascii() or not digits.isdigit():
+        return None
+    value = int(candidate)
+    if 0 <= value <= 100:
+        return value
+    return None
+
+
+def run_audit(
+    path: Path,
+    as_json: bool = False,
+    badge: bool = False,
+    fail_under: str | None = None,
+) -> int:
+    """Run the read-only audit command and return its process exit code.
+
+    Exit codes follow RFC 0004 §2: ``0`` ok, ``1`` findings or a
+    ``--fail-under`` threshold breach, ``2`` usage or I/O error.
+    """
+    threshold = _parse_fail_under(fail_under)
+    if fail_under is not None and threshold is None:
+        print(
+            "scyvera audit: error: --fail-under must be an integer "
+            "between 0 and 100",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
         report = scan_tree(path)
     except FileNotFoundError:
@@ -300,15 +371,19 @@ def run_audit(path: Path, as_json: bool = False) -> int:
         return 2
 
     if as_json:
-        print(report.to_json())
-    elif not report.findings:
-        print(f"PASS  {report.target} (0 findings, score {report.score}/100, {report.band})")
+        if badge:
+            payload = report.to_dict()
+            payload["badge"] = render_badge(report)
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(report.to_json())
     else:
-        print(
-            f"WARN  {report.target} "
-            f"({len(report.findings)} finding(s), score {report.score}/100, {report.band})"
-        )
+        print(render_report(report))
+        if badge:
+            print(render_badge(report))
 
+    if threshold is not None:
+        return 0 if report.score >= threshold else 1
     return 0 if not report.findings else 1
 
 
@@ -323,7 +398,12 @@ def main() -> int:
         return run_lint(args.contract)
 
     if args.command == "audit":
-        return run_audit(args.path, as_json=args.json)
+        return run_audit(
+            args.path,
+            as_json=args.json,
+            badge=args.badge,
+            fail_under=args.fail_under,
+        )
 
     if args.command == "init":
         return run_init(
