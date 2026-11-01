@@ -1,4 +1,6 @@
 from .builder import AgentIdentity, Contract, SystemIdentity
+from .audit import AuditReport, AuditError, SymlinkTargetError, scan_tree
+from .audit_rules import RULES, SEVERITY_WEIGHTS, AuditRule, Finding
 from .enforcer import AuditEntry, ContractEnforcer
 from .exceptions import (
     ApprovalPendingError,
@@ -33,6 +35,9 @@ __all__ = [
     "AgentIdentity",
     "ApprovalPendingError",
     "AuditEntry",
+    "AuditError",
+    "AuditReport",
+    "AuditRule",
     "BaseGateway",
     "Contract",
     "ContractEnforcer",
@@ -44,21 +49,26 @@ __all__ = [
     "ContractVersionError",
     "ContractViolationError",
     "DeclarationValidationError",
+    "Finding",
     "GatewayError",
     "GitHubGateway",
     "LIFECYCLE_DEFAULTS",
     "LintResult",
     "LintWarning",
     "QdrantGateway",
+    "RULES",
     "RegistryEntry",
     "RegistryError",
     "SCHEMA_V1_PATH",
     "SCHEMA_V1_1_PATH",
+    "SEVERITY_WEIGHTS",
+    "SymlinkTargetError",
     "SystemIdentity",
     "ValidationError",
     "ValidationResult",
     "apply_lifecycle_defaults",
     "detect_contract_version",
     "lint_contract",
+    "scan_tree",
     "validate_contract",
 ]

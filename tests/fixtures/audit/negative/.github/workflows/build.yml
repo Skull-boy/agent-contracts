@@ -1,0 +1,11 @@
+name: build
+
+on: [workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build only
+        # Negative fixture for AU-CI-002: no publish or deploy command.
+        run: npm ci && npm test

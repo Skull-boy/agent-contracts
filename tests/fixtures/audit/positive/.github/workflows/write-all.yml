@@ -1,0 +1,13 @@
+name: write-all
+
+on: [workflow_dispatch]
+
+permissions: write-all
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo token
+        # Positive fixture: AU-CI-001 (write-all and secret in run).
+        run: echo "${{ secrets.DEPLOY_TOKEN }}"

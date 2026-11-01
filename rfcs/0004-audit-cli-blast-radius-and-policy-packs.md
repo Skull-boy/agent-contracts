@@ -130,6 +130,10 @@ Deterministic first, shareable second:
 [![Blast Radius: Exposed](https://img.shields.io/badge/blast%20radius-Exposed-red)](scyvera)
 ```
 
+### 4.1 Scoring refinement (M2.0a.1)
+
+Scoring now applies diminishing per-rule loads instead of a flat sum: findings are grouped by `rule_id` and the first three occurrences contribute `base × 1.00`, `base × 0.25`, and `base × 0.10` respectively, while every further occurrence contributes zero, so one rule can add at most `1.35 × base`. The reported score is `max(0, 100 − ceil(total_load))` with the bands above unchanged, and `AU-SH-001`, `AU-GIT-001`, and `AU-NET-001` fire only in executable contexts (`*.sh`, `*.ps1`, `*.bat`, `*.cmd`, `Dockerfile*`, workflow `run:` values, and Makefile/justfile content), never in prose, arbitrary YAML/JSON, or documentation. Findings whose normalized path starts with `tests/fixtures/` stay in the report but carry `scored: false` and contribute nothing to the score, band, or `stats.findings`, which now counts scored findings only. The scan skip list also includes `.agents` so installed skill tooling is never audited.
+
 ## 5. Contract Draft Generation (`--generate`)
 
 - Produces a v1.1 contract (version defaults seen in `cli.py run_init`) whose `resources`, `permissions`, `side_effects`, and `approvals` sections are **derived from findings' suggestion fragments**, deduplicated, and ordered deterministically.
@@ -167,6 +171,9 @@ construction:
 
 1. **Dogfood**: `scyvera audit .` runs against the Scyvera repo itself in CI; result is asserted in a test snapshot (band must remain `Shielded` at 1.3.0 release; if drift occurs, the test fails loudly, not silently).
 2. **Fixture corpus**: `tests/fixtures/audit/` contains a miniature synthetic repo (env file, shell script, workflow, python source, dockerfile, n8n json) — one per scanner — plus negative variants. Scanned against in tests via relative path resolution (same pattern as existing FIXTURE logic).
+
+> **Synthetic fixture policy.** Positive fixtures intentionally contain realistic-looking secrets and destructive commands (that is what proves the detectors fire). They are therefore scanner-ignored as official policy: GitHub Push Protection allowlist and GitGuardian path exclusion cover `tests/fixtures/audit/**`, and the same rules are documented for contributors in [`CONTRIBUTING.md` → Synthetic Fixture Policy](../CONTRIBUTING.md). Fixture values must be non-usable synthetic strings (dashed leet-style words; no credential-format prefixes, no live-pattern values). A scanner flag on this path is resolved via scanner configuration — never by weakening or deleting a positive test.
+
 3. **Determinism test**: same corpus scanned twice produces byte-identical JSON.
 4. **Cross-platform test**: synthetic repo with a `.ps1` destructive script on the Windows path style; POSIX variants for `.sh`.
 5. **Schema-accuracy test**: every `--generate` result validates against v1.1 with zero lint warnings (see §5).

@@ -1,0 +1,4 @@
+# Negative fixture for AU-ENV-001 / AU-ENV-002: no dotenv file is present.
+app:
+  name: offline-demo
+  debug: false

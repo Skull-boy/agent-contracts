@@ -110,6 +110,19 @@ If you discover a security vulnerability or accidental credential exposure in an
 
 ---
 
+## 🧪 Synthetic Fixture Policy (audit / scanner tests)
+
+Scyvera's audit engine is tested against **intentionally dangerous-looking fixture material** under `tests/fixtures/audit/` — fake committed secrets, destructive shell commands, broad CI permissions. This is deliberate: a secret-scanner project must prove its detectors fire, and those fixtures are the proof.
+
+Rules for anyone adding or touching fixture material:
+
+- Fixture secret values must be **non-usable synthetic strings**: dashed leet-style words (e.g. `API_KEY=H3llo-Th1s-1s-Dummy-V4lu3`), never credential-format prefixes (`sk_`, `AKIA`, `ghp_`, `Bearer`, JWT shapes) and never live-pattern values.
+- The path `tests/fixtures/audit/**` is **scanner-ignored by configuration** (GitHub Push Protection allowlist + GitGuardian path exclusion). This is documented policy, not an oversight — never "fix" a scanner warning by weakening the fixture.
+- If a real scanner still flags a new fixture value, resolve it via the project's scanner configuration; do not delete positive test cases.
+- For real-world examples elsewhere in the repo (`examples/`, `implementations/`), plain placeholders (`changeme`, `${ENV_VAR}`) are preferred.
+
+---
+
 ## 📄 Code of Conduct
 
 Be respectful, be constructive, and assume good faith. This is a collaborative open-source community.

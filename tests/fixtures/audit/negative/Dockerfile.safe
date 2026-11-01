@@ -1,0 +1,5 @@
+FROM alpine:3.19
+
+# Negative fixture for AU-DOC-001: unprivileged, no host mounts.
+USER nobody
+CMD ["echo", "safe"]
