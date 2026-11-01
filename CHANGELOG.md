@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Audit Scan Engine (M2.0a / M2.0a.1)
+- **`scyvera audit [path] [--json]`**: deterministic, read-only Blast Radius scan with `report_version: 1` JSON output and `0` / `1` / `2` exit codes.
+- **Rule registry (`AUxxx`)**: eleven pure per-file scanners covering dotenv secrets, destructive shell commands, history rewrites, piped remote installs, workflow permissions, Dockerfiles, n8n workflows, and unpinned dependencies.
+- **Scoring**: diminishing per-rule loads (`1.00`, `0.25`, `0.10`, then `0`) with `score = max(0, 100 − ceil(total_load))` and `Shielded` / `Controlled` / `Exposed` / `Unbounded` bands.
+- **Executable-context allowlist**: `AU-SH-001`, `AU-GIT-001`, and `AU-NET-001` fire only in shell/PowerShell/batch scripts, Dockerfiles, Makefiles/justfiles, and workflow `run:` values — never in prose or arbitrary YAML/JSON.
+- **Fixture quarantine**: findings under `tests/fixtures/` remain visible with `scored: false` and never affect score, band, exit code, or `stats.findings`.
+- **Cross-platform hardening**: symlinked targets are refused (T14), `.agents` tooling is skipped, and dotenv templates (`.env.example`, `.sample`, `.template`, `.dist`) are not reported as live secret files.
+- **Tests**: fixture-corpus positive/negative coverage, context/quarantine policy tests, and a dogfood guardrail requiring this repository to scan as `Shielded`.
+
 ## [1.2.0] — 2026-10-31
 
 ### Added — Contract Registry, Dynamic Declarations & Gate Integrity (unreleased → released)

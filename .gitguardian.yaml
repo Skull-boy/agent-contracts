@@ -1,0 +1,13 @@
+# Local ggshield configuration (see CONTRIBUTING.md -> Synthetic Fixture Policy).
+#
+# Positive audit fixtures deliberately contain dangerous-looking values so the
+# detectors can be proven to fire. They are synthetic and must never be
+# removed or weakened to silence a scanner.
+#
+# This file only affects local `ggshield` runs. The GitGuardian GitHub App
+# reads its path exclusions from the dashboard, not from the repository, so
+# the same exclusion must also be configured there (see CONTRIBUTING.md).
+version: 2
+secret:
+  ignored_paths:
+    - "tests/fixtures/audit/**"

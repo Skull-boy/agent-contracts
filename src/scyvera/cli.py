@@ -299,17 +299,28 @@ def run_audit(path: Path, as_json: bool = False) -> int:
         print(f"       {error}")
         return 2
 
+    scored = [finding for finding in report.findings if finding.scored]
+    quarantined = len(report.findings) - len(scored)
+
     if as_json:
         print(report.to_json())
-    elif not report.findings:
-        print(f"PASS  {report.target} (0 findings, score {report.score}/100, {report.band})")
+    elif not scored:
+        detail = "0 findings"
+        if quarantined:
+            detail = f"{quarantined} quarantined finding(s) not scored"
+        print(
+            f"PASS  {report.target} "
+            f"({detail}, score {report.score}/100, {report.band})"
+        )
     else:
+        quarantine_note = f", {quarantined} quarantined" if quarantined else ""
         print(
             f"WARN  {report.target} "
-            f"({len(report.findings)} finding(s), score {report.score}/100, {report.band})"
+            f"({len(scored)} finding(s){quarantine_note}, "
+            f"score {report.score}/100, {report.band})"
         )
 
-    return 0 if not report.findings else 1
+    return 0 if not scored else 1
 
 
 def main() -> int:
