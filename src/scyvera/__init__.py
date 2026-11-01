@@ -2,6 +2,7 @@ from .builder import AgentIdentity, Contract, SystemIdentity
 from .audit import AuditReport, AuditError, SymlinkTargetError, scan_tree
 from .audit_rules import RULES, SEVERITY_WEIGHTS, AuditRule, Finding
 from .enforcer import AuditEntry, ContractEnforcer
+from .report import BAND_COLORS, render_badge, render_report
 from .exceptions import (
     ApprovalPendingError,
     ContractFileNameError,
@@ -38,6 +39,7 @@ __all__ = [
     "AuditError",
     "AuditReport",
     "AuditRule",
+    "BAND_COLORS",
     "BaseGateway",
     "Contract",
     "ContractEnforcer",
@@ -69,6 +71,8 @@ __all__ = [
     "apply_lifecycle_defaults",
     "detect_contract_version",
     "lint_contract",
+    "render_badge",
+    "render_report",
     "scan_tree",
     "validate_contract",
 ]

@@ -10,11 +10,12 @@ byte-identically.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import json
 import math
 import os
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Mapping
 
 from .audit_rules import RULES, SEVERITY_WEIGHTS, Finding
@@ -48,6 +49,118 @@ _SEVERITY_RANK: dict[str, int] = {
     "low": 3,
 }
 
+#: Stable order and names for the terminal ``Scanned N files (...)``
+#: breakdown. The count is presentation metadata and is never serialized, so
+#: ``--json`` output remains byte-identical (M2.0b).
+FILE_KINDS: tuple[str, ...] = (
+    "manifests",
+    "workflows",
+    "source",
+    "shell",
+    "containers",
+    "env",
+    "docs",
+    "other",
+)
+
+_MANIFEST_NAMES = frozenset(
+    {
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg",
+        "pipfile",
+        "pipfile.lock",
+        "poetry.lock",
+        "package.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "cargo.toml",
+        "cargo.lock",
+        "go.mod",
+        "go.sum",
+        "gemfile",
+        "gemfile.lock",
+        "composer.json",
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+        "environment.yml",
+        "environment.yaml",
+    }
+)
+_SOURCE_SUFFIXES = frozenset(
+    {
+        ".py",
+        ".pyi",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".mjs",
+        ".cjs",
+        ".go",
+        ".rs",
+        ".java",
+        ".kt",
+        ".kts",
+        ".rb",
+        ".php",
+        ".c",
+        ".h",
+        ".cc",
+        ".cpp",
+        ".hpp",
+        ".cs",
+        ".swift",
+        ".scala",
+    }
+)
+_SHELL_SUFFIXES = frozenset(
+    {".sh", ".bash", ".zsh", ".ksh", ".ps1", ".psm1", ".bat", ".cmd"}
+)
+_DOC_SUFFIXES = frozenset({".md", ".markdown", ".rst", ".adoc", ".txt"})
+
+
+def _is_workflow_path(relative_path: str) -> bool:
+    parts = relative_path.replace("\\", "/").split("/")
+    return any(
+        parts[index] == ".github" and parts[index + 1] == "workflows"
+        for index in range(len(parts) - 1)
+    )
+
+
+def _file_kind(relative_path: str) -> str:
+    """Classify one scanned file for the terminal breakdown (M2.0b).
+
+    Classification is deterministic and purely name-based; it never reads the
+    file again. Unknown names fall back to ``"other"`` so the breakdown can
+    never omit a scanned file.
+    """
+    name = Path(relative_path).name
+    lowered = name.lower()
+    suffix = Path(lowered).suffix
+
+    if _is_workflow_path(relative_path):
+        return "workflows"
+    if lowered.startswith(("dockerfile", "containerfile")):
+        return "containers"
+    if lowered.startswith("docker-compose") and suffix in {".yml", ".yaml"}:
+        return "containers"
+    if lowered.startswith(".env"):
+        return "env"
+    if lowered in _MANIFEST_NAMES or (
+        lowered.startswith("requirements") and lowered.endswith(".txt")
+    ):
+        return "manifests"
+    if suffix in _SOURCE_SUFFIXES:
+        return "source"
+    if suffix in _SHELL_SUFFIXES:
+        return "shell"
+    if suffix in _DOC_SUFFIXES:
+        return "docs"
+    return "other"
+
 
 class AuditError(Exception):
     """Raised when the audit target cannot be scanned safely."""
@@ -69,7 +182,12 @@ class SymlinkTargetError(AuditError):
 
 @dataclass(frozen=True)
 class AuditReport:
-    """Deterministic Blast Radius report (RFC 0004 §4)."""
+    """Deterministic Blast Radius report (RFC 0004 §4).
+
+    ``file_kinds`` is terminal-renderer metadata: the number of scanned files
+    per :data:`FILE_KINDS` category. It is deliberately excluded from
+    :meth:`to_dict`, so ``--json`` output stays byte-identical (M2.0b).
+    """
 
     report_version: int
     target: str
@@ -79,6 +197,9 @@ class AuditReport:
     findings: tuple[Finding, ...]
     draft_available: bool
     packs_suggested: tuple[str, ...]
+    file_kinds: Mapping[str, int] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     def to_dict(self) -> dict[str, Any]:
         findings = [
@@ -241,6 +362,7 @@ def scan_tree(target: Path) -> AuditReport:
     findings: list[Finding] = []
     files_scanned = 0
     files_skipped = 0
+    file_kind_counts: dict[str, int] = {}
 
     if target_path.is_file():
         scanned, file_findings = _scan_file(
@@ -251,6 +373,8 @@ def scan_tree(target: Path) -> AuditReport:
         if scanned:
             files_scanned = 1
             findings.extend(file_findings)
+            kind = _file_kind(target_path.as_posix())
+            file_kind_counts[kind] = file_kind_counts.get(kind, 0) + 1
         else:
             files_skipped = 1
     else:
@@ -280,6 +404,10 @@ def scan_tree(target: Path) -> AuditReport:
                 if scanned:
                     files_scanned += 1
                     findings.extend(file_findings)
+                    kind = _file_kind(relative_path)
+                    file_kind_counts[kind] = (
+                        file_kind_counts.get(kind, 0) + 1
+                    )
                 else:
                     files_skipped += 1
 
@@ -314,4 +442,11 @@ def scan_tree(target: Path) -> AuditReport:
         findings=tuple(findings),
         draft_available=bool(scored_findings),
         packs_suggested=("github-safe",) if scored_findings else (),
+        file_kinds=MappingProxyType(
+            {
+                kind: file_kind_counts[kind]
+                for kind in FILE_KINDS
+                if kind in file_kind_counts
+            }
+        ),
     )

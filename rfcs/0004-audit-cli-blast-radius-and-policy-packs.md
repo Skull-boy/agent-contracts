@@ -1,5 +1,5 @@
 > [!NOTE]
-> **RFC Status: Proposed (implementation to start on `feat/scyvera-audit`)**
+> **RFC Status: Implemented through M2.0b on `feat/scyvera-report`**
 > This RFC specifies the **adoption funnel**: `scyvera audit`, the Blast Radius Report, and Policy Packs. It is the implementation plan for Move 1–3 of the positioning upgrade, built directly on top of the Tier 1 static-analysis work planned in [`docs/roadmap.md`](../docs/roadmap.md) (M2.2) and the v1.1 contract schema.
 >
 > Author: Scyvera Core Team / Agent Contracts Working Group

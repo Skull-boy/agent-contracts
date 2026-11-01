@@ -7,14 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added — Audit Scan Engine (M2.0a / M2.0a.1)
-- **`scyvera audit [path] [--json]`**: deterministic, read-only Blast Radius scan with `report_version: 1` JSON output and `0` / `1` / `2` exit codes.
-- **Rule registry (`AUxxx`)**: eleven pure per-file scanners covering dotenv secrets, destructive shell commands, history rewrites, piped remote installs, workflow permissions, Dockerfiles, n8n workflows, and unpinned dependencies.
-- **Scoring**: diminishing per-rule loads (`1.00`, `0.25`, `0.10`, then `0`) with `score = max(0, 100 − ceil(total_load))` and `Shielded` / `Controlled` / `Exposed` / `Unbounded` bands.
-- **Executable-context allowlist**: `AU-SH-001`, `AU-GIT-001`, and `AU-NET-001` fire only in shell/PowerShell/batch scripts, Dockerfiles, Makefiles/justfiles, and workflow `run:` values — never in prose or arbitrary YAML/JSON.
-- **Fixture quarantine**: findings under `tests/fixtures/` remain visible with `scored: false` and never affect score, band, exit code, or `stats.findings`.
-- **Cross-platform hardening**: symlinked targets are refused (T14), `.agents` tooling is skipped, and dotenv templates (`.env.example`, `.sample`, `.template`, `.dist`) are not reported as live secret files.
-- **Tests**: fixture-corpus positive/negative coverage, context/quarantine policy tests, and a dogfood guardrail requiring this repository to scan as `Shielded`.
+### Added — Blast Radius Report (M2.0b)
+- **Band-first terminal report**: `scyvera audit` now renders the Blast Radius report the way RFC 0004 §2 pins it — status and target first, then the score and band, a `Scanned N files (...)` breakdown, scored findings grouped by severity, and the contract suggestion footer. Quarantined fixture findings stay in `--json` but are never rendered.
+- **New `--badge` flag**: emits a shields.io badge pinned to the Blast Radius band (never the numeric score, so published badges do not flap when scoring internals evolve). With `--json`, the report gains one additive top-level `"badge"` key; without `--badge`, `--json` output is byte-identical to before.
+- **New `--fail-under <score>` CI gate**: exits `1` when the Blast Radius score is below the threshold and `0` otherwise, independent of whether findings exist. Thresholds are validated as integers from 0 to 100; invalid input exits `2` with a single actionable stderr line and no usage wall or traceback.
+- **Windows-safe output**: the renderer falls back from the pinned em dash to `->` when the attached stdout encoding cannot represent it, so narrow console codepages (cp437/cp850) can never crash an audit run.
+
+---
 
 ## [1.2.0] — 2026-10-31
 
