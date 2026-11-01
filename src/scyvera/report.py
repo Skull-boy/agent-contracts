@@ -178,11 +178,19 @@ def render_report(
     scored = [finding for finding in report.findings if finding.scored]
 
     if not scored:
-        text = (
+        lines = [
             f"PASS  {report.target} {dash} exploit risk none "
             f"(score {report.score}/100)"
-        )
-        return _make_encodable(text, resolved)
+        ]
+        # Preserve the M2.0a.1 quarantine transparency contract: fixture-only
+        # trees report that findings were seen but not scored. This is a count,
+        # not a finding row, so the scored Blast Radius stays the only content.
+        quarantined = len(report.findings) - len(scored)
+        if quarantined:
+            lines.append(
+                f"{_INDENT}{quarantined} quarantined finding(s) not scored"
+            )
+        return _make_encodable("\n".join(lines), resolved)
 
     status = (
         "FAIL"

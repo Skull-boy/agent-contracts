@@ -440,8 +440,8 @@ def scan_tree(target: Path) -> AuditReport:
             "findings": severity_counts,
         },
         findings=tuple(findings),
-        draft_available=bool(findings),
-        packs_suggested=("github-safe",) if findings else (),
+        draft_available=bool(scored_findings),
+        packs_suggested=("github-safe",) if scored_findings else (),
         file_kinds=MappingProxyType(
             {
                 kind: file_kind_counts[kind]

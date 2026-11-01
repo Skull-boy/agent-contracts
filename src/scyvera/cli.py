@@ -371,7 +371,6 @@ def run_audit(
         return 2
 
     scored = [finding for finding in report.findings if finding.scored]
-    quarantined = len(report.findings) - len(scored)
 
     if as_json:
         if badge:
@@ -387,7 +386,7 @@ def run_audit(
 
     if threshold is not None:
         return 0 if report.score >= threshold else 1
-    return 0 if not report.findings else 1
+    return 0 if not scored else 1
 
 
 def main() -> int:

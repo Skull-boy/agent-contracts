@@ -598,7 +598,9 @@ def test_cli_ascii_stdout_cannot_crash() -> None:
 
 def test_positive_fixture_render_has_no_scored_rows() -> None:
     report = scan_tree(POSITIVE)
+    text = render_report(report)
 
     assert report.score == 100
     assert all(finding.scored is False for finding in report.findings)
-    assert render_report(report).startswith("PASS  ")
+    assert text.startswith("PASS  ")
+    assert "12 quarantined finding(s) not scored" in text

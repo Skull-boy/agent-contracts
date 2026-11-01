@@ -425,7 +425,8 @@ def test_cli_audit_scored_finding_warns_and_exits_one(
 
     assert exit_code == 1
     assert "WARN" in output
-    assert "1 finding(s)" in output
+    assert "Blast Radius: 97/100 (Shielded)" in output
+    assert "[AU-NET-002]" in output
     assert "quarantined" not in output
 
 
