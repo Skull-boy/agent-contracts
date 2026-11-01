@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Blast Radius Report (M2.0b)
+- **Band-first terminal report**: `scyvera audit` now renders the Blast Radius report the way RFC 0004 §2 pins it — status and target first, then the score and band, a `Scanned N files (...)` breakdown, scored findings grouped by severity, and the contract suggestion footer. Quarantined fixture findings stay in `--json` but are never rendered.
+- **New `--badge` flag**: emits a shields.io badge pinned to the Blast Radius band (never the numeric score, so published badges do not flap when scoring internals evolve). With `--json`, the report gains one additive top-level `"badge"` key; without `--badge`, `--json` output is byte-identical to before.
+- **New `--fail-under <score>` CI gate**: exits `1` when the Blast Radius score is below the threshold and `0` otherwise, independent of whether findings exist. Thresholds are validated as integers from 0 to 100; invalid input exits `2` with a single actionable stderr line and no usage wall or traceback.
+- **Windows-safe output**: the renderer falls back from the pinned em dash to `->` when the attached stdout encoding cannot represent it, so narrow console codepages (cp437/cp850) can never crash an audit run.
+
+---
+
 ## [1.2.0] — 2026-10-31
 
 ### Added — Contract Registry, Dynamic Declarations & Gate Integrity (unreleased → released)
