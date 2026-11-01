@@ -259,8 +259,10 @@ def test_report_shape_matches_rfc_0004():
     ]
     assert "generated_at" not in data
     assert data["target"] == CORPUS.as_posix()
-    assert data["draft_available"] is True
-    assert data["packs_suggested"] == ["github-safe"]
+    # Every finding in the corpus is a quarantined fixture, so nothing is
+    # actionable: no contract draft and no policy pack are suggested.
+    assert data["draft_available"] is False
+    assert data["packs_suggested"] == []
 
 
 def test_scan_is_byte_identical_across_runs():
@@ -380,7 +382,8 @@ def test_cli_audit_json_is_deterministic(monkeypatch, capsys):
         exit_codes.append(main())
         outputs.append(capsys.readouterr().out)
 
-    assert exit_codes == [1, 1]
+    # Fixture-only findings are quarantined, so the scan is a PASS.
+    assert exit_codes == [0, 0]
     assert outputs[0] == outputs[1]
 
     data = json.loads(outputs[0])
@@ -389,6 +392,41 @@ def test_cli_audit_json_is_deterministic(monkeypatch, capsys):
     assert data["band"] == "Shielded"
     assert len(data["findings"]) == 12
     assert all(finding["scored"] is False for finding in data["findings"])
+
+
+def test_cli_audit_quarantined_only_exits_zero(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        ["scyvera", "audit", str(POSITIVE)],
+    )
+
+    exit_code = main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "PASS" in output
+    assert "12 quarantined finding(s) not scored" in output
+    assert "score 100/100" in output
+
+
+def test_cli_audit_scored_finding_warns_and_exits_one(
+    tmp_path, monkeypatch, capsys
+):
+    (tmp_path / "client.py").write_text(
+        "import " + "requests\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["scyvera", "audit", str(tmp_path)],
+    )
+
+    exit_code = main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "WARN" in output
+    assert "1 finding(s)" in output
+    assert "quarantined" not in output
 
 
 def test_cli_audit_clean_path_returns_zero(monkeypatch, capsys):

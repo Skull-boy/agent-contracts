@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import math
 from pathlib import Path
 import re
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Literal, Mapping
 
 
 SEVERITY_WEIGHTS: dict[str, int] = {
@@ -90,6 +90,9 @@ def _rule(
 # ---------------------------------------------------------------------------
 
 _ENV_FILE_RE = re.compile(r"^\.env(?:\..*)?$")
+# Committed dotenv templates are documentation, not live secrets: they are
+# checked in on purpose with placeholder values. Real dotenv files, including
+# .env.local and .env.production, are still audited.
 _ENV_TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".dist")
 _SECRET_KEY_RE = re.compile(
     r"(?:^|_)(?:api_?key|secret|token|password|passwd|pwd|private_?key|"
@@ -105,7 +108,6 @@ _PLACEHOLDER_VALUE_RE = re.compile(
 _SHELL_SUFFIXES = frozenset({".sh", ".bash", ".zsh", ".ksh"})
 _POWERSHELL_SUFFIXES = frozenset({".ps1", ".psm1"})
 _BATCH_SUFFIXES = frozenset({".bat", ".cmd"})
-_EXECUTABLE_SUFFIXES = _SHELL_SUFFIXES | _POWERSHELL_SUFFIXES | _BATCH_SUFFIXES
 _MAKE_BASENAMES = frozenset({"makefile", "gnumakefile", "justfile"})
 _MAKE_SUFFIXES = frozenset({".mk"})
 
@@ -204,6 +206,20 @@ _REQUIREMENTS_RE = re.compile(
 )
 
 
+@dataclass(frozen=True)
+class _ExecutableLine:
+    """A physical source line that a shell-like context may execute."""
+
+    number: int
+    text: str
+
+
+# Shell dialect a file executes in. "generic" is a multi-dialect context
+# (Dockerfile, Makefile/justfile, workflow run block) where any supported
+# shell syntax may legitimately appear.
+_ShellKind = Literal["posix", "powershell", "batch", "generic"]
+
+
 def _is_env_file(filename: str) -> bool:
     lowered = filename.lower()
     if any(lowered.endswith(suffix) for suffix in _ENV_TEMPLATE_SUFFIXES):
@@ -219,13 +235,33 @@ def _is_makefile(filename: str) -> bool:
     )
 
 
-def _yaml_run_lines(text: str) -> dict[int, str]:
-    """Extract the line numbers and text of ``run:`` block values.
+def _shell_kind(filename: str) -> _ShellKind | None:
+    """Classify a file by the shell it executes, if it executes one."""
+    suffix = Path(filename).suffix.lower()
 
-    Only commands that actually execute are returned; other YAML prose is
-    never visible to the shell/git/network rules.
+    if suffix in _SHELL_SUFFIXES:
+        return "posix"
+    if suffix in _POWERSHELL_SUFFIXES:
+        return "powershell"
+    if suffix in _BATCH_SUFFIXES:
+        return "batch"
+    if _is_dockerfile(filename) or _is_makefile(filename):
+        return "generic"
+    if suffix in _WORKFLOW_SUFFIXES:
+        return "generic"
+    return None
+
+
+def _workflow_run_lines(text: str) -> tuple[_ExecutableLine, ...]:
+    """Extract the physical lines that make up workflow ``run:`` values.
+
+    GitHub Actions executes only the scalar value of a step's ``run`` key.
+    Both inline values (``run: make test``) and block scalars (``run: |``)
+    are supported. YAML outside those blocks is never exposed to the
+    shell/git/network rules, so prose and configuration cannot be mistaken
+    for commands.
     """
-    executable: dict[int, str] = {}
+    lines: list[_ExecutableLine] = []
     run_indent: int | None = None
 
     for number, raw in enumerate(text.splitlines(), start=1):
@@ -233,53 +269,57 @@ def _yaml_run_lines(text: str) -> dict[int, str]:
         if run_match is not None:
             run_indent = len(run_match.group(1))
             remainder = run_match.group(2).strip()
-            if remainder and not remainder.startswith(("|", ">")):
-                executable[number] = remainder
+
+            if not remainder:
+                # A null ``run:`` key has no executable value.
+                run_indent = None
+                continue
+
+            if remainder.startswith(("|", ">")):
+                # Block scalar: its indented body follows on later lines.
+                continue
+
+            lines.append(_ExecutableLine(number, remainder))
+            run_indent = None
             continue
 
         if run_indent is None:
             continue
 
-        stripped = raw.strip()
-        if not stripped:
+        if not raw.strip():
+            # Blank lines belong to a block scalar and do not end it.
             continue
 
-        indent = len(raw) - len(raw.lstrip())
-        if indent > run_indent:
-            executable[number] = raw
+        if len(raw) - len(raw.lstrip()) > run_indent:
+            lines.append(_ExecutableLine(number, raw))
         else:
             run_indent = None
 
-    return executable
+    return tuple(lines)
 
 
 def _executable_lines(
-    path: str,
     text: str,
     filename: str,
-) -> dict[int, str] | None:
-    """Return line-numbered executable text, or ``None`` if not executable.
+) -> tuple[_ExecutableLine, ...] | None:
+    """Return executable lines, or ``None`` when there is no such context.
 
-    AU-SH-001, AU-GIT-001 and AU-NET-001 are only allowed to fire on shell
-    scripts, Dockerfiles, Makefiles/justfiles, and the ``run:`` values of
-    workflow YAML. Documentation, prose, and arbitrary JSON are excluded.
+    Shell scripts, Dockerfiles, and Makefiles/justfiles execute essentially
+    every line. Workflow YAML exposes only its ``run:`` values. Everything
+    else (documentation, prose, arbitrary YAML/JSON) returns ``None``.
     """
     suffix = Path(filename).suffix.lower()
 
-    if (
-        suffix in _EXECUTABLE_SUFFIXES
-        or _is_dockerfile(filename)
-        or _is_makefile(filename)
-    ):
-        return {
-            number: line
-            for number, line in enumerate(text.splitlines(), start=1)
-        }
-
     if suffix in _WORKFLOW_SUFFIXES:
-        return _yaml_run_lines(text)
+        return _workflow_run_lines(text)
 
-    return None
+    if _shell_kind(filename) is None:
+        return None
+
+    return tuple(
+        _ExecutableLine(number, line)
+        for number, line in enumerate(text.splitlines(), start=1)
+    )
 
 
 def _is_comment_line(line: str) -> bool:
@@ -432,31 +472,30 @@ def _match_env_secret(
 def _match_shell_delete(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    executable = _executable_lines(path, text, filename)
+    executable = _executable_lines(text, filename)
     if executable is None:
         return []
 
-    suffix = Path(filename).suffix.lower()
-
-    for number, raw in executable.items():
-        line = raw.strip()
+    kind = _shell_kind(filename)
+    for item in executable:
+        line = item.text.strip()
         if not line or _is_comment_line(line):
             continue
 
         matched: str | None = None
-        if suffix in _POWERSHELL_SUFFIXES:
-            if _ps_remove_is_recursive_and_force(line):
-                matched = "Remove-Item -Recurse -Force"
-        elif suffix in _BATCH_SUFFIXES:
-            if _DEL_RECURSIVE_RE.search(line):
-                matched = "del /s"
-        elif _rm_is_recursive_and_force(line):
+        if kind in ("posix", "generic") and _rm_is_recursive_and_force(line):
             matched = "rm -rf"
+        elif kind in ("powershell", "generic") and (
+            _ps_remove_is_recursive_and_force(line)
+        ):
+            matched = "Remove-Item -Recurse -Force"
+        elif kind in ("batch", "generic") and _DEL_RECURSIVE_RE.search(line):
+            matched = "del /s"
 
         if matched is not None:
             return [
                 (
-                    number,
+                    item.number,
                     f"Destructive filesystem command '{matched}' found in '{filename}'.",
                     {
                         "side_effects": [
@@ -475,19 +514,19 @@ def _match_shell_delete(
 def _match_git_destructive(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    executable = _executable_lines(path, text, filename)
+    executable = _executable_lines(text, filename)
     if executable is None:
         return []
 
-    for number, raw in executable.items():
-        line = raw.strip()
+    for item in executable:
+        line = item.text.strip()
         if not line or _is_comment_line(line):
             continue
         matched = _git_destructive_match(line)
         if matched is not None:
             return [
                 (
-                    number,
+                    item.number,
                     f"History-rewriting command '{matched}' found in '{filename}'.",
                     {
                         "permissions": ["git_ref:write"],
@@ -503,18 +542,18 @@ def _match_git_destructive(
 def _match_piped_install(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    executable = _executable_lines(path, text, filename)
+    executable = _executable_lines(text, filename)
     if executable is None:
         return []
 
-    for number, raw in executable.items():
-        line = raw.strip()
+    for item in executable:
+        line = item.text.strip()
         if not line or _is_comment_line(line):
             continue
         if _CURL_PIPE_RE.search(line) or _IWR_PIPE_RE.search(line):
             return [
                 (
-                    number,
+                    item.number,
                     f"Remote install script is piped directly into an interpreter in '{filename}'.",
                     {
                         "side_effects": [
@@ -570,30 +609,29 @@ def _match_ci_write(
 
     write_all_line: int | None = None
     secret_line: int | None = None
-    run_indent: int | None = None
+
+    # Reuse the single workflow run-block parser so an inline ``run:`` cannot
+    # leak its indentation into a following ``env:`` block (which would
+    # misreport a safe secret reference as command-line interpolation).
+    run_lines = _workflow_run_lines(text)
+    run_line_numbers = {item.number for item in run_lines}
+
+    for item in run_lines:
+        if _SECRET_REF_RE.search(item.text):
+            secret_line = item.number
+            break
 
     for number, raw in enumerate(text.splitlines(), start=1):
+        if number in run_line_numbers:
+            continue
+
         stripped = raw.strip()
         if not stripped or stripped.startswith("#"):
             continue
 
-        run_match = _RUN_KEY_RE.match(raw)
-        if run_match is not None:
-            run_indent = len(run_match.group(1))
-            if secret_line is None and _SECRET_REF_RE.search(run_match.group(2)):
-                secret_line = number
-            continue
-
-        if run_indent is not None:
-            indent = len(raw) - len(raw.lstrip())
-            if indent > run_indent:
-                if secret_line is None and _SECRET_REF_RE.search(raw):
-                    secret_line = number
-                continue
-            run_indent = None
-
-        if write_all_line is None and _WRITE_ALL_RE.match(raw):
+        if _WRITE_ALL_RE.match(raw):
             write_all_line = number
+            break
 
     if write_all_line is None and secret_line is None:
         return []

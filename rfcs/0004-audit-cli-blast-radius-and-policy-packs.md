@@ -40,7 +40,7 @@ Flags:
   --force                      Allow --generate to overwrite an existing file
 ```
 
-- Output conventions follow the existing CLI (`PASS` / `WARN` / `FAIL` prefixes; exit codes: `0` clean, `1` findings or `--fail-under` threshold breach, `2` usage/IO error).
+- Output conventions follow the existing CLI (`PASS` / `WARN` / `FAIL` prefixes; exit codes: `0` clean, `1` findings or `--fail-under` threshold breach, `2` usage/IO error). Quarantined fixture findings never affect the exit code: a scan whose only findings are `scored: false` reports `PASS` and exits `0`.
 - Default human output (pinned format, score band first — the number people screenshot):
 
 ```text
@@ -106,7 +106,7 @@ class Finding:
 
 Deterministic first, shareable second:
 
-- **Scoring**: `score = 100 − min(100, Σ severity_weight)`, weights: critical 15, high 8, medium 3, low 1. Bands: ≥ 90 `Shielded`, 70–89 `Controlled`, 40–69 `Exposed`, < 40 `Unbounded`.
+- **Scoring**: see §4.1 for the authoritative formula (diminishing per-rule loads, `score = max(0, 100 − ceil(total_load))`). Bands: ≥ 90 `Shielded`, 70–89 `Controlled`, 40–69 `Exposed`, < 40 `Unbounded`.
 - Order of findings in all output: severity desc, then rule_id, then path — never file-system order (determinism across runs and machines).
 - No timestamps unless `--stamp`; both variants serialize identically otherwise.
 - `--json` emits exactly:
@@ -124,6 +124,8 @@ Deterministic first, shareable second:
 }
 ```
 
+- `draft_available` and `packs_suggested` describe actionable, scored findings only. A scan whose findings are all quarantined fixtures reports `false` / `[]`. Each finding still carries its `scored` flag so fixture coverage remains visible.
+
 - Badge markdown (`--badge`) emits a shields.io snippet pinned to the band, not the raw score (avoids churn):
 
 ```markdown
@@ -132,7 +134,7 @@ Deterministic first, shareable second:
 
 ### 4.1 Scoring refinement (M2.0a.1)
 
-Scoring now applies diminishing per-rule loads instead of a flat sum: findings are grouped by `rule_id` and the first three occurrences contribute `base × 1.00`, `base × 0.25`, and `base × 0.10` respectively, while every further occurrence contributes zero, so one rule can add at most `1.35 × base`. The reported score is `max(0, 100 − ceil(total_load))` with the bands above unchanged, and `AU-SH-001`, `AU-GIT-001`, and `AU-NET-001` fire only in executable contexts (`*.sh`, `*.ps1`, `*.bat`, `*.cmd`, `Dockerfile*`, workflow `run:` values, and Makefile/justfile content), never in prose, arbitrary YAML/JSON, or documentation. Findings whose normalized path starts with `tests/fixtures/` stay in the report but carry `scored: false` and contribute nothing to the score, band, or `stats.findings`, which now counts scored findings only. The scan skip list also includes `.agents` so installed skill tooling is never audited.
+Scoring now applies diminishing per-rule loads instead of a flat sum: findings are grouped by `rule_id` and the first three occurrences contribute `base × 1.00`, `base × 0.25`, and `base × 0.10` respectively, while every further occurrence contributes zero, so one rule can add at most `1.35 × base`. The reported score is `max(0, 100 − ceil(total_load))` with the bands above unchanged, and `AU-SH-001`, `AU-GIT-001`, and `AU-NET-001` fire only in executable contexts (`*.sh`, `*.ps1`, `*.bat`, `*.cmd`, `Dockerfile*`, workflow `run:` values, and Makefile/justfile content), never in prose, arbitrary YAML/JSON, or documentation. Findings whose normalized path starts with `tests/fixtures/`, or any finding produced by a scan whose target itself lives under `tests/fixtures/`, stay in the report but carry `scored: false` and contribute nothing to the score, band, exit code, `draft_available`, `packs_suggested`, or `stats.findings`, which now counts scored findings only. The scan skip list also includes `.agents` so installed skill tooling is never audited.
 
 ## 5. Contract Draft Generation (`--generate`)
 
@@ -172,7 +174,7 @@ construction:
 1. **Dogfood**: `scyvera audit .` runs against the Scyvera repo itself in CI; result is asserted in a test snapshot (band must remain `Shielded` at 1.3.0 release; if drift occurs, the test fails loudly, not silently).
 2. **Fixture corpus**: `tests/fixtures/audit/` contains a miniature synthetic repo (env file, shell script, workflow, python source, dockerfile, n8n json) — one per scanner — plus negative variants. Scanned against in tests via relative path resolution (same pattern as existing FIXTURE logic).
 
-> **Synthetic fixture policy.** Positive fixtures intentionally contain realistic-looking secrets and destructive commands (that is what proves the detectors fire). They are therefore scanner-ignored as official policy: GitHub Push Protection allowlist and GitGuardian path exclusion cover `tests/fixtures/audit/**`, and the same rules are documented for contributors in [`CONTRIBUTING.md` → Synthetic Fixture Policy](../CONTRIBUTING.md). Fixture values must be non-usable synthetic strings (dashed leet-style words; no credential-format prefixes, no live-pattern values). A scanner flag on this path is resolved via scanner configuration — never by weakening or deleting a positive test.
+> **Synthetic fixture policy.** Positive fixtures intentionally contain realistic-looking secrets and destructive commands (that is what proves the detectors fire). They are therefore scanner-ignored as official policy: GitHub Push Protection allowlists the path, the GitGuardian GitHub App excludes `tests/fixtures/audit/**` in its dashboard configuration, and local `ggshield` runs read the same exclusion from [`.gitguardian.yaml`](../.gitguardian.yaml). The rules are documented for contributors in [`CONTRIBUTING.md` → Synthetic Fixture Policy](../CONTRIBUTING.md). Fixture values must be non-usable synthetic strings (dashed leet-style words; no credential-format prefixes, no live-pattern values). A scanner flag on this path is resolved via scanner configuration — never by weakening or deleting a positive test.
 
 3. **Determinism test**: same corpus scanned twice produces byte-identical JSON.
 4. **Cross-platform test**: synthetic repo with a `.ps1` destructive script on the Windows path style; POSIX variants for `.sh`.

@@ -370,6 +370,9 @@ def run_audit(
         print(f"       {error}")
         return 2
 
+    scored = [finding for finding in report.findings if finding.scored]
+    quarantined = len(report.findings) - len(scored)
+
     if as_json:
         if badge:
             payload = report.to_dict()

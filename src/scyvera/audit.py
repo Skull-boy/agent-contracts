@@ -249,12 +249,43 @@ def _band_for_score(score: int) -> str:
     return "Unbounded"
 
 
-def _has_tests_fixtures_segment(path: str) -> bool:
-    parts = [part for part in path.replace("\\", "/").split("/") if part]
+def _is_fixture_path(path: str) -> bool:
+    """True for workspace-relative paths inside ``tests/fixtures/``."""
+    return path.replace("\\", "/").startswith("tests/fixtures/")
+
+
+def _is_fixture_target(target: Path) -> bool:
+    """True when the scan target itself lives under ``tests/fixtures``.
+
+    Relative finding paths lose the ``tests/fixtures/`` prefix when the
+    target is a fixture directory, so a direct fixture scan is quarantined
+    wholesale instead of being scored as production code.
+    """
+    parts = [
+        part for part in target.resolve().as_posix().split("/") if part
+    ]
     return any(
         parts[index] == "tests" and parts[index + 1] == "fixtures"
         for index in range(len(parts) - 1)
     )
+
+
+def _quarantine_findings(
+    findings: list[Finding],
+    target: Path,
+) -> list[Finding]:
+    """Mark intentional fixture findings as unscored.
+
+    Quarantined findings stay in the report so fixture coverage remains
+    visible, but they never change the score, band, or severity stats.
+    """
+    quarantine_all = _is_fixture_target(target)
+    return [
+        replace(finding, scored=False)
+        if quarantine_all or _is_fixture_path(finding.path)
+        else finding
+        for finding in findings
+    ]
 
 
 def _total_load(findings: list[Finding]) -> float:
@@ -314,6 +345,10 @@ def scan_tree(target: Path) -> AuditReport:
 
     Symlinked targets are refused (T14). Paths inside the report are relative
     to the scan root and normalized to ``/`` separators.
+
+    Findings inside ``tests/fixtures/`` are intentional test material. They
+    are marked ``scored=False`` and excluded from the score, band, exit
+    code, and ``stats.findings`` while remaining visible in the report.
     """
     target_path = Path(target)
 
@@ -376,15 +411,7 @@ def scan_tree(target: Path) -> AuditReport:
                 else:
                     files_skipped += 1
 
-    quarantine_all = _has_tests_fixtures_segment(
-        target_path.resolve().as_posix()
-    )
-    findings = [
-        replace(finding, scored=False)
-        if quarantine_all or finding.path.startswith("tests/fixtures/")
-        else finding
-        for finding in findings
-    ]
+    findings = _quarantine_findings(findings, target_path)
 
     findings.sort(
         key=lambda finding: (
