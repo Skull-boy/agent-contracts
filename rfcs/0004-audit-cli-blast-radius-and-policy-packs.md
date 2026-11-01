@@ -171,6 +171,9 @@ construction:
 
 1. **Dogfood**: `scyvera audit .` runs against the Scyvera repo itself in CI; result is asserted in a test snapshot (band must remain `Shielded` at 1.3.0 release; if drift occurs, the test fails loudly, not silently).
 2. **Fixture corpus**: `tests/fixtures/audit/` contains a miniature synthetic repo (env file, shell script, workflow, python source, dockerfile, n8n json) — one per scanner — plus negative variants. Scanned against in tests via relative path resolution (same pattern as existing FIXTURE logic).
+
+> **Synthetic fixture policy.** Positive fixtures intentionally contain realistic-looking secrets and destructive commands (that is what proves the detectors fire). They are therefore scanner-ignored as official policy: GitHub Push Protection allowlist and GitGuardian path exclusion cover `tests/fixtures/audit/**`, and the same rules are documented for contributors in [`CONTRIBUTING.md` → Synthetic Fixture Policy](../CONTRIBUTING.md). Fixture values must be non-usable synthetic strings (dashed leet-style words; no credential-format prefixes, no live-pattern values). A scanner flag on this path is resolved via scanner configuration — never by weakening or deleting a positive test.
+
 3. **Determinism test**: same corpus scanned twice produces byte-identical JSON.
 4. **Cross-platform test**: synthetic repo with a `.ps1` destructive script on the Windows path style; POSIX variants for `.sh`.
 5. **Schema-accuracy test**: every `--generate` result validates against v1.1 with zero lint warnings (see §5).
