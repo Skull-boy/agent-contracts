@@ -117,7 +117,9 @@ Scyvera's audit engine is tested against **intentionally dangerous-looking fixtu
 Rules for anyone adding or touching fixture material:
 
 - Fixture secret values must be **non-usable synthetic strings**: dashed leet-style words (e.g. `API_KEY=H3llo-Th1s-1s-Dummy-V4lu3`), never credential-format prefixes (`sk_`, `AKIA`, `ghp_`, `Bearer`, JWT shapes) and never live-pattern values.
-- The path `tests/fixtures/audit/**` is **scanner-ignored by configuration** (GitHub Push Protection allowlist + GitGuardian path exclusion). This is documented policy, not an oversight — never "fix" a scanner warning by weakening the fixture.
+- The path `tests/fixtures/audit/**` is **scanner-ignored by configuration**. Two places must agree:
+  - **Repository**: [`.gitguardian.yaml`](../.gitguardian.yaml) excludes the path for local `ggshield` runs, and GitHub Push Protection must allowlist it in repository settings.
+  - **GitGuardian dashboard**: the GitHub App reads exclusions from the dashboard, not from `.gitguardian.yaml`, so `tests/fixtures/audit/**` must also be added to the repository's path exclusions there. This is documented policy, not an oversight — never "fix" a scanner warning by weakening the fixture.
 - If a real scanner still flags a new fixture value, resolve it via the project's scanner configuration; do not delete positive test cases.
 - For real-world examples elsewhere in the repo (`examples/`, `implementations/`), plain placeholders (`changeme`, `${ENV_VAR}`) are preferred.
 
