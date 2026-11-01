@@ -10,8 +10,9 @@ byte-identically.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any, Mapping
@@ -22,6 +23,7 @@ from .audit_rules import RULES, SEVERITY_WEIGHTS, Finding
 REPORT_VERSION = 1
 MAX_FILE_BYTES = 1024 * 1024
 BINARY_SNIFF_BYTES = 8 * 1024
+RULE_LOAD_COEFFICIENTS: tuple[float, ...] = (1.00, 0.25, 0.10)
 
 SKIP_DIRS: frozenset[str] = frozenset(
     {
@@ -35,6 +37,7 @@ SKIP_DIRS: frozenset[str] = frozenset(
         ".release-test",
         "brag-output",
         ".assurance",
+        ".agents",
     }
 )
 
@@ -87,6 +90,7 @@ class AuditReport:
                 "path": finding.path,
                 "line": finding.line,
                 "suggestion": dict(finding.suggestion),
+                "scored": finding.scored,
             }
             for finding in self.findings
         ]
@@ -122,6 +126,31 @@ def _band_for_score(score: int) -> str:
     if score >= 40:
         return "Exposed"
     return "Unbounded"
+
+
+def _has_tests_fixtures_segment(path: str) -> bool:
+    parts = [part for part in path.replace("\\", "/").split("/") if part]
+    return any(
+        parts[index] == "tests" and parts[index + 1] == "fixtures"
+        for index in range(len(parts) - 1)
+    )
+
+
+def _total_load(findings: list[Finding]) -> float:
+    """Diminishing per-rule load: 1.00, 0.25, 0.10, then zero."""
+    occurrences: dict[str, int] = {}
+    total = 0.0
+
+    for finding in findings:
+        index = occurrences.get(finding.rule_id, 0)
+        occurrences[finding.rule_id] = index + 1
+        if index < len(RULE_LOAD_COEFFICIENTS):
+            total += (
+                SEVERITY_WEIGHTS[finding.severity]
+                * RULE_LOAD_COEFFICIENTS[index]
+            )
+
+    return total
 
 
 def _scan_file(
@@ -219,6 +248,16 @@ def scan_tree(target: Path) -> AuditReport:
                 else:
                     files_skipped += 1
 
+    quarantine_all = _has_tests_fixtures_segment(
+        target_path.resolve().as_posix()
+    )
+    findings = [
+        replace(finding, scored=False)
+        if quarantine_all or finding.path.startswith("tests/fixtures/")
+        else finding
+        for finding in findings
+    ]
+
     findings.sort(
         key=lambda finding: (
             _SEVERITY_RANK[finding.severity],
@@ -228,11 +267,11 @@ def scan_tree(target: Path) -> AuditReport:
         )
     )
 
-    total_weight = sum(SEVERITY_WEIGHTS[finding.severity] for finding in findings)
-    score = 100 - min(100, total_weight)
+    scored_findings = [finding for finding in findings if finding.scored]
+    score = max(0, 100 - math.ceil(_total_load(scored_findings)))
 
     severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    for finding in findings:
+    for finding in scored_findings:
         severity_counts[finding.severity] += 1
 
     return AuditReport(

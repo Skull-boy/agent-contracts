@@ -162,16 +162,49 @@ def test_corpus_score_counts_and_stats():
 
     assert report.report_version == 1
     assert len(report.findings) == 12
-    assert report.score == 0
-    assert report.band == "Unbounded"
+    assert all(finding.scored is False for finding in report.findings)
+    assert report.score == 100
+    assert report.band == "Shielded"
     assert report.stats["files_scanned"] == 22
     assert report.stats["files_skipped"] == 0
     assert report.stats["findings"] == {
-        "critical": 4,
-        "high": 4,
-        "medium": 3,
-        "low": 1,
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
     }
+
+
+def test_repeated_rule_load_stops_after_third_occurrence(tmp_path):
+    three = tmp_path / "three"
+    three.mkdir()
+    for index in range(3):
+        (three / f"client_{index}.py").write_text(
+            "import " + "requests\n",
+            encoding="utf-8",
+        )
+
+    five = tmp_path / "five"
+    five.mkdir()
+    for index in range(5):
+        (five / f"client_{index}.py").write_text(
+            "import " + "requests\n",
+            encoding="utf-8",
+        )
+
+    three_report = scan_tree(three)
+    five_report = scan_tree(five)
+
+    assert [finding.rule_id for finding in three_report.findings] == [
+        "AU-NET-002",
+        "AU-NET-002",
+        "AU-NET-002",
+    ]
+    assert len(five_report.findings) == 5
+    assert all(finding.scored for finding in five_report.findings)
+    # base 3 * (1.00 + 0.25 + 0.10) = 4.05 -> ceil 5 -> score 95.
+    assert three_report.score == 95
+    assert five_report.score == 95
 
 
 def test_findings_are_ordered_deterministically():
@@ -222,6 +255,7 @@ def test_report_shape_matches_rfc_0004():
         "path",
         "line",
         "suggestion",
+        "scored",
     ]
     assert "generated_at" not in data
     assert data["target"] == CORPUS.as_posix()
@@ -351,9 +385,10 @@ def test_cli_audit_json_is_deterministic(monkeypatch, capsys):
 
     data = json.loads(outputs[0])
     assert data["report_version"] == 1
-    assert data["score"] == 0
-    assert data["band"] == "Unbounded"
+    assert data["score"] == 100
+    assert data["band"] == "Shielded"
     assert len(data["findings"]) == 12
+    assert all(finding["scored"] is False for finding in data["findings"])
 
 
 def test_cli_audit_clean_path_returns_zero(monkeypatch, capsys):

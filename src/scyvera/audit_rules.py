@@ -25,7 +25,11 @@ SEVERITY_WEIGHTS: dict[str, int] = {
 
 @dataclass(frozen=True)
 class Finding:
-    """A single audit finding (RFC 0004 §3)."""
+    """A single audit finding (RFC 0004 §3).
+
+    ``scored`` is the M2.0a.1 quarantine marker: fixture findings remain in
+    the report but contribute nothing to score, band, or scored stats.
+    """
 
     rule_id: str
     severity: str
@@ -34,6 +38,7 @@ class Finding:
     path: str
     line: int | None
     suggestion: Mapping[str, Any]
+    scored: bool = True
 
 
 @dataclass(frozen=True)
@@ -85,6 +90,7 @@ def _rule(
 # ---------------------------------------------------------------------------
 
 _ENV_FILE_RE = re.compile(r"^\.env(?:\..*)?$")
+_ENV_TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".dist")
 _SECRET_KEY_RE = re.compile(
     r"(?:^|_)(?:api_?key|secret|token|password|passwd|pwd|private_?key|"
     r"access_?key|credential)(?:_|$)",
@@ -99,8 +105,10 @@ _PLACEHOLDER_VALUE_RE = re.compile(
 _SHELL_SUFFIXES = frozenset({".sh", ".bash", ".zsh", ".ksh"})
 _POWERSHELL_SUFFIXES = frozenset({".ps1", ".psm1"})
 _BATCH_SUFFIXES = frozenset({".bat", ".cmd"})
+_EXECUTABLE_SUFFIXES = _SHELL_SUFFIXES | _POWERSHELL_SUFFIXES | _BATCH_SUFFIXES
+_MAKE_BASENAMES = frozenset({"makefile", "gnumakefile", "justfile"})
+_MAKE_SUFFIXES = frozenset({".mk"})
 
-_DOCUMENT_SUFFIXES = frozenset({".md", ".markdown", ".rst", ".adoc", ".txt", ".text"})
 _SOURCE_SUFFIXES = frozenset(
     {
         ".py",
@@ -197,12 +205,81 @@ _REQUIREMENTS_RE = re.compile(
 
 
 def _is_env_file(filename: str) -> bool:
+    lowered = filename.lower()
+    if any(lowered.endswith(suffix) for suffix in _ENV_TEMPLATE_SUFFIXES):
+        return False
     return _ENV_FILE_RE.match(filename) is not None
 
 
-def _is_code_context(filename: str) -> bool:
-    """Content-level network/git rules ignore prose and documentation files."""
-    return Path(filename).suffix.lower() not in _DOCUMENT_SUFFIXES
+def _is_makefile(filename: str) -> bool:
+    lowered = filename.lower()
+    return (
+        lowered in _MAKE_BASENAMES
+        or Path(filename).suffix.lower() in _MAKE_SUFFIXES
+    )
+
+
+def _yaml_run_lines(text: str) -> dict[int, str]:
+    """Extract the line numbers and text of ``run:`` block values.
+
+    Only commands that actually execute are returned; other YAML prose is
+    never visible to the shell/git/network rules.
+    """
+    executable: dict[int, str] = {}
+    run_indent: int | None = None
+
+    for number, raw in enumerate(text.splitlines(), start=1):
+        run_match = _RUN_KEY_RE.match(raw)
+        if run_match is not None:
+            run_indent = len(run_match.group(1))
+            remainder = run_match.group(2).strip()
+            if remainder and not remainder.startswith(("|", ">")):
+                executable[number] = remainder
+            continue
+
+        if run_indent is None:
+            continue
+
+        stripped = raw.strip()
+        if not stripped:
+            continue
+
+        indent = len(raw) - len(raw.lstrip())
+        if indent > run_indent:
+            executable[number] = raw
+        else:
+            run_indent = None
+
+    return executable
+
+
+def _executable_lines(
+    path: str,
+    text: str,
+    filename: str,
+) -> dict[int, str] | None:
+    """Return line-numbered executable text, or ``None`` if not executable.
+
+    AU-SH-001, AU-GIT-001 and AU-NET-001 are only allowed to fire on shell
+    scripts, Dockerfiles, Makefiles/justfiles, and the ``run:`` values of
+    workflow YAML. Documentation, prose, and arbitrary JSON are excluded.
+    """
+    suffix = Path(filename).suffix.lower()
+
+    if (
+        suffix in _EXECUTABLE_SUFFIXES
+        or _is_dockerfile(filename)
+        or _is_makefile(filename)
+    ):
+        return {
+            number: line
+            for number, line in enumerate(text.splitlines(), start=1)
+        }
+
+    if suffix in _WORKFLOW_SUFFIXES:
+        return _yaml_run_lines(text)
+
+    return None
 
 
 def _is_comment_line(line: str) -> bool:
@@ -355,20 +432,26 @@ def _match_env_secret(
 def _match_shell_delete(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
+    executable = _executable_lines(path, text, filename)
+    if executable is None:
+        return []
+
     suffix = Path(filename).suffix.lower()
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in executable.items():
         line = raw.strip()
         if not line or _is_comment_line(line):
             continue
 
         matched: str | None = None
-        if suffix in _SHELL_SUFFIXES and _rm_is_recursive_and_force(line):
+        if suffix in _POWERSHELL_SUFFIXES:
+            if _ps_remove_is_recursive_and_force(line):
+                matched = "Remove-Item -Recurse -Force"
+        elif suffix in _BATCH_SUFFIXES:
+            if _DEL_RECURSIVE_RE.search(line):
+                matched = "del /s"
+        elif _rm_is_recursive_and_force(line):
             matched = "rm -rf"
-        elif suffix in _POWERSHELL_SUFFIXES and _ps_remove_is_recursive_and_force(line):
-            matched = "Remove-Item -Recurse -Force"
-        elif suffix in _BATCH_SUFFIXES and _DEL_RECURSIVE_RE.search(line):
-            matched = "del /s"
 
         if matched is not None:
             return [
@@ -392,10 +475,11 @@ def _match_shell_delete(
 def _match_git_destructive(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    if not _is_code_context(filename):
+    executable = _executable_lines(path, text, filename)
+    if executable is None:
         return []
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in executable.items():
         line = raw.strip()
         if not line or _is_comment_line(line):
             continue
@@ -419,10 +503,11 @@ def _match_git_destructive(
 def _match_piped_install(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    if not _is_code_context(filename):
+    executable = _executable_lines(path, text, filename)
+    if executable is None:
         return []
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in executable.items():
         line = raw.strip()
         if not line or _is_comment_line(line):
             continue
