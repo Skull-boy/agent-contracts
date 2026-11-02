@@ -28,7 +28,11 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 
 ## ⚡ The 2-Minute Demo
 
-This is `scyvera audit .` run inside the Scyvera repository itself:
+**Scyvera in 23 seconds** — the audit, the generated draft, and the block that proves it:
+
+![Scyvera in 23 seconds](assets/scyvera-demo.gif)
+
+And this is `scyvera audit .` run inside the Scyvera repository itself:
 
 ```text
 WARN  .
