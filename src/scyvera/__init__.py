@@ -2,6 +2,7 @@ from .builder import AgentIdentity, Contract, SystemIdentity
 from .audit import AuditReport, AuditError, SymlinkTargetError, scan_tree
 from .audit_rules import RULES, SEVERITY_WEIGHTS, AuditRule, Finding
 from .enforcer import AuditEntry, ContractEnforcer
+from .generate import DraftContract, build_draft, write_draft
 from .report import BAND_COLORS, render_badge, render_report
 from .exceptions import (
     ApprovalPendingError,
@@ -51,6 +52,7 @@ __all__ = [
     "ContractVersionError",
     "ContractViolationError",
     "DeclarationValidationError",
+    "DraftContract",
     "Finding",
     "GatewayError",
     "GitHubGateway",
@@ -69,10 +71,12 @@ __all__ = [
     "ValidationError",
     "ValidationResult",
     "apply_lifecycle_defaults",
+    "build_draft",
     "detect_contract_version",
     "lint_contract",
     "render_badge",
     "render_report",
     "scan_tree",
     "validate_contract",
+    "write_draft",
 ]
