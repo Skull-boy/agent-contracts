@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Documentation (Growth lane G1)
+- **README rewritten around the no-contract funnel**: the hero now states the positioning sentence and leads with `scyvera audit` → report → badge → CI gate → generated draft, with hand-written contract authoring moved to the second path. The runtime enforcer, gateways, registry, builder, honesty sections, and domain examples remain.
+- **Badges made non-stale**: the hardcoded test count is replaced by the `validate-contracts.yml` GitHub Actions badge; the row now adds PyPI, Python 3.10+, and this repository's own Shielded Blast Radius badge.
+
 ### Added — Auto-contract drafts (M2.0c)
 - **New `--generate <contract.yaml>` flag**: `scyvera audit` now turns a scan into a ready-to-review v1.1 contract draft. Scored findings merge into `resources`, `permissions`, `side_effects`, and `approvals`; `system.name` comes from the scanned repository directory, `domain` is `software`, and `risk.level` tracks the worst scored severity. Critical findings mark matching side effects `irreversible`; medium and high findings never do (RFC 0004 §10.1). The report still prints exactly as before, followed by one line naming the written draft.
 - **New `--force` overwrite guard**: `--generate` refuses to replace an existing file unless `--force` is passed, exiting `2` with a single actionable stderr line. `--force` without `--generate` is rejected the same way.

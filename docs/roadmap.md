@@ -101,7 +101,7 @@ These tasks do **not** depend on M2.1–M2.3 (they share module layout and test 
 
 | Task | Deliverable | Acceptance |
 |---|---|---|
-| **G1** | README hero rewrite ("set once, enforced everywhere, provable forever") + animated GIF of a blocked agent action + audit badge in a prominent position | Hero states positioning sentence; GIF under 2 MB |
+| **G1** | README hero rewrite ("set once, enforced everywhere, provable forever") + animated GIF of a blocked agent action + audit badge in a prominent position | Hero states positioning sentence; GIF under 2 MB<br>G1 shipped on `docs/readme-g1`: hero rewritten around the no-contract funnel (scan → badge → gate → draft), dynamic test badge, Blast Radius badge, and the contract lane retained below. Animated GIF still outstanding. |
 | **G2** | Launch film via `/brag` skill: 60s loopable clip (agent tries force-push → denied → receipt URL) | Video published to brag-output/ and linked from README |
 | **G3** | Showcase gallery + "contract/pack of the month" curation ritual (docs/community/SHOWCASE.md) | Gallery seeded with the 6 golden packs and 3 cross-domain examples |
 | **G4** | Contributor ladder docs: "add a policy pack" as the recommended first PR path in CONTRIBUTING.md | CONTRIBUTING includes pack template + CI expectations |
