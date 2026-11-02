@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from .audit import AuditError, scan_tree
+from .generate import build_draft, write_draft
 from .linter import lint_contract
 from .report import render_badge, render_report
 from .validator import validate_contract
@@ -59,7 +60,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scan a path for agent blast-radius findings.",
         description=(
             "Scan [path] (default `.`) with the AUxxx rule registry and print "
-            "the Blast Radius Report. Reads only: never writes any file."
+            "the Blast Radius Report. Read-only unless --generate writes one "
+            "contract draft."
         ),
         epilog=(
             "exit codes: 0 ok, 1 findings or threshold breach, "
@@ -102,6 +104,30 @@ def build_parser() -> argparse.ArgumentParser:
             "Exit 1 when the Blast Radius score is below SCORE "
             "(an integer from 0 to 100)"
         ),
+    )
+
+    audit_parser.add_argument(
+        "--generate",
+        metavar="CONTRACT",
+        type=Path,
+        default=None,
+        help=(
+            "Write a v1.1 contract draft derived from scored findings to "
+            "CONTRACT (use a .yaml name); the report still prints"
+        ),
+    )
+
+    audit_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the --generate target when it already exists",
+    )
+
+    audit_parser.add_argument(
+        "--pack",
+        metavar="NAME",
+        default=None,
+        help="Apply a policy pack to the draft (ships in a later release)",
     )
 
     # init subcommand
@@ -340,12 +366,32 @@ def run_audit(
     as_json: bool = False,
     badge: bool = False,
     fail_under: str | None = None,
+    generate: Path | None = None,
+    force: bool = False,
+    pack: str | None = None,
 ) -> int:
-    """Run the read-only audit command and return its process exit code.
+    """Run the audit command and return its process exit code.
 
     Exit codes follow RFC 0004 §2: ``0`` ok, ``1`` findings or a
-    ``--fail-under`` threshold breach, ``2`` usage or I/O error.
+    ``--fail-under`` threshold breach, ``2`` usage or I/O error. With
+    ``--generate`` the command additionally writes one contract draft
+    (RFC 0004 §5); nothing else is ever written.
     """
+    if pack is not None:
+        print(
+            "scyvera audit: error: policy packs ship in a later release; "
+            "--pack is not available yet",
+            file=sys.stderr,
+        )
+        return 2
+
+    if force and generate is None:
+        print(
+            "scyvera audit: error: --force requires --generate",
+            file=sys.stderr,
+        )
+        return 2
+
     threshold = _parse_fail_under(fail_under)
     if fail_under is not None and threshold is None:
         print(
@@ -354,6 +400,22 @@ def run_audit(
             file=sys.stderr,
         )
         return 2
+
+    if generate is not None:
+        if generate.suffix == ".yml":
+            print(
+                f"scyvera audit: error: {generate} must use the .yaml "
+                "extension so `scyvera validate` can load it",
+                file=sys.stderr,
+            )
+            return 2
+        if generate.exists() and not force:
+            print(
+                f"scyvera audit: error: {generate} exists; "
+                "pass --force to overwrite",
+                file=sys.stderr,
+            )
+            return 2
 
     try:
         report = scan_tree(path)
@@ -370,17 +432,44 @@ def run_audit(
         print(f"       {error}")
         return 2
 
+    draft_path: str | None = None
+    if generate is not None:
+        try:
+            write_draft(build_draft(report), generate)
+        except PermissionError:
+            print(
+                f"scyvera audit: error: cannot write {generate}: "
+                "permission denied",
+                file=sys.stderr,
+            )
+            return 2
+        except OSError as error:
+            print(
+                f"scyvera audit: error: cannot write {generate}: {error}",
+                file=sys.stderr,
+            )
+            return 2
+        draft_path = str(generate)
+
     scored = [finding for finding in report.findings if finding.scored]
 
     if as_json:
-        if badge:
+        if badge or draft_path is not None:
             payload = report.to_dict()
-            payload["badge"] = render_badge(report)
+            if badge:
+                payload["badge"] = render_badge(report)
+            if draft_path is not None:
+                payload["draft_path"] = draft_path
             print(json.dumps(payload, indent=2, ensure_ascii=False))
         else:
             print(report.to_json())
     else:
         print(render_report(report))
+        if draft_path is not None:
+            print(
+                f"Draft contract written to {draft_path} "
+                f"(validate with: scyvera validate {draft_path})."
+            )
         if badge:
             print(render_badge(report))
 
@@ -405,6 +494,9 @@ def main() -> int:
             as_json=args.json,
             badge=args.badge,
             fail_under=args.fail_under,
+            generate=args.generate,
+            force=args.force,
+            pack=args.pack,
         )
 
     if args.command == "init":
