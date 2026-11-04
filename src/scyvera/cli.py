@@ -8,6 +8,7 @@ import yaml
 from .audit import AuditError, scan_tree
 from .generate import build_draft, write_draft
 from .linter import lint_contract
+from .packs import PackError, load_pack
 from .report import render_badge, render_report
 from .validator import validate_contract
 
@@ -127,7 +128,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--pack",
         metavar="NAME",
         default=None,
-        help="Apply a policy pack to the draft (ships in a later release)",
+        help=(
+            "Apply a local Policy Pack from packs/<NAME>.yaml to the "
+            "--generate draft (requires --generate)"
+        ),
     )
 
     # init subcommand
@@ -377,13 +381,20 @@ def run_audit(
     ``--generate`` the command additionally writes one contract draft
     (RFC 0004 §5); nothing else is ever written.
     """
-    if pack is not None:
+    if pack is not None and generate is None:
         print(
-            "scyvera audit: error: policy packs ship in a later release; "
-            "--pack is not available yet",
+            "scyvera audit: error: --pack requires --generate <contract>",
             file=sys.stderr,
         )
         return 2
+
+    policy_pack = None
+    if pack is not None:
+        try:
+            policy_pack = load_pack(pack)
+        except PackError as error:
+            print(f"scyvera audit: error: {error}", file=sys.stderr)
+            return 2
 
     if force and generate is None:
         print(
@@ -435,7 +446,10 @@ def run_audit(
     draft_path: str | None = None
     if generate is not None:
         try:
-            write_draft(build_draft(report), generate)
+            write_draft(
+                build_draft(report, pack=policy_pack),
+                generate,
+            )
         except PermissionError:
             print(
                 f"scyvera audit: error: cannot write {generate}: "

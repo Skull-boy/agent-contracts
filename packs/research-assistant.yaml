@@ -1,0 +1,15 @@
+# Policy Pack: research-assistant (RFC 0004 §6)
+pack: research-assistant
+version: "1.0.0"
+domain: research
+description: Boundaries for literature and data research assistants.
+derive:
+  irreversibly_forbidden:
+    - file_delete
+    - remote_execution
+  requires_approval:
+    - network:egress
+    - database:write
+  cap_side_effects_per_window: 30
+construction:
+  contract_version: "1.1"

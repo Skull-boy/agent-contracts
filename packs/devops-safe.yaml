@@ -1,0 +1,16 @@
+# Policy Pack: devops-safe (RFC 0004 §6)
+pack: devops-safe
+version: "1.0.0"
+domain: software
+description: Boundaries for agents that operate CI, containers, and deploys.
+derive:
+  irreversibly_forbidden:
+    - file_delete
+    - remote_execution
+  requires_approval:
+    - ci_deploy_write
+    - host_mount
+    - registry:publish
+  cap_side_effects_per_window: 10
+construction:
+  contract_version: "1.1"

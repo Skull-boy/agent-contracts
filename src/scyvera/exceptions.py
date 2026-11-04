@@ -127,3 +127,15 @@ class RegistryError(Exception):
         super().__init__(
             f"Registry error during '{operation}': {reason}"
         )
+
+
+class PackError(Exception):
+    """Raised when a Policy Pack cannot be loaded or is malformed.
+
+    Implements the local-only pack contract in RFC 0004 §6: a pack is a
+    facts-only YAML artifact, so any structural problem is reported before a
+    draft is generated rather than silently ignored.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

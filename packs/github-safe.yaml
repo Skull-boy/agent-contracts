@@ -1,0 +1,15 @@
+# Policy Pack: github-safe (RFC 0004 §6)
+pack: github-safe
+version: "1.0.0"
+domain: software
+description: Boundaries for coding agents working in a git repository.
+derive:
+  irreversibly_forbidden:
+    - file_delete
+    - remote_execution
+  requires_approval:
+    - git_ref_write
+    - ci_deploy_write
+  cap_side_effects_per_window: 10
+construction:
+  contract_version: "1.1"

@@ -1,0 +1,15 @@
+# Policy Pack: finance-ops (RFC 0004 §6)
+pack: finance-ops
+version: "1.0.0"
+domain: finance
+description: Boundaries for agents that prepare or execute financial operations.
+derive:
+  irreversibly_forbidden:
+    - payment_reversal
+    - remote_execution
+  requires_approval:
+    - initiate_transaction
+    - registry:publish
+  cap_side_effects_per_window: 5
+construction:
+  contract_version: "1.1"
