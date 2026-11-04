@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 import yaml
 
+import scyvera.packs
 from scyvera.audit import AuditReport, scan_tree
 from scyvera.audit_rules import Finding
 from scyvera.cli import main
@@ -171,7 +172,18 @@ def test_golden_pack_names_match_the_rfc() -> None:
 
 
 def test_loader_defaults_to_the_packaged_copy() -> None:
-    assert PACKS_DIR == PACKAGE_PACKS
+    """The shipped packs sit next to the module, wherever it is installed.
+
+    CI installs the built wheel and runs the suite against it, so the default
+    pack directory is site-packages' ``scyvera/packs`` rather than the
+    repository's ``src/scyvera/packs``. Pinning the module-relative location
+    keeps this test meaningful in both the checkout and the installed package.
+    """
+    module_dir = Path(scyvera.packs.__file__).resolve().parent
+
+    assert PACKS_DIR == module_dir / "packs"
+    assert PACKS_DIR.is_dir()
+    assert available_packs() == GOLDEN_PACK_NAMES
 
 
 @pytest.mark.parametrize("name", GOLDEN_PACK_NAMES)
