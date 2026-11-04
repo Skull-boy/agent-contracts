@@ -3,6 +3,7 @@ from .audit import AuditReport, AuditError, SymlinkTargetError, scan_tree
 from .audit_rules import RULES, SEVERITY_WEIGHTS, AuditRule, Finding
 from .enforcer import AuditEntry, ContractEnforcer
 from .generate import DraftContract, build_draft, write_draft
+from .packs import PACKS_DIR, PolicyPack, available_packs, load_pack
 from .report import BAND_COLORS, render_badge, render_report
 from .exceptions import (
     ApprovalPendingError,
@@ -13,6 +14,7 @@ from .exceptions import (
     ContractViolationError,
     DeclarationValidationError,
     GatewayError,
+    PackError,
     RegistryError,
 )
 from .gateway import BaseGateway, GitHubGateway, QdrantGateway
@@ -59,6 +61,9 @@ __all__ = [
     "LIFECYCLE_DEFAULTS",
     "LintResult",
     "LintWarning",
+    "PACKS_DIR",
+    "PackError",
+    "PolicyPack",
     "QdrantGateway",
     "RULES",
     "RegistryEntry",
@@ -71,9 +76,11 @@ __all__ = [
     "ValidationError",
     "ValidationResult",
     "apply_lifecycle_defaults",
+    "available_packs",
     "build_draft",
     "detect_contract_version",
     "lint_contract",
+    "load_pack",
     "render_badge",
     "render_report",
     "scan_tree",

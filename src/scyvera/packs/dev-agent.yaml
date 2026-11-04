@@ -1,0 +1,15 @@
+# Policy Pack: dev-agent (RFC 0004 §6)
+pack: dev-agent
+version: "1.0.0"
+domain: software
+description: Boundaries for a coding agent working inside a local repository.
+derive:
+  irreversibly_forbidden:
+    - file_delete
+    - remote_execution
+  requires_approval:
+    - git_ref:write
+    - registry:publish
+  cap_side_effects_per_window: 20
+construction:
+  contract_version: "1.1"

@@ -25,6 +25,7 @@ import yaml
 
 from .audit import AuditReport
 from .audit_rules import Finding
+from .packs import PolicyPack
 
 
 __all__ = ["DraftContract", "build_draft", "write_draft"]
@@ -395,23 +396,101 @@ def _normalize_observability(
     return _ordered_entry(result, ("level", "sinks"))
 
 
+def _apply_pack(body: dict[str, Any], pack: PolicyPack) -> None:
+    """Apply pack constraints to ``body`` in place (RFC 0004 §6).
+
+    Pack constraints win over heuristic-derived entries: a forbidden side
+    effect becomes irreversible and loses every approval entry (the RFC pins
+    "no approvals offered"); a required action gains a required approval.
+    Entries the pack does not mention are finding-only extras and are kept.
+
+    ``construction.cap_side_effects_per_window`` maps to the v1.1
+    ``constraints`` section, whose schema already models a numeric limit with
+    ``type`` and ``maximum``. The constraint type mirrors the field name used
+    by the v1.2 guardrail projection in RFC 0003 §C5.
+    """
+    forbidden = set(pack.irreversibly_forbidden)
+    required = set(pack.requires_approval)
+
+    effects: list[Any] = []
+    present: set[str] = set()
+    for entry in body["side_effects"]:
+        if isinstance(entry, Mapping):
+            effect_type = entry.get("type")
+            if isinstance(effect_type, str):
+                present.add(effect_type)
+                if effect_type in forbidden:
+                    entry = dict(entry)
+                    entry["irreversible"] = True
+        effects.append(entry)
+    for effect_type in sorted(forbidden - present):
+        effects.append({"type": effect_type, "irreversible": True})
+    body["side_effects"] = _dedupe_side_effects(effects)
+
+    approvals: list[Any] = []
+    required_seen: set[str] = set()
+    for entry in body["approvals"]:
+        action = _approval_action(entry)
+        if action is None:
+            approvals.append(entry)
+            continue
+        if action in forbidden:
+            continue
+        if action in required:
+            entry = (
+                dict(entry)
+                if isinstance(entry, Mapping)
+                else {"action": entry}
+            )
+            entry["required"] = True
+            required_seen.add(action)
+        approvals.append(entry)
+    for action in sorted(required - required_seen):
+        approvals.append({"action": action, "required": True})
+    body["approvals"] = _dedupe(approvals, "approvals")
+
+    if pack.cap_side_effects_per_window is not None:
+        constraint = {
+            "type": "side_effects_per_window",
+            "maximum": pack.cap_side_effects_per_window,
+        }
+        constraints = [
+            entry
+            for entry in body.get("constraints", [])
+            if not (
+                isinstance(entry, Mapping)
+                and entry.get("type") == "side_effects_per_window"
+            )
+        ]
+        constraints.append(constraint)
+        body["constraints"] = sorted(
+            constraints,
+            key=lambda entry: _sort_key(entry, ("type", "maximum")),
+        )
+
+
 def build_draft(
     report: AuditReport,
     *,
     repo_name: str | None = None,
     domain: str = "software",
+    pack: PolicyPack | None = None,
 ) -> DraftContract:
-    """Build a v1.1 contract draft from ``report`` (RFC 0004 §5).
+    """Build a v1.1 contract draft from ``report`` (RFC 0004 §5, §6).
 
     Only scored findings contribute. ``repo_name`` overrides the name derived
     from the scanned target; ``domain`` defaults to ``"software"`` as pinned
-    by the RFC. The returned mapping preserves the field order used by
-    ``scyvera init`` and carries any omitted suggestion keys as metadata for
+    by the RFC. When ``pack`` is supplied, its domain replaces ``domain`` and
+    its ``derive.*`` constraints are merged into the draft (RFC 0004 §5–§6).
+    The returned mapping preserves the field order used by ``scyvera init``
+    and carries any omitted suggestion keys as metadata for
     :func:`write_draft`.
     """
     scored = tuple(finding for finding in report.findings if finding.scored)
     risk_level = _risk_level(scored)
     merged, omitted = _merge_suggestions(scored)
+    if pack is not None:
+        domain = pack.domain
 
     side_effects = merged["side_effects"]
     approvals = _ensure_approvals(
@@ -440,15 +519,28 @@ def build_draft(
         "inputs": [],
         "outputs": [],
         "permissions": merged["permissions"],
-        "side_effects": side_effects,
-        "approvals": approvals,
-        "dependencies": [],
-        "state": {"persistence": "session"},
-        "recovery": {"strategy": "retry"},
-        "replay": {"mode": "idempotent"},
-        "observability": observability,
-        "risk": {"level": risk_level},
     }
+    if pack is not None and pack.cap_side_effects_per_window is not None:
+        body["constraints"] = [
+            {
+                "type": "side_effects_per_window",
+                "maximum": pack.cap_side_effects_per_window,
+            }
+        ]
+    body.update(
+        {
+            "side_effects": side_effects,
+            "approvals": approvals,
+            "dependencies": [],
+            "state": {"persistence": "session"},
+            "recovery": {"strategy": "retry"},
+            "replay": {"mode": "idempotent"},
+            "observability": observability,
+            "risk": {"level": risk_level},
+        }
+    )
+    if pack is not None:
+        _apply_pack(body, pack)
     return DraftContract(body, omitted_suggestion_keys=omitted)
 
 

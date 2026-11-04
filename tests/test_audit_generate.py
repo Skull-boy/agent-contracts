@@ -570,8 +570,7 @@ def test_cli_badge_remains_the_final_line_with_generate(
     [
         (
             ["--pack", "github-safe"],
-            "scyvera audit: error: policy packs ship in a later release; "
-            "--pack is not available yet",
+            "scyvera audit: error: --pack requires --generate <contract>",
         ),
         (
             ["--force"],

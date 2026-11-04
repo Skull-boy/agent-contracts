@@ -1,0 +1,15 @@
+# Policy Pack: email-triage (RFC 0004 §6)
+pack: email-triage
+version: "1.0.0"
+domain: business
+description: Boundaries for agents that triage shared inboxes.
+derive:
+  irreversibly_forbidden:
+    - file_delete
+    - remote_execution
+  requires_approval:
+    - email:send
+    - external_api_write
+  cap_side_effects_per_window: 15
+construction:
+  contract_version: "1.1"
