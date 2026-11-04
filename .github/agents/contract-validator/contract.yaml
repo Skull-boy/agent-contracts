@@ -1,0 +1,77 @@
+version: 1.1
+system:
+  name: contract-validator
+  purpose: Automated PR contract validation and governance reporting
+  version: 1.0.0
+
+domain: software
+
+lifecycle:
+  mode: request-response
+  initiation: agent
+  resumability: stateless
+
+inputs:
+  - name: pull_request_diff
+    type: string
+    description: Git diff and list of modified YAML files in the pull request
+    required: true
+  - name: github_token
+    type: string
+    description: GitHub Actions token for posting validation feedback
+    required: false
+
+outputs:
+  - name: validation_report
+    type: string
+    description: Formatted Markdown summary of contract validation results
+  - name: pr_comment
+    type: string
+    description: Automated comment posted to the pull request
+
+permissions:
+  - github:pull-requests:read
+  - github:pull-requests:write
+
+side_effects:
+  - type: github_pr_comment
+    description: Posts validation feedback comment on the PR
+    irreversible: false
+
+approval_points: []
+
+recovery:
+  strategy: stop
+  details: Log validation error to Actions output and report failure on PR
+
+replay:
+  mode: idempotent
+  details: Re-running workflow on the same PR commit produces identical output
+
+dependencies:
+  - name: python
+    type: runtime
+    required: true
+  - name: scyvera
+    type: package
+    required: true
+  - name: PyYAML
+    type: package
+    required: true
+  - name: jsonschema
+    type: package
+    required: true
+
+state:
+  persistence: ephemeral
+  scope: workflow-execution
+
+observability:
+  level: audit
+  sinks:
+    - github_actions_logs
+    - github_pr_comments
+
+risk:
+  level: low
+  category: automated-governance
