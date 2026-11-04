@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] — 2026-11-04
 
 ### Added — Policy Packs (M2.7)
 - **New `--pack <name>` flag**: `scyvera audit . --generate contract.yaml --pack github-safe` applies a local Policy Pack to the generated v1.1 draft (RFC 0004 §6). The pack supplies the draft's `domain`, forces `irreversibly_forbidden` effects to `irreversible: true` while removing their approval entries, and forces `requires_approval` actions to `required: true`. Pack constraints win over heuristic-derived entries; finding-only extras are appended. `--pack` without `--generate` exits `2` with one actionable stderr line.
@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed — Documentation (Growth lane G1)
 - **README rewritten around the no-contract funnel**: the hero now states the positioning sentence and leads with `scyvera audit` → report → badge → CI gate → generated draft, with hand-written contract authoring moved to the second path. The runtime enforcer, gateways, registry, builder, honesty sections, and domain examples remain.
 - **Badges made non-stale**: the hardcoded test count is replaced by the `validate-contracts.yml` GitHub Actions badge; the row now adds PyPI, Python 3.10+, and this repository's own Shielded Blast Radius badge.
+- **2-Minute Demo**: the README embeds `assets/scyvera-demo.gif`, a terminal capture of the audit, the generated draft, and the blocked action.
+- **Roadmap refreshed**: `docs/roadmap.md` marks G1 as shipped and links each M2.0x/M2.7 row to its shipped note, so the plan and the changelog stay in step.
 
 ### Added — Auto-contract drafts (M2.0c)
 - **New `--generate <contract.yaml>` flag**: `scyvera audit` now turns a scan into a ready-to-review v1.1 contract draft. Scored findings merge into `resources`, `permissions`, `side_effects`, and `approvals`; `system.name` comes from the scanned repository directory, `domain` is `software`, and `risk.level` tracks the worst scored severity. Critical findings mark matching side effects `irreversible`; medium and high findings never do (RFC 0004 §10.1). The report still prints exactly as before, followed by one line naming the written draft.
@@ -29,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New `--badge` flag**: emits a shields.io badge pinned to the Blast Radius band (never the numeric score, so published badges do not flap when scoring internals evolve). With `--json`, the report gains one additive top-level `"badge"` key; without `--badge`, `--json` output is byte-identical to before.
 - **New `--fail-under <score>` CI gate**: exits `1` when the Blast Radius score is below the threshold and `0` otherwise, independent of whether findings exist. Thresholds are validated as integers from 0 to 100; invalid input exits `2` with a single actionable stderr line and no usage wall or traceback.
 - **Windows-safe output**: the renderer falls back from the pinned em dash to `->` when the attached stdout encoding cannot represent it, so narrow console codepages (cp437/cp850) can never crash an audit run.
+
+### Added — Audit Scan Engine (M2.0a)
+- **New `scyvera audit [path]` command**: a bounded, read-only walk over a target tree scores it against the 11-rule AUxxx registry (`src/scyvera/audit_rules.py`) and emits a deterministic report — findings ordered by severity, rule id, and path, with no timestamp. `--json` prints that report as `report_version: 1` and nothing else.
+- **Hardened scanning**: vendored and tooling directories (`.git`, `.venv`, `node_modules`, `dist`, `build`, `.agents`, and others) are skipped, files larger than 1 MiB are not read, binary content is sniffed and ignored, and symlinks are refused rather than followed (T14-consistent).
+- **Diminishing per-rule loads (M2.0a.1)**: the first three occurrences of a rule contribute `1.00`, `0.25`, and `0.10` of its base weight, so one rule can add at most `1.35 x base`; the score is `max(0, 100 - ceil(total_load))`.
+- **Fixture quarantine (M2.0a.1)**: findings under `tests/fixtures/`, or from a scan whose target is itself a fixture, stay visible in the report but contribute nothing to score, band, exit code, `draft_available`, `packs_suggested`, or `stats.findings`; a fixtures-only scan reports PASS and exits `0`.
+- **Executable-context allowlist (M2.0a.1)**: `AU-SH-001`, `AU-GIT-001`, and `AU-NET-001` fire only in executable contexts — shell, PowerShell, batch, `Dockerfile*`, Makefile/justfile, and workflow `run:` blocks — never in prose, arbitrary YAML/JSON, or documentation.
+- **Production hardening (PR #44)**: one typed executable-line parser now backs every context dialect, workflow `run:` blocks no longer leak indentation into a following `env:` block (fixing an AU-CI-001 false positive), and quarantine semantics are consistent end to end.
+- **Dogfood gate**: `tests/test_audit_dogfood.py` runs `scyvera audit .` against this repository in CI and pins the Shielded band, so drift fails loudly instead of silently.
+- **Docs**: RFC 0004 defines the report contract, scoring formula, and exit-code semantics; `CONTRIBUTING.md` and `.gitguardian.yaml` document the synthetic-fixture policy (scanner configuration excludes the path — tests are never weakened).
 
 ---
 
