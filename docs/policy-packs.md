@@ -61,6 +61,10 @@ construction:
 Unknown keys are rejected rather than ignored, so a typo fails CI instead of
 silently weakening a boundary.
 
+`cap_side_effects_per_window` appears under `derive` in the template above, but
+RFC 0004 §6's prose names `construction.cap_*`. Both locations are accepted;
+declaring it in both is rejected. Golden packs use the template location.
+
 ## Merge semantics
 
 When a pack is applied to a generated draft:

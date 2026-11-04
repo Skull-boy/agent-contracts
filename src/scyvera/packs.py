@@ -56,7 +56,14 @@ _DERIVE_KEYS = frozenset(
         "cap_side_effects_per_window",
     }
 )
-_CONSTRUCTION_KEYS = frozenset({"contract_version"})
+_CONSTRUCTION_KEYS = frozenset(
+    {
+        "contract_version",
+        # RFC 0004 §6 names ``construction.cap_*`` in prose while its normative
+        # template puts the cap under ``derive``; both locations are accepted.
+        "cap_side_effects_per_window",
+    }
+)
 
 #: Field order used when reporting pack problems. Kept immutable so a caller
 #: can never mutate the loader's vocabulary.
@@ -141,6 +148,49 @@ def _reject_unknown_keys(
         )
 
 
+def _expect_positive_int(value: Any, *, field: str, source: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise _fail(source, f"'{field}' must be a positive integer")
+    return value
+
+
+def _resolve_cap(
+    derive: Mapping[str, Any],
+    construction: Mapping[str, Any],
+    *,
+    source: str,
+) -> int | None:
+    """Resolve ``cap_side_effects_per_window`` from either RFC §6 location.
+
+    RFC 0004 §6's normative template nests the cap under ``derive``, while the
+    bullet immediately below names ``construction.cap_*``. Both spellings are
+    therefore accepted. Declaring it in both places is rejected rather than
+    silently preferring one, because the pack would then carry two answers with
+    no defined precedence.
+    """
+    derive_cap = derive.get("cap_side_effects_per_window")
+    construction_cap = construction.get("cap_side_effects_per_window")
+    if derive_cap is not None and construction_cap is not None:
+        raise _fail(
+            source,
+            "specify cap_side_effects_per_window once, under either derive or "
+            "construction (RFC 0004 §6 names both)",
+        )
+    if derive_cap is not None:
+        return _expect_positive_int(
+            derive_cap,
+            field="derive.cap_side_effects_per_window",
+            source=source,
+        )
+    if construction_cap is not None:
+        return _expect_positive_int(
+            construction_cap,
+            field="construction.cap_side_effects_per_window",
+            source=source,
+        )
+    return None
+
+
 def pack_from_mapping(
     payload: Mapping[str, Any],
     *,
@@ -149,11 +199,12 @@ def pack_from_mapping(
 ) -> PolicyPack:
     """Validate ``payload`` and return an immutable :class:`PolicyPack`.
 
-    The accepted structure is exactly the RFC 0004 §6 template: ``pack``,
-    ``version``, ``domain``, ``description``, ``derive.*``, and
-    ``construction.contract_version``. Unknown keys are rejected rather than
-    ignored, so a typo in a contributor's pack fails CI instead of silently
-    producing a weaker boundary.
+    The accepted structure is the RFC 0004 §6 template: ``pack``, ``version``,
+    ``domain``, ``description``, ``derive.*``, and
+    ``construction.contract_version``. ``cap_side_effects_per_window`` is read
+    from ``derive`` (template) or ``construction`` (prose), but not both.
+    Unknown keys are rejected rather than ignored, so a typo in a contributor's
+    pack fails CI instead of silently producing a weaker boundary.
     """
     if not isinstance(payload, Mapping):
         raise _fail(source, "pack must be a YAML mapping")
@@ -187,14 +238,6 @@ def pack_from_mapping(
     if "requires_approval" not in derive:
         raise _fail(source, "missing required key(s): derive.requires_approval")
 
-    cap = derive.get("cap_side_effects_per_window")
-    if cap is not None:
-        if isinstance(cap, bool) or not isinstance(cap, int) or cap <= 0:
-            raise _fail(
-                source,
-                "'derive.cap_side_effects_per_window' must be a positive integer",
-            )
-
     construction = _expect_mapping(
         payload["construction"],
         field="construction",
@@ -222,6 +265,8 @@ def pack_from_mapping(
             "unsupported construction.contract_version "
             f"{contract_version!r} (expected {_SUPPORTED_CONTRACT_VERSION!r})",
         )
+
+    cap = _resolve_cap(derive, construction, source=source)
 
     forbidden = _expect_string_list(
         derive["irreversibly_forbidden"],

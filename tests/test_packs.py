@@ -247,6 +247,38 @@ def test_cap_is_optional_and_absent_constraints_stay_absent() -> None:
     assert "constraints" not in draft
 
 
+def test_cap_is_accepted_under_construction_as_section_6_prose_names_it() -> None:
+    """RFC 0004 §6 names ``construction.cap_*`` in prose, so accept it there."""
+    payload = _valid_payload()
+    cap = payload["derive"].pop("cap_side_effects_per_window")
+    payload["construction"]["cap_side_effects_per_window"] = cap
+
+    pack = pack_from_mapping(payload, name="github-safe")
+
+    assert pack.cap_side_effects_per_window == cap
+    draft = build_draft(_report(), pack=pack)
+    assert draft["constraints"] == [
+        {"type": "side_effects_per_window", "maximum": cap}
+    ]
+
+
+def test_cap_declared_in_both_locations_is_rejected() -> None:
+    payload = _valid_payload()
+    payload["construction"]["cap_side_effects_per_window"] = 10
+
+    with pytest.raises(PackError, match="specify cap_side_effects_per_window once"):
+        pack_from_mapping(payload, name="github-safe")
+
+
+def test_cap_under_construction_must_still_be_positive() -> None:
+    payload = _valid_payload()
+    del payload["derive"]["cap_side_effects_per_window"]
+    payload["construction"]["cap_side_effects_per_window"] = -1
+
+    with pytest.raises(PackError, match="positive integer"):
+        pack_from_mapping(payload, name="github-safe")
+
+
 def test_load_pack_rejects_path_traversal() -> None:
     with pytest.raises(PackError, match="invalid policy pack name"):
         load_pack("../contract")
