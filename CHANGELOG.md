@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Policy Packs (M2.7)
+- **New `--pack <name>` flag**: `scyvera audit . --generate contract.yaml --pack github-safe` applies a local Policy Pack to the generated v1.1 draft (RFC 0004 §6). The pack supplies the draft's `domain`, forces `irreversibly_forbidden` effects to `irreversible: true` while removing their approval entries, and forces `requires_approval` actions to `required: true`. Pack constraints win over heuristic-derived entries; finding-only extras are appended. `--pack` without `--generate` exits `2` with one actionable stderr line.
+- **Six golden packs**: `dev-agent`, `github-safe`, `finance-ops`, `research-assistant`, `email-triage`, and `devops-safe` ship under `packs/` and as wheel package data under `src/scyvera/packs/`. Loading is filesystem-only with no network fetch; pack names cannot escape the packs directory, and symlinked packs are refused (T14).
+- **Pack QA sweep**: `tests/test_packs.py` loads every golden pack, applies it to every fixture corpus, writes the draft, and requires Tier 0 schema validation plus Tier 2 lint with zero warnings. It also pins the repository and packaged copies byte-for-byte.
+- **Docs**: new [`docs/policy-packs.md`](./docs/policy-packs.md) documents the format, merge semantics, and the add-a-pack workflow.
+
 ### Changed — Documentation (Growth lane G1)
 - **README rewritten around the no-contract funnel**: the hero now states the positioning sentence and leads with `scyvera audit` → report → badge → CI gate → generated draft, with hand-written contract authoring moved to the second path. The runtime enforcer, gateways, registry, builder, honesty sections, and domain examples remain.
 - **Badges made non-stale**: the hardcoded test count is replaced by the `validate-contracts.yml` GitHub Actions badge; the row now adds PyPI, Python 3.10+, and this repository's own Shielded Blast Radius badge.

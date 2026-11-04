@@ -37,7 +37,7 @@ And this is `scyvera audit .` run inside the Scyvera repository itself:
 ```text
 WARN  .
       Blast Radius: 92/100 (Shielded)
-      Scanned 139 files (5 manifests, 9 workflow files, 42 source files, 6 shell scripts, 2 container files, 1 env file, 35 doc files, 39 other files)
+      Scanned 154 files (5 manifests, 9 workflow files, 44 source files, 6 shell scripts, 2 container files, 1 env file, 36 doc files, 51 other files)
 
       MEDIUM    [AU-N8N-001] n8n workflow with external writes
                 implementations/n8n/competitor-feature-parity-watcher/workflow.json:169 + 3 more
@@ -108,6 +108,14 @@ Draft contract written to contract.yaml (validate with: scyvera validate contrac
 The scan writes one schema-valid v1.1 contract. `scyvera validate contract.yaml` and `scyvera lint contract.yaml` both pass with 0 warnings, and a permanent fixture sweep enforces that for every audit corpus. `--force` overwrites an existing file; nothing else is ever written.
 
 That draft is the input to the enforcement layer below: `ContractEnforcer.load("contract.yaml")` turns the scanned boundary into a runtime gate.
+
+### e. Start from a policy, not a blank page
+
+```bash
+scyvera audit . --generate contract.yaml --pack github-safe
+```
+
+The pack's constraints win over heuristic-derived entries; finding-only extras are appended. Six golden packs ship in `packs/`: `dev-agent`, `github-safe`, `finance-ops`, `research-assistant`, `email-triage`, `devops-safe`. Loading is local-only. A pack is a starting boundary, not an audit result. See [`docs/policy-packs.md`](./docs/policy-packs.md).
 
 ---
 
@@ -378,6 +386,7 @@ agent-contracts/
 │   ├── roadmap.md                      # Implementation Roadmap & Task Sequencing
 │   ├── terminology.md                  # Specification Terminology
 │   ├── architecture.md                 # Repository Architectural Model
+│   ├── policy-packs.md                 # Policy Pack format, packs, and merge rules
 │   ├── vision.md                       # Strategic Project Vision
 │   ├── workflow-engineering.md         # Engineering Philosophy
 │   ├── concepts/                       # Concept deep-dives
@@ -400,6 +409,13 @@ agent-contracts/
 ├── patterns/                           # Reusable contract patterns
 │   ├── detect-judge-approve-act.md
 │   └── monitor-alert-escalate.md
+├── packs/                              # Policy Packs (six golden packs, RFC 0004 §6)
+│   ├── dev-agent.yaml
+│   ├── devops-safe.yaml
+│   ├── email-triage.yaml
+│   ├── finance-ops.yaml
+│   ├── github-safe.yaml
+│   └── research-assistant.yaml
 ├── rfcs/                               # Specification RFCs
 │   ├── 0002-lifecycle-field.md         # Lifecycle Field (v1.1, implemented)
 │   ├── 0003-harness-distribution-eval-and-integrity.md
@@ -420,6 +436,8 @@ agent-contracts/
 │   ├── gateway.py                      # Gated gateway layer (base, GitHub, Qdrant)
 │   ├── generate.py                     # Schema-valid contract draft generator
 │   ├── linter.py                       # Tier 2 semantic linter (ACxxx taxonomy)
+│   ├── packs.py                        # Policy Pack loader, validation, and errors
+│   ├── packs/                          # Packaged Policy Packs (wheel data)
 │   ├── registry.py                     # Versioned append-only contract registry
 │   ├── report.py                       # Band-first Blast Radius renderer and badge
 │   ├── validator.py                    # Multi-version schema validation engine
@@ -443,6 +461,7 @@ agent-contracts/
 │   ├── test_gateway.py                 # Gateway boundary tests
 │   ├── test_lifecycle.py
 │   ├── test_linter.py
+│   ├── test_packs.py                   # Policy Pack schema/lint sweep and CLI merge tests
 │   ├── test_registry.py                # Contract registry tests
 │   ├── test_schemas_sync.py
 │   ├── test_validator.py
@@ -463,6 +482,7 @@ agent-contracts/
 - **Audit scan engine (`scyvera audit`)**: AUxxx rule registry, deterministic JSON report (`report_version: 1`), execution-context matching, skip list, size caps, binary sniffing, symlink refusal, and fixture quarantine.
 - **Blast Radius Report**: band-first terminal renderer, `--badge` shields.io snippet (band only), and the `--fail-under` CI gate with exit codes `0` / `1` / `2`.
 - **Contract draft generation (`--generate`)**: findings-derived v1.1 drafts with deterministic ordering, `--force` overwrite guard, and zero-warning `validate` / `lint` results enforced by a fixture sweep.
+- **Policy Packs (`--pack`)**: six golden packs (`dev-agent`, `github-safe`, `finance-ops`, `research-assistant`, `email-triage`, `devops-safe`) loaded locally from `packs/<name>.yaml`, applied to `--generate` drafts, and shipped as wheel package data. Every pack must pass schema validation and zero-warning lint in the `tests/test_packs.py` sweep.
 - **Static Validation Engine**: CLI and Python API (`validate_contract`) validating against bundled JSON Schemas.
 - **Semantic Linter**: Tier 2 consistency rules (`lint_contract`) detecting unbounded write permissions (AC101), high-risk systems without approval gates (AC201), vague idle behavior (AC301), and irreversible actions (AC302).
 - **Runtime Enforcer (`ContractEnforcer`)**: Default-deny execution gating (`@enforcer.gate`), post-load SHA-256 integrity checks, and audit trails.
@@ -476,7 +496,6 @@ agent-contracts/
 
 The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). The next phases as recorded there:
 
-- **M2.7 — Policy Packs** (Phase 2A remainder): `packs/<name>.yaml` with six golden packs (`dev-agent`, `github-safe`, `finance-ops`, `research-assistant`, `email-triage`, `devops-safe`), local-only `--pack <name>` merge semantics, wheel packaging, and a pack CI sweep.
 - **Phase 1 — Core Hardening**: hash-chained `ContractRegistry`, trace schema layer, contract identity pinning against symlink escape and substitution, the re-seal ritual, and completed distribution threat-model status.
 - **Phase 2 — Conformance & Evals**: tiered `scyvera check` (structural, static, runtime-trace) with n8n and LangGraph adapters, a trace-driven eval harness, report-format unification, and an additive v1.2 `guardrails` schema slice.
 - **Phase 3 — Distribution**: the `scyvera-harness` skill, multi-runtime packaging for OpenCode / Claude / Gemini / Codex, Sigstore and SBOM release attestations, `scyvera self-check`, and the documentation surface upgrade.
@@ -499,7 +518,7 @@ The suite includes a permanent dogfood gate: it scans this repository and fails 
 
 Contributions are welcome — new domain profiles, framework reference implementations, specification RFCs, or Python API improvements. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
-Good first contributions: a Policy Pack (M2.7) — arriving soon, tracked in the roadmap; a domain example; an audit rule with fixtures.
+Good first contributions: a Policy Pack — start from the template in [`docs/policy-packs.md`](./docs/policy-packs.md); a domain example; an audit rule with fixtures.
 
 ---
 
