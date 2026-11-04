@@ -22,7 +22,7 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 
 > **Try it, read nothing first:** `pip install "scyvera @ git+https://github.com/Skull-boy/agent-contracts.git" && scyvera audit .`
 >
-> The audit funnel is on `main` today. The published PyPI 1.2.0 release predates it and ships validation, linting, and enforcement only.
+> The audit funnel is on `main` and ships in the 1.3.0 release. Installs from 1.2.0 and earlier provide validation, linting, and enforcement only.
 
 ---
 

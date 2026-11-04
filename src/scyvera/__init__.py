@@ -32,7 +32,7 @@ from .validator import (
     validate_contract,
 )
 
-__version__ = "1.1.3"
+__version__ = "1.3.0"
 
 __all__ = [
     "__version__",
