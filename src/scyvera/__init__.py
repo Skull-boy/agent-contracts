@@ -1,6 +1,14 @@
 from .builder import AgentIdentity, Contract, SystemIdentity
 from .audit import AuditReport, AuditError, SymlinkTargetError, scan_tree
 from .audit_rules import RULES, SEVERITY_WEIGHTS, AuditRule, Finding
+from .conformance import (
+    CheckReport,
+    CheckTier,
+    ConformanceError,
+    TierNotImplementedError,
+    check_contract,
+    render_check,
+)
 from .enforcer import AuditEntry, ContractEnforcer
 from .generate import DraftContract, build_draft, write_draft
 from .packs import PACKS_DIR, PolicyPack, available_packs, load_pack
@@ -44,6 +52,9 @@ __all__ = [
     "AuditRule",
     "BAND_COLORS",
     "BaseGateway",
+    "CheckReport",
+    "CheckTier",
+    "ConformanceError",
     "Contract",
     "ContractEnforcer",
     "ContractFileNameError",
@@ -73,15 +84,18 @@ __all__ = [
     "SEVERITY_WEIGHTS",
     "SymlinkTargetError",
     "SystemIdentity",
+    "TierNotImplementedError",
     "ValidationError",
     "ValidationResult",
     "apply_lifecycle_defaults",
     "available_packs",
     "build_draft",
+    "check_contract",
     "detect_contract_version",
     "lint_contract",
     "load_pack",
     "render_badge",
+    "render_check",
     "render_report",
     "scan_tree",
     "validate_contract",

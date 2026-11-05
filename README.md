@@ -140,15 +140,19 @@ Create a starter contract, or inspect one you already have. The CLI detects the 
 scyvera init contract.yaml --name "Research Assistant" --domain "research"
 scyvera validate contract.yaml
 scyvera lint contract.yaml
+scyvera check contract.yaml
 ```
 
 ```text
 CREATED contract.yaml (spec version 1.1)
 PASS  contract.yaml
 PASS  contract.yaml (0 semantic warnings)
+PASS  contract.yaml (tier 0 (structural): 0 schema errors, 0 semantic warnings)
 ```
 
 `lint` runs the Tier 2 ACxxx rules: unbounded write permissions (AC101), high-risk systems without approvals (AC201), vague idle behavior (AC301), and irreversible actions without an approval boundary (AC302).
+
+`check` (RFC 0003 §C3) runs the Tier 0 conformance check — `validate` + `lint` in one report, with `--tier {0,1,2,auto}` resolving to the highest implemented tier and never degrading silently.
 
 ### Runtime Enforcer
 
