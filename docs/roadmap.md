@@ -97,6 +97,63 @@ These tasks do **not** depend on M2.1–M2.3 (they share module layout and test 
 
 ---
 
+## Production-Defensibility Program (cross-phase, the v1.4 gate)
+
+**Goal:** the milestone where third parties are told *"use Scyvera in your main production
+projects"* and every word of that claim is machine-checkable. Everything here is additive to the
+phases above; task IDs below are new (PD-prefix) and never collide with `M`-tasks.
+
+### The v1.4 production gate (verbatim DoD)
+
+A team can:
+1. **Install verifiably** — a release published with Sigstore signature + SBOM + provenance
+   (M3.3), self-verifiable in place via `scyvera self-check` (M3.4), failing closed on mismatch.
+2. **Prove history** — `registry.jsonl` is hash-chained so any rewrite is detectable (M1.1);
+   contract loads refuse symlink escapes and unregistered re-seal paths (M1.3/M1.4).
+3. **Gate their CI** — one line in the Actions workflow via the official `scyvera-audit-action`
+   (PD-6), plus `scyvera check --fail-under` locally.
+4. **Bound behavior** — contracts can carry optional guardrails (M2.6) and measured runs are
+   scoreable (M2.4/M2.5).
+5. **Reach every runtime** — harness skill + per-target packaging (M3.1/M3.2) and an MCP server
+   mode so MCP-native agents call `scyvera` as a tool (PD-7).
+
+Until all five hold, the README's positioning stays "beta-serious", not "production". This gate
+is deliberately explicit so the marketing language can never outrun the merged code.
+
+### Sequencing (explicit, ordered — overrides nothing, records the order)
+
+```
+1. M2.3 LangGraph Tier-1 adapter            (in flight; adoption depth)
+2. PD-1..PD-4  trust-surface basics         (docs + CI hygiene; cheap, immediate)
+3. M1.1-M1.4  registry integrity cluster    (hash chain, pinning, re-seal — the receipts)
+4. M3.3/M3.4  signing + self-check          (make PyPI artifacts self-verifiable)
+5. M2.6       guardrails                    (behavioral bounds production teams ask for)
+6. M2.4/M2.5  eval harness + unified report (measured conformance)
+7. M3.1/M3.2/PD-6/PD-7  distribution reach (skill, packaging, Action, MCP mode)
+8. PD-8       optional Rust scanner         (only behind differential-output tests)
+```
+
+### New tasks (PD rows)
+
+| Task | Deliverable | Acceptance |
+|---|---|---|
+| **PD-1** | `SECURITY.md` + supported-versions table + coordinated-disclosure route | SECURITY.md present, links from README; report/disclosure path unambiguous |
+| **PD-2** | CI hardening: all workflow actions pinned by commit SHA, least-privilege `permissions:` on every workflow | Zero floating `@latest`/`@vX` action refs; per- workflow minimal token permissions |
+| **PD-3** | Cross-platform test matrix: 3.10–3.14 × linux/windows/macOS | All matrix combinations green on PRs to main |
+| **PD-4** | Deserialization pin: tests assert only `yaml.safe_load`/`yaml.safe_load_file` paths exist | no `yaml.load` without explicit unsafe refactor; enforced by test |
+| **PD-5** | Published perf benchmark (synthetic 10k-file repo) | benchmark script + recorded numbers in docs; pre-answers big-repo claims |
+| **PD-6** | Official `scyvera-audit-action` GitHub Action (installs scyvera, runs `audit --fail-under`, respects `--badge`) | Sample consuming repo; action pinned, tagged v1 |
+| **PD-7** | `scyvera mcp` server mode exposing validate/audit/check as MCP tools | stdio MCP server; deterministic outputs identical to CLI; usable by MCP-native harnesses |
+| **PD-8** | *(Optional, deferred)* Rust scanner binary emitting byte-identical RFC 0004 reports | differential test suite: Rust output ≡ Python output across corpora; shipped as separate wheel only when scale demands |
+
+### Mapping to existing rows
+
+Lane A = M1.1–M1.4 + M3.3 + M3.4 (registry integrity, signing, self-check).
+Lane B = M2.6 + M2.4 + M2.5 (guardrails, evals, unified reports).
+Distribution reach = M3.1 + M3.2 + PD-6 + PD-7.
+
+---
+
 ## Growth & Community Lane (cross-phase, RFC 0004 + positioning)
 
 | Task | Deliverable | Acceptance |
@@ -129,3 +186,4 @@ These tasks do **not** depend on M2.1–M2.3 (they share module layout and test 
 | **P2** | Conformance & Evals (C3, C4) + Guardrails (C5) | 0/6 | `scyvera check` end-to-end |
 | **P3** | Distribution (C6) | 0/5 | Skill/plugin installable + attested |
 | **P4** | Post-release enforcer upgrades (optional) | 0/3 | T1 mitigation, async approvals, A2A handshake |
+| **v1.4 gate** | Production-Defensibility Program (PD rows, cross-phase) | 0/8 | Signed install + self-check + CI Action + MCP mode + hash-chained receipts |
