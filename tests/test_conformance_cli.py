@@ -28,6 +28,7 @@ from scyvera.cli import main
 from scyvera.conformance import (
     CheckReport,
     CheckTier,
+    Tier1UnavailableError,
     TierNotImplementedError,
     check_contract,
     render_check,
@@ -66,11 +67,13 @@ def test_resolve_tier_zero_is_explicit_and_silent() -> None:
     assert note is None
 
 
-def test_resolve_tier_static_raises() -> None:
-    with pytest.raises(TierNotImplementedError):
-        resolve_tier("1")
-    with pytest.raises(TierNotImplementedError):
-        resolve_tier(CheckTier.STATIC)
+def test_resolve_tier_static_resolves() -> None:
+    tier, note = resolve_tier("1")
+    assert tier is CheckTier.STATIC
+    assert note is None
+    tier, note = resolve_tier(CheckTier.STATIC)
+    assert tier is CheckTier.STATIC
+    assert note is None
 
 
 def test_resolve_tier_trace_raises() -> None:
@@ -136,10 +139,11 @@ def test_check_contract_tier_auto_resolves_with_note() -> None:
     assert "tier 0" in report.tier_note
 
 
-def test_check_contract_explicit_unimplemented_tier_raises() -> None:
-    for tier in ("1", "2"):
-        with pytest.raises(TierNotImplementedError):
-            check_contract(VALID, tier=tier)
+def test_check_contract_tier1_requires_adapter() -> None:
+    with pytest.raises(Tier1UnavailableError):
+        check_contract(VALID, tier="1")
+    with pytest.raises(TierNotImplementedError):
+        check_contract(VALID, tier="2")
 
 
 def test_conformance_library_never_prints_or_writes(
@@ -243,17 +247,28 @@ def test_cli_check_missing_file_exit_two(
     assert "file not found" in captured.out
 
 
-@pytest.mark.parametrize("tier", ["1", "2"])
 def test_cli_check_unimplemented_tier_exit_two(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tier: str
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(sys, "argv", ["scyvera", "check", str(VALID), "--tier", tier])
+    monkeypatch.setattr(sys, "argv", ["scyvera", "check", str(VALID), "--tier", "2"])
     exit_code = main()
     captured = capsys.readouterr()
     assert exit_code == 2
     assert captured.out == ""
     assert "not implemented" in captured.err
     assert "Traceback" not in captured.err, "unimplemented tiers fail with a clean message"
+
+
+def test_cli_check_tier1_without_adapter_exit_two(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["scyvera", "check", str(VALID), "--tier", "1"])
+    exit_code = main()
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "no tier 1 adapter" in captured.err
+    assert "Traceback" not in captured.err, "missing adapters fail with a clean message"
 
 
 def test_cli_superset_of_validate_and_lint_on_failures(

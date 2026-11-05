@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -6,13 +7,81 @@ from pathlib import Path
 import yaml
 
 from .audit import AuditError, scan_tree
-from .conformance import TierNotImplementedError, check_contract, render_check
+from .conformance import (
+    CheckTier,
+    Tier1Adapter,
+    Tier1ContractError,
+    Tier1UnavailableError,
+    TierNotImplementedError,
+    check_contract,
+    render_check,
+    resolve_tier,
+)
 from .exceptions import ContractFileNameError
 from .generate import build_draft, write_draft
 from .linter import lint_contract
 from .packs import PackError, load_pack
 from .report import render_badge, render_report
 from .validator import validate_contract
+
+# Loaded tier 1 adapters, keyed by absolute source path, so repeated checks in
+# one process do not re-exec the adapter module.
+_TIER1_ADAPTERS: dict[str, Tier1Adapter] = {}
+
+
+def _load_tier1_adapter_module(path: Path) -> Tier1Adapter | None:
+    """Load ``tier1.py`` by path (``implementations/`` is not installed)."""
+    key = str(path.resolve())
+    cached = _TIER1_ADAPTERS.get(key)
+    if cached is not None:
+        return cached
+
+    module_name = f"_scyvera_tier1_adapter_{len(_TIER1_ADAPTERS)}"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    previous_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous_dont_write_bytecode
+
+    factory = getattr(module, "create_adapter", None)
+    if callable(factory):
+        adapter = factory()
+    else:
+        adapter_type = getattr(module, "N8nTier1Adapter", None)
+        if not isinstance(adapter_type, type):
+            return None
+        adapter = adapter_type()
+
+    if not isinstance(adapter, Tier1Adapter):
+        return None
+    _TIER1_ADAPTERS[key] = adapter
+    return adapter
+
+
+def _discover_tier1_adapter(target: Path) -> Tier1Adapter | None:
+    """Find a tier 1 adapter that claims ``target``.
+
+    Discovery is filesystem-only and mirrors the repository layout: walk up
+    from the target looking for ``implementations/n8n/tier1.py`` (or a sibling
+    ``tier1.py`` for a self-contained implementation directory). A target
+    without ``workflow.json`` is not claimed by the n8n adapter.
+    """
+    if not (target / "workflow.json").is_file():
+        return None
+    sibling = target / "tier1.py"
+    if sibling.is_file():
+        return _load_tier1_adapter_module(sibling)
+    for base in (target, *target.parents):
+        nested = base / "implementations" / "n8n" / "tier1.py"
+        if nested.is_file():
+            return _load_tier1_adapter_module(nested)
+    return None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,8 +134,10 @@ def build_parser() -> argparse.ArgumentParser:
             "Run the conformance check for [contract]. Tier 0 (structural) "
             "is a superset of `scyvera validate` + `scyvera lint`: one "
             "report combining schema errors and ACxxx semantic warnings. "
-            "Tier 1/2 are reserved for the static and runtime-trace "
-            "adapters and fail loudly until they ship (never silently)."
+            "Tier 1 (static) inspects an implementation directory such as an "
+            "n8n workflow and reports T101/T102/T103 findings. Tier 2 is "
+            "reserved for the runtime-trace adapter and fails loudly until it "
+            "ships (never silently)."
         ),
         epilog=("exit codes: 0 pass (or warn-only), 1 fail, 2 usage/IO error"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -75,7 +146,10 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "contract",
         type=Path,
-        help="Path to contract.yaml",
+        help=(
+            "Path to contract.yaml, or an implementation directory for "
+            "--tier 1 (directory must contain contract.yaml and workflow.json)"
+        ),
     )
 
     check_parser.add_argument(
@@ -85,8 +159,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
         help=(
             "Conformance tier: 0 structural (schema + lint), 1 static "
-            "(adapter, M2.2), 2 runtime-trace (M2.4); auto resolves to the "
-            "highest implemented tier with an explicit notice"
+            "(adapter; M2.2), 2 runtime-trace (M2.4); auto resolves to tier 0 "
+            "with an explicit notice"
         ),
     )
 
@@ -268,35 +342,68 @@ def run_check(
 ) -> int:
     """Run the RFC 0003 §C3 conformance check and return its exit code.
 
-    Exit codes: ``0`` pass (or warn-only, matching ``scyvera lint``),
-    ``1`` fail, ``2`` usage/IO error, including a requested-but-unimplemented
-    tier per the roadmap's "tier auto-degrades with explicit notice, never
-    silently" acceptance rule.
+    Tier 1 accepts either a contract file or an implementation directory; for
+    a directory the adapter inspects ``workflow.json`` next to
+    ``contract.yaml``. Exit codes: ``0`` pass (or warn-only, matching
+    ``scyvera lint``), ``1`` fail (including any T101 or error-severity T102
+    finding), ``2`` usage/IO error, including an explicit tier 2 request or a
+    tier 1 target no adapter claims — per the roadmap's "tier auto-degrades
+    with explicit notice, never silently" acceptance rule.
     """
+    target = contract_path if contract_path.is_dir() else contract_path.parent
+    contract = (
+        contract_path / "contract.yaml" if contract_path.is_dir() else contract_path
+    )
+
     try:
-        report = check_contract(contract_path, schema_path=schema_path, tier=tier)
+        resolved_tier, _ = resolve_tier(tier)
+        adapter: Tier1Adapter | None = None
+        if resolved_tier is CheckTier.STATIC:
+            adapter = _discover_tier1_adapter(target)
+            if adapter is None:
+                print(
+                    f"scyvera check: error: no tier 1 adapter for {target} "
+                    "(expected workflow.json + contract.yaml with a supported "
+                    "adapter)",
+                    file=sys.stderr,
+                )
+                return 2
+        report = check_contract(
+            contract,
+            schema_path=schema_path,
+            tier=tier,
+            target=target,
+            adapter=adapter,
+        )
     except TierNotImplementedError as error:
         print(f"scyvera check: error: {error}", file=sys.stderr)
         return 2
+    except Tier1UnavailableError as error:
+        print(f"scyvera check: error: {error}", file=sys.stderr)
+        return 2
+    except Tier1ContractError as error:
+        print(f"FAIL  {contract}")
+        print(f"      cannot run tier 1: {error}")
+        return 1
     except ContractFileNameError as error:
         print(f"scyvera check: error: {error}", file=sys.stderr)
         return 2
     except FileNotFoundError:
-        print(f"ERROR  {contract_path}")
+        print(f"ERROR  {contract}")
         print("       file not found")
         return 2
     except PermissionError:
-        print(f"ERROR  {contract_path}")
+        print(f"ERROR  {contract}")
         print("       permission denied")
         return 2
     except yaml.YAMLError as error:
-        print(f"FAIL  {contract_path}")
+        print(f"FAIL  {contract}")
         print(f"      invalid YAML: {error}")
         return 1
 
     print(render_check(report), end="")
 
-    return 0 if report.valid else 1
+    return 1 if (not report.valid or report.tier1_failed) else 0
 
 
 def run_init(
