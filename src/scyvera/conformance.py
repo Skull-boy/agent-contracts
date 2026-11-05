@@ -45,6 +45,7 @@ import abc
 import enum
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Mapping
 
 from .linter import LintWarning, lint_contract
 from .validator import ValidationError, validate_contract
@@ -53,12 +54,16 @@ __all__ = [
     "CheckReport",
     "CheckTier",
     "ConformanceError",
+    "ContractDeclarations",
     "Tier1Adapter",
     "Tier1ContractError",
     "Tier1Finding",
     "Tier1UnavailableError",
     "TierNotImplementedError",
+    "canonical_service",
     "check_contract",
+    "declaration_token",
+    "extract_contract_declarations",
     "render_check",
     "resolve_tier",
 ]
@@ -138,6 +143,141 @@ class Tier1Finding:
     path: str
     node_id: str
     severity: str
+
+
+# Canonical service aliases shared by Tier 1 adapters. Contracts are prose in
+# v1.0 and loose mappings in v1.1, so tokens are normalised before comparison
+# (``google_sheets`` and ``google-sheets`` must match).
+_SERVICE_ALIASES: Mapping[str, str] = {
+    "antigravity": "local-shell",
+    "antigravity-cli": "local-shell",
+    "cli": "local-shell",
+    "execute-command": "local-shell",
+    "executecommand": "local-shell",
+    "local-shell": "local-shell",
+    "shell": "local-shell",
+    "local-llm": "local-llm",
+    "llama": "local-llm",
+    "llama-cpp": "local-llm",
+    "lmstudio": "local-llm",
+    "local-model": "local-llm",
+    "ollama": "local-llm",
+    "googlesheets": "google-sheets",
+    "google-sheet": "google-sheets",
+    "google-sheets": "google-sheets",
+    "sheets": "google-sheets",
+    "http": "network",
+    "https": "network",
+    "internet": "network",
+    "network": "network",
+    "rss": "network",
+    "web": "network",
+    "github-api": "github",
+    "open-ai": "openai",
+    "openai-api": "openai",
+    "telegram-bot": "telegram",
+}
+
+
+def canonical_service(token: str) -> str:
+    """Normalise a contract or implementation token to a canonical service."""
+    cleaned = token.strip().lower().replace("_", "-").replace(" ", "-")
+    head = cleaned.split(":", 1)[0]
+    return _SERVICE_ALIASES.get(head, head)
+
+
+def declaration_token(item: Any) -> str | None:
+    """Extract one service token from a v1.0 or v1.1 declaration entry.
+
+    PyYAML parses a v1.0 permission line such as ``- github: issues:write`` as
+    a single-key mapping, so both the free-text mapping form and the v1.1
+    ``{resource, actions}`` form must be accepted. Free-text side effects
+    (a full sentence rather than a token) are normalised as a single token so
+    they remain visible to the unused-declaration comparison.
+    """
+    if isinstance(item, str):
+        token = item.strip()
+        return canonical_service(token) if token else None
+    if isinstance(item, Mapping):
+        for key in ("service", "resource", "name"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                return canonical_service(value)
+        for key in item:
+            if isinstance(key, str) and key.strip():
+                return canonical_service(key)
+    return None
+
+
+def _service_head(token: str) -> str:
+    """Reduce a permission token to the service that performs it."""
+    head = token.split(":", 1)[0].split(".", 1)[0]
+    return canonical_service(head)
+
+
+@dataclass(frozen=True)
+class ContractDeclarations:
+    """Service-level facts extracted from a v1.0 or v1.1 contract.
+
+    ``services`` is the set used for undeclared-action (T101) comparisons;
+    ``permission_tokens`` preserves the narrower ``github.read`` /
+    ``qdrant.search`` tokens used for unused-declaration (T103) comparisons.
+    Sharing both sets keeps the two finding directions symmetric.
+    """
+
+    services: frozenset[str]
+    permission_tokens: frozenset[str]
+    requires_approval: bool
+
+
+def extract_contract_declarations(contract: Mapping[str, Any]) -> ContractDeclarations:
+    """Read permissions, resources, side effects, and approval gates."""
+    services: set[str] = set()
+    permission_tokens: set[str] = set()
+
+    permissions = contract.get("permissions") or []
+    if isinstance(permissions, Mapping):
+        entries: list[Any] = [
+            {"service": key, "actions": value} for key, value in permissions.items()
+        ]
+    elif isinstance(permissions, list):
+        entries = permissions
+    else:
+        entries = []
+
+    for entry in entries:
+        token = declaration_token(entry)
+        if token:
+            permission_tokens.add(token)
+            services.add(_service_head(token))
+
+    resources = contract.get("resources") or []
+    if isinstance(resources, list):
+        for resource in resources:
+            token = declaration_token(resource)
+            if token:
+                services.add(_service_head(token))
+
+    side_effects = contract.get("side_effects") or []
+    if isinstance(side_effects, list):
+        for effect in side_effects:
+            token = declaration_token(effect)
+            if token:
+                permission_tokens.add(token)
+                services.add(_service_head(token))
+
+    approval_points = contract.get("approval_points") or []
+    approvals = contract.get("approvals") or []
+    requires_approval = bool(approval_points) or any(
+        not (isinstance(entry, Mapping) and entry.get("required") is False)
+        for entry in approvals
+    )
+
+    return ContractDeclarations(
+        services=frozenset(services),
+        permission_tokens=frozenset(permission_tokens),
+        requires_approval=requires_approval,
+    )
 
 
 class Tier1Adapter(abc.ABC):
