@@ -64,21 +64,72 @@ def _load_tier1_adapter_module(path: Path) -> Tier1Adapter | None:
     return adapter
 
 
+def _contract_framework(contract_path: Path) -> str | None:
+    """Read the ``framework`` key from a contract, if it is readable.
+
+    Discovery stays filesystem-only: an unreadable or malformed contract is
+    simply not a claim, leaving the normal "no tier 1 adapter" path intact.
+    """
+    if not contract_path.is_file():
+        return None
+    try:
+        with contract_path.open("r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+    except (OSError, yaml.YAMLError):
+        return None
+    if isinstance(data, dict):
+        framework = data.get("framework")
+        if isinstance(framework, str):
+            return framework.strip().lower()
+    return None
+
+
+def _has_python_source(target: Path) -> bool:
+    """Whether ``target`` contains at least one non-cache Python source file."""
+    if not target.is_dir():
+        return False
+    return any(
+        path.is_file() and "__pycache__" not in path.parts
+        for path in target.rglob("*.py")
+    )
+
+
 def _discover_tier1_adapter(target: Path) -> Tier1Adapter | None:
     """Find a tier 1 adapter that claims ``target``.
 
-    Discovery is filesystem-only and mirrors the repository layout: walk up
-    from the target looking for ``implementations/n8n/tier1.py`` (or a sibling
-    ``tier1.py`` for a self-contained implementation directory). A target
-    without ``workflow.json`` is not claimed by the n8n adapter.
+    Discovery is filesystem-only and mirrors the repository layout:
+
+    - n8n: the target contains ``workflow.json``; use a sibling ``tier1.py``
+      or walk up to ``implementations/n8n/tier1.py``. Behaviour is unchanged
+      from M2.2, including the rule that a workflow target never falls
+      through to another adapter.
+    - LangGraph: the target contains a ``contract.yaml`` whose ``framework``
+      is ``langgraph``, or the target contains Python source and a parent
+      chain exposes ``implementations/langgraph/tier1.py``. Both checks read
+      the filesystem only and are deterministic.
     """
-    if not (target / "workflow.json").is_file():
+    if (target / "workflow.json").is_file():
+        sibling = target / "tier1.py"
+        if sibling.is_file():
+            return _load_tier1_adapter_module(sibling)
+        for base in (target, *target.parents):
+            nested = base / "implementations" / "n8n" / "tier1.py"
+            if nested.is_file():
+                return _load_tier1_adapter_module(nested)
         return None
+
+    langgraph_claim = (
+        _contract_framework(target / "contract.yaml") == "langgraph"
+        or _has_python_source(target)
+    )
+    if not langgraph_claim:
+        return None
+
     sibling = target / "tier1.py"
     if sibling.is_file():
         return _load_tier1_adapter_module(sibling)
     for base in (target, *target.parents):
-        nested = base / "implementations" / "n8n" / "tier1.py"
+        nested = base / "implementations" / "langgraph" / "tier1.py"
         if nested.is_file():
             return _load_tier1_adapter_module(nested)
     return None
@@ -148,7 +199,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help=(
             "Path to contract.yaml, or an implementation directory for "
-            "--tier 1 (directory must contain contract.yaml and workflow.json)"
+            "--tier 1 (n8n: contract.yaml + workflow.json; LangGraph: "
+            "contract.yaml + Python source)"
         ),
     )
 

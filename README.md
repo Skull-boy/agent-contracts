@@ -152,7 +152,7 @@ PASS  contract.yaml (tier 0 (structural): 0 schema errors, 0 semantic warnings)
 
 `lint` runs the Tier 2 ACxxx rules: unbounded write permissions (AC101), high-risk systems without approvals (AC201), vague idle behavior (AC301), and irreversible actions without an approval boundary (AC302).
 
-`check` (RFC 0003 §C3) runs the Tier 0 conformance check — `validate` + `lint` in one report, with `--tier {0,1,2,auto}` resolving to the highest implemented tier and never degrading silently. Tier 1 (`--tier 1`) now inspects n8n implementations, comparing each workflow's services and approval gates against `contract.yaml` and reporting T101/T102/T103 findings (roadmap M2.2).
+`check` (RFC 0003 §C3) runs the Tier 0 conformance check — `validate` + `lint` in one report, with `--tier {0,1,2,auto}` resolving to the highest implemented tier and never degrading silently. Tier 1 (`--tier 1`) now inspects n8n workflows and LangGraph implementations, comparing exercised services and approval gates against `contract.yaml` and reporting T101/T102/T103 findings (roadmap M2.2/M2.3).
 
 ### Runtime Enforcer
 
