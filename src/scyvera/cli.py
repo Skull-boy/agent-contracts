@@ -6,6 +6,8 @@ from pathlib import Path
 import yaml
 
 from .audit import AuditError, scan_tree
+from .conformance import TierNotImplementedError, check_contract, render_check
+from .exceptions import ContractFileNameError
 from .generate import build_draft, write_draft
 from .linter import lint_contract
 from .packs import PackError, load_pack
@@ -53,6 +55,46 @@ def build_parser() -> argparse.ArgumentParser:
         "contract",
         type=Path,
         help="Path to contract.yaml",
+    )
+
+    # check subcommand (RFC 0003 §C3, roadmap M2.1)
+    check_parser = subparsers.add_parser(
+        "check",
+        help="Run RFC 0003 §C3 conformance checks against a contract.",
+        description=(
+            "Run the conformance check for [contract]. Tier 0 (structural) "
+            "is a superset of `scyvera validate` + `scyvera lint`: one "
+            "report combining schema errors and ACxxx semantic warnings. "
+            "Tier 1/2 are reserved for the static and runtime-trace "
+            "adapters and fail loudly until they ship (never silently)."
+        ),
+        epilog=("exit codes: 0 pass (or warn-only), 1 fail, 2 usage/IO error"),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    check_parser.add_argument(
+        "contract",
+        type=Path,
+        help="Path to contract.yaml",
+    )
+
+    check_parser.add_argument(
+        "--tier",
+        type=str,
+        choices=["0", "1", "2", "auto"],
+        default="auto",
+        help=(
+            "Conformance tier: 0 structural (schema + lint), 1 static "
+            "(adapter, M2.2), 2 runtime-trace (M2.4); auto resolves to the "
+            "highest implemented tier with an explicit notice"
+        ),
+    )
+
+    check_parser.add_argument(
+        "--schema",
+        type=Path,
+        default=None,
+        help="Path to custom JSON Schema file (tier 0 only)",
     )
 
     # audit subcommand
@@ -217,6 +259,44 @@ def run_validate(contract_path: Path, schema_path: Path | None = None) -> int:
             print(f"      {error.message}")
 
     return 1
+
+
+def run_check(
+    contract_path: Path,
+    tier: str = "auto",
+    schema_path: Path | None = None,
+) -> int:
+    """Run the RFC 0003 §C3 conformance check and return its exit code.
+
+    Exit codes: ``0`` pass (or warn-only, matching ``scyvera lint``),
+    ``1`` fail, ``2`` usage/IO error, including a requested-but-unimplemented
+    tier per the roadmap's "tier auto-degrades with explicit notice, never
+    silently" acceptance rule.
+    """
+    try:
+        report = check_contract(contract_path, schema_path=schema_path, tier=tier)
+    except TierNotImplementedError as error:
+        print(f"scyvera check: error: {error}", file=sys.stderr)
+        return 2
+    except ContractFileNameError as error:
+        print(f"scyvera check: error: {error}", file=sys.stderr)
+        return 2
+    except FileNotFoundError:
+        print(f"ERROR  {contract_path}")
+        print("       file not found")
+        return 2
+    except PermissionError:
+        print(f"ERROR  {contract_path}")
+        print("       permission denied")
+        return 2
+    except yaml.YAMLError as error:
+        print(f"FAIL  {contract_path}")
+        print(f"      invalid YAML: {error}")
+        return 1
+
+    print(render_check(report), end="")
+
+    return 0 if report.valid else 1
 
 
 def run_init(
@@ -501,6 +581,9 @@ def main() -> int:
 
     if args.command == "lint":
         return run_lint(args.contract)
+
+    if args.command == "check":
+        return run_check(args.contract, tier=args.tier, schema_path=args.schema)
 
     if args.command == "audit":
         return run_audit(

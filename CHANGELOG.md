@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Conformance CLI (M2.1, RFC 0003 §C3)
+- **New `scyvera check <contract.yaml>` command**: runs the Tier 0 (structural) conformance check — a strict superset of `scyvera validate` + `scyvera lint` — as one report combining schema-validation errors and ACxxx semantic warnings. Exit codes follow the house convention: `0` pass (or warn-only, matching `lint`), `1` fail, `2` usage/IO error.
+- **`--tier {0,1,2,auto}` with explicit degradation, never silently**: `auto` (the default) resolves to the highest implemented tier — today tier 0 — and prints a `note:` line saying so; explicitly requesting tier 1 (static) or tier 2 (runtime-trace) exits `2` with a clean one-line stderr message until the M2.2–M2.4 adapters ship.
+- **New `scyvera/conformance.py` module**: `check_contract()`, `resolve_tier()`, `render_check()` plus the `CheckReport` / `CheckTier` data types and `ConformanceError` / `TierNotImplementedError`. Pure engine (no printing, no writes, no new dependencies), frozen immutable results, exported from the `scyvera` package (`__all__` updated).
+- RFC delta raised, not silently changed: RFC 0003 §C3 specifies `--tier {0,1,2}` while roadmap M2.1 requires `{0,1,2,auto}`; the implementation follows the roadmap (the stricter operational spec) pending a one-line RFC amendment.
+
 ## [1.3.0] — 2026-11-04
 
 ### Added — Policy Packs (M2.7)
