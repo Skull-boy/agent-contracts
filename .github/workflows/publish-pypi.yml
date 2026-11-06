@@ -52,6 +52,18 @@ jobs:
       - name: Build wheel and source distribution
         run: python -m build
 
+      - name: Upload dist artifact for release attestation
+        # RFC 0003 §C6 / roadmap M3.3: the release-attest workflow downloads
+        # this exact artifact instead of rebuilding, so the attested wheel is
+        # byte-identical to the one published here. Retain for 90 days (the
+        # maximum) so attestation can run even after a delayed retry.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2 (pinned 2026-11-06)
+        with:
+          name: dist
+          path: dist/
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Install built wheel
         run: python -m pip install dist/*.whl
 
