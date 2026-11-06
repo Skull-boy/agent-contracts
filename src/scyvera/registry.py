@@ -51,6 +51,13 @@ _REQUIRED_FIELDS = frozenset({
 })
 
 
+def _path_key(path: Optional[str]) -> Optional[str]:
+    """Normalize a registry entry path for identity lookups (M1.3, T14)."""
+    if path is None:
+        return None
+    return os.path.normcase(os.path.abspath(path))
+
+
 @dataclass
 class RegistryEntry:
     """Immutable data container representing a single registry record.
@@ -86,6 +93,10 @@ class ContractRegistry:
         self._entries: list[RegistryEntry] = []
         self._hash_index: dict[str, RegistryEntry] = {}
         self._node_index: dict[str, list[RegistryEntry]] = {}
+        # File contracts have no node_id, so their version history is keyed by
+        # canonical path. This is what lets an M1.4 re-seal register version
+        # N+1 for the same file instead of a second unrelated version 1.
+        self._path_index: dict[str, list[RegistryEntry]] = {}
         # Format state is established at load time, never inferred lazily:
         # an empty file is chain-ready, a fully chained file is verified
         # eagerly, and a fully legacy file stays readable but refuses appends.
@@ -157,12 +168,16 @@ class ContractRegistry:
         if source == "file" and enforcer._contract_path is not None:
             file_path = str(enforcer._contract_path.resolve())
 
-        # Compute version
+        # Compute version. Declarations version by node_id; file contracts
+        # version by canonical path so an M1.4 re-seal produces N+1.
+        path_key = _path_key(file_path)
         if node_id is not None:
             existing = self._node_index.get(node_id, [])
-            version = len(existing) + 1
+        elif path_key is not None:
+            existing = self._path_index.get(path_key, [])
         else:
-            version = 1
+            existing = []
+        version = len(existing) + 1
 
         # RFC 0003 §C1: chain every new entry. A fresh (empty) registry starts
         # from the fixed genesis value; otherwise hash the last entry's
@@ -190,6 +205,8 @@ class ContractRegistry:
         self._hash_index[entry.contract_hash] = entry
         if entry.node_id is not None:
             self._node_index.setdefault(entry.node_id, []).append(entry)
+        if path_key is not None:
+            self._path_index.setdefault(path_key, []).append(entry)
 
         # Persist to disk
         self._append_to_file(entry)
@@ -273,6 +290,28 @@ class ContractRegistry:
         """Return True if an entry with this hash exists."""
         return contract_hash in self._hash_index
 
+    def get_history_by_path(self, path: str | Path) -> list[RegistryEntry]:
+        """Return all entries registered for a canonical contract path (M1.3).
+
+        File contracts carry ``node_id=None``, so the canonical path is their
+        stable identity (T14). A chained registry re-verifies first, matching
+        :meth:`get_history`, because a tampered file must not answer identity
+        questions. Results are ordered by version ascending.
+        """
+        self._guard_provenance()
+        key = _path_key(os.fspath(path))
+        if key is None:
+            return []
+        entries = self._path_index.get(key, [])
+        return sorted(entries, key=lambda e: e.version)
+
+    def get_latest_by_path(self, path: str | Path) -> Optional[RegistryEntry]:
+        """Return the highest-version entry for a canonical contract path."""
+        history = self.get_history_by_path(path)
+        if not history:
+            return None
+        return history[-1]
+
     # -------------------------------------------------------------------------
     # Chain Integrity (RFC 0003 §C1, roadmap M1.1)
     # -------------------------------------------------------------------------
@@ -340,10 +379,14 @@ class ContractRegistry:
         self._entries = chained
         self._hash_index = {}
         self._node_index = {}
+        self._path_index = {}
         for entry in chained:
             self._hash_index[entry.contract_hash] = entry
             if entry.node_id is not None:
                 self._node_index.setdefault(entry.node_id, []).append(entry)
+            key = _path_key(entry.path)
+            if key is not None:
+                self._path_index.setdefault(key, []).append(entry)
         self._chained = True
         self._legacy = False
 
@@ -399,10 +442,14 @@ class ContractRegistry:
         self._entries = entries
         self._hash_index = {}
         self._node_index = {}
+        self._path_index = {}
         for entry in entries:
             self._hash_index[entry.contract_hash] = entry
             if entry.node_id is not None:
                 self._node_index.setdefault(entry.node_id, []).append(entry)
+            key = _path_key(entry.path)
+            if key is not None:
+                self._path_index.setdefault(key, []).append(entry)
 
         self._chained = has_chained
         self._legacy = has_legacy
