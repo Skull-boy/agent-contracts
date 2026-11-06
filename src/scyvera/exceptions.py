@@ -145,6 +145,23 @@ class RegistryError(Exception):
         )
 
 
+class ResealError(Exception):
+    """Raised when the M1.4 re-seal ritual cannot complete.
+
+    The ritual is the only sanctioned regeneration path (T12): validate,
+    lint with zero errors, register the sealed contract, then hand back a
+    governable enforcer. Any skipped or partial step raises this error so a
+    caller can never receive an enforcer from a half-completed reseal.
+    """
+
+    def __init__(self, step: str, reason: str) -> None:
+        self.step = step
+        self.reason = reason
+        super().__init__(
+            f"Re-seal ritual failed at '{step}': {reason}"
+        )
+
+
 class PackError(Exception):
     """Raised when a Policy Pack cannot be loaded or is malformed.
 

@@ -49,9 +49,11 @@ from .exceptions import (
     GatewayError,
     PackError,
     RegistryError,
+    ResealError,
 )
 from .gateway import BaseGateway, GitHubGateway, QdrantGateway
 from .registry import ContractRegistry, RegistryEntry
+from .reseal import RESEAL_AUDIT_NOTE, ResealRecord, ResealResult, reseal
 from .linter import LintResult, LintWarning, lint_contract
 from .validator import (
     LIFECYCLE_DEFAULTS,
@@ -110,9 +112,13 @@ __all__ = [
     "PackError",
     "PolicyPack",
     "QdrantGateway",
+    "RESEAL_AUDIT_NOTE",
     "RULES",
     "RegistryEntry",
     "RegistryError",
+    "ResealError",
+    "ResealRecord",
+    "ResealResult",
     "SCHEMA_V1_PATH",
     "SCHEMA_V1_1_PATH",
     "SEVERITY_WEIGHTS",
@@ -141,6 +147,7 @@ __all__ = [
     "render_badge",
     "render_check",
     "render_report",
+    "reseal",
     "scan_tree",
     "validate_contract",
     "verify_chain_entries",
