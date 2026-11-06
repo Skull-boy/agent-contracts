@@ -103,10 +103,12 @@ def _discover_tier1_adapter(target: Path) -> Tier1Adapter | None:
       or walk up to ``implementations/n8n/tier1.py``. Behaviour is unchanged
       from M2.2, including the rule that a workflow target never falls
       through to another adapter.
-    - LangGraph: the target contains a ``contract.yaml`` whose ``framework``
-      is ``langgraph``, or the target contains Python source and a parent
-      chain exposes ``implementations/langgraph/tier1.py``. Both checks read
-      the filesystem only and are deterministic.
+    - LangGraph: a local ``contract.yaml`` claims the target only when its
+      ``framework`` is ``langgraph``; a local contract with no framework key
+      is authoritative and never falls through. A Python-source target with
+      no local contract is claimed when a parent chain exposes
+      ``implementations/langgraph/tier1.py``. Both checks read the filesystem
+      only and are deterministic.
     """
     if (target / "workflow.json").is_file():
         sibling = target / "tier1.py"
@@ -118,11 +120,11 @@ def _discover_tier1_adapter(target: Path) -> Tier1Adapter | None:
                 return _load_tier1_adapter_module(nested)
         return None
 
-    langgraph_claim = (
-        _contract_framework(target / "contract.yaml") == "langgraph"
-        or _has_python_source(target)
-    )
-    if not langgraph_claim:
+    contract_path = target / "contract.yaml"
+    if contract_path.is_file():
+        if _contract_framework(contract_path) != "langgraph":
+            return None
+    elif not _has_python_source(target):
         return None
 
     sibling = target / "tier1.py"
