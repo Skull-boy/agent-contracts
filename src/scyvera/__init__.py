@@ -54,6 +54,18 @@ from .exceptions import (
 from .gateway import BaseGateway, GitHubGateway, QdrantGateway
 from .registry import ContractRegistry, RegistryEntry
 from .reseal import RESEAL_AUDIT_NOTE, ResealRecord, ResealResult, reseal
+from .selfcheck import (
+    SELF_CHECK_REPORT_VERSION,
+    SELF_MANIFEST_FILENAME,
+    SELF_MANIFEST_NAME,
+    SELF_MANIFEST_VERSION,
+    SelfCheckEntry,
+    SelfCheckError,
+    SelfCheckFailure,
+    SelfCheckResult,
+    generate_manifest,
+    self_check,
+)
 from .linter import LintResult, LintWarning, lint_contract
 from .validator import (
     LIFECYCLE_DEFAULTS,
@@ -121,7 +133,15 @@ __all__ = [
     "ResealResult",
     "SCHEMA_V1_PATH",
     "SCHEMA_V1_1_PATH",
+    "SELF_CHECK_REPORT_VERSION",
+    "SELF_MANIFEST_FILENAME",
+    "SELF_MANIFEST_NAME",
+    "SELF_MANIFEST_VERSION",
     "SEVERITY_WEIGHTS",
+    "SelfCheckEntry",
+    "SelfCheckError",
+    "SelfCheckFailure",
+    "SelfCheckResult",
     "SymlinkTargetError",
     "SystemIdentity",
     "Tier1Adapter",
@@ -141,6 +161,7 @@ __all__ = [
     "declaration_token",
     "detect_contract_version",
     "extract_contract_declarations",
+    "generate_manifest",
     "lint_contract",
     "load_pack",
     "next_prev_hash",
@@ -149,6 +170,7 @@ __all__ = [
     "render_report",
     "reseal",
     "scan_tree",
+    "self_check",
     "validate_contract",
     "verify_chain_entries",
     "write_draft",

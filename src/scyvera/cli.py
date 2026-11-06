@@ -22,6 +22,14 @@ from .generate import build_draft, write_draft
 from .linter import lint_contract
 from .packs import PackError, load_pack
 from .report import render_badge, render_report
+from .selfcheck import (
+    FAILURE_MANIFEST_INVALID,
+    FAILURE_MANIFEST_MISSING,
+    FAILURE_MANIFEST_VERSION_MISMATCH,
+    SelfCheckError,
+    SelfCheckResult,
+    self_check,
+)
 from .validator import validate_contract
 
 # Loaded tier 1 adapters, keyed by absolute source path, so repeated checks in
@@ -223,6 +231,35 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Path to custom JSON Schema file (tier 0 only)",
+    )
+
+    # self-check subcommand (RFC 0003 §C2, roadmap M3.4)
+    self_check_parser = subparsers.add_parser(
+        "self-check",
+        help="Verify the installed scyvera distribution against its signed manifest.",
+        description=(
+            "Verify every runtime file in the INSTALLED scyvera distribution "
+            "against the packaged _self_manifest.json (RFC 0003 §C2). "
+            "Failures are fail-closed: a modified, missing, or unlisted file "
+            "fails, as does a missing or unsupported manifest. This command "
+            "checks the installed distribution, never the current directory; "
+            "a development checkout may legitimately fail until the manifest "
+            "is regenerated with `python -m tools.generate_self_manifest`."
+        ),
+        epilog=(
+            "exit codes: 0 clean, 1 integrity deviation, 2 usage/IO error or "
+            "unverifiable manifest (including a missing manifest)"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    self_check_parser.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            "Emit the machine-readable result (self_check_version: 1) and "
+            "nothing else"
+        ),
     )
 
     # audit subcommand
@@ -587,6 +624,99 @@ def run_lint(contract_path: Path) -> int:
     return 0
 
 
+_SELF_CHECK_UNVERIFIABLE = frozenset(
+    {
+        FAILURE_MANIFEST_INVALID,
+        FAILURE_MANIFEST_MISSING,
+        FAILURE_MANIFEST_VERSION_MISMATCH,
+    }
+)
+
+
+def _self_check_exit_code(result: SelfCheckResult) -> int:
+    """Map a self-check result to the house 0/1/2 exit-code convention."""
+    if result.passed:
+        return 0
+    if any(
+        failure.code in _SELF_CHECK_UNVERIFIABLE
+        for failure in result.failures
+    ):
+        return 2
+    return 1
+
+
+def _render_self_check(result: SelfCheckResult) -> str:
+    """Render the human ``scyvera self-check`` report (ASCII, house style)."""
+    status = "PASS" if result.passed else "FAIL"
+    package_version = result.package_version or "unknown"
+    manifest_version = result.manifest_version or "missing"
+    lines = [
+        f"{status}  self-check  scyvera {package_version}",
+        f"      manifest: {manifest_version}",
+    ]
+
+    if result.passed:
+        lines.append(f"      verified: {len(result.entries)} files")
+        return "\n".join(lines) + "\n"
+
+    lines.append(f"      deviations: {len(result.failures)}")
+    for failure in result.failures:
+        location = f" {failure.path}" if failure.path else ""
+        lines.append(f"      [{failure.code}]{location}: {failure.message}")
+
+    for entry in result.entries:
+        if entry.status == "ok":
+            continue
+        if entry.status == "unlisted":
+            lines.append(
+                f"      {entry.path}: unlisted (actual {entry.actual_sha256})"
+            )
+        elif entry.status == "missing":
+            lines.append(
+                f"      {entry.path}: missing (expected {entry.expected_sha256})"
+            )
+        else:
+            lines.append(
+                f"      {entry.path}: modified "
+                f"(expected {entry.expected_sha256}, actual {entry.actual_sha256})"
+            )
+
+    return "\n".join(lines) + "\n"
+
+
+def run_self_check(as_json: bool = False) -> int:
+    """Run ``scyvera self-check`` and return its process exit code.
+
+    Exit codes are documented on the subcommand and pinned in
+    ``tests/test_self_check.py``:
+
+    - ``0``: the installed distribution matches the packaged manifest.
+    - ``1``: a verifiable manifest disagrees with the installed files
+      (modified/missing/unlisted), or the manifest version does not match the
+      installed distribution version.
+    - ``2``: self-check cannot verify anything (missing/malformed/unsupported
+      manifest, or an IO/installed-distribution problem). A missing manifest
+      is intentionally ``2``, not ``1``: it is an unverifiable install rather
+      than a detected deviation.
+
+    Args:
+        as_json: Emit the typed :class:`SelfCheckResult` JSON instead of the
+            human report.
+    """
+    try:
+        result = self_check()
+    except SelfCheckError as error:
+        print(f"scyvera self-check: error: {error}", file=sys.stderr)
+        return 2
+
+    if as_json:
+        print(result.to_json())
+    else:
+        print(_render_self_check(result), end="")
+
+    return _self_check_exit_code(result)
+
+
 def _parse_fail_under(raw: str | None) -> int | None:
     """Return a valid 0–100 threshold, or ``None`` when absent or invalid.
 
@@ -745,6 +875,9 @@ def main() -> int:
 
     if args.command == "check":
         return run_check(args.contract, tier=args.tier, schema_path=args.schema)
+
+    if args.command == "self-check":
+        return run_self_check(as_json=args.json)
 
     if args.command == "audit":
         return run_audit(

@@ -80,4 +80,5 @@ where = ["src"]
 scyvera = [
     "schemas/*/*.json",
     "packs/*.yaml",
+    "_self_manifest.json",
 ]
