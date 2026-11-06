@@ -51,6 +51,7 @@ def _write_contract(
         f"  - type: {effect}\n    resource: {name}\n"
         for effect in side_effects
     )
+    side_effect_block = side_effect_lines or "  []\n"
     path.write_text(
         "version: 1.1\n"
         "system:\n"
@@ -60,7 +61,7 @@ def _write_contract(
         "  mode: request-response\n"
         "permissions:\n"
         f"{permission_lines}"
-        f"side_effects:\n{side_effect_lines or '  []\n'}"
+        f"side_effects:\n{side_effect_block}"
         "approval_points: []\n"
         "recovery_strategy: retry\n"
         "replay_semantics: idempotent\n"
