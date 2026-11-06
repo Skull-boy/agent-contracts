@@ -25,7 +25,16 @@ from .conformance import (
     extract_contract_declarations,
     render_check,
 )
-from .enforcer import AuditEntry, ContractEnforcer
+from .enforcer import (
+    AuditEntry,
+    ContractEnforcer,
+    ContractIdentity,
+    IDENTITY_DIVERGENT_REGISTRY,
+    IDENTITY_MATCHES_REGISTRY,
+    IDENTITY_NOT_CHECKED,
+    IDENTITY_STALE_REGISTRY,
+    IDENTITY_UNREGISTERED,
+)
 from .generate import DraftContract, build_draft, write_draft
 from .packs import PACKS_DIR, PolicyPack, available_packs, load_pack
 from .report import BAND_COLORS, render_badge, render_report
@@ -75,6 +84,7 @@ __all__ = [
     "ContractDeclarations",
     "ContractEnforcer",
     "ContractFileNameError",
+    "ContractIdentity",
     "ContractRegistry",
     "ContractTamperError",
     "ContractValidationError",
@@ -88,6 +98,11 @@ __all__ = [
     "GENESIS_HASH",
     "GatewayError",
     "GitHubGateway",
+    "IDENTITY_DIVERGENT_REGISTRY",
+    "IDENTITY_MATCHES_REGISTRY",
+    "IDENTITY_NOT_CHECKED",
+    "IDENTITY_STALE_REGISTRY",
+    "IDENTITY_UNREGISTERED",
     "LIFECYCLE_DEFAULTS",
     "LintResult",
     "LintWarning",

@@ -28,12 +28,28 @@ class ContractViolationError(Exception):
 
     Scyvera operates on default-deny: any operation not declared in the contract
     is denied immediately and loudly.
+
+    ``reason`` is an additive keyword for load-time violations that are not
+    undeclared actions (for example, an M1.3/T14 symlink escape). When it is
+    supplied, it replaces the default "action not declared" message; existing
+    three-argument call sites keep their exact message and attributes.
     """
 
-    def __init__(self, action_name: str, contract_path: str, suggestion: str) -> None:
+    def __init__(
+        self,
+        action_name: str,
+        contract_path: str,
+        suggestion: str,
+        *,
+        reason: str | None = None,
+    ) -> None:
         self.action_name = action_name
         self.contract_path = str(contract_path)
         self.suggestion = suggestion
+        self.reason = reason
+        if reason is not None:
+            super().__init__(reason)
+            return
         super().__init__(
             f"Contract violation: Action '{action_name}' is not declared in '{self.contract_path}'. "
             f"Suggestion: Declare this action in the '{suggestion}' field of your contract."

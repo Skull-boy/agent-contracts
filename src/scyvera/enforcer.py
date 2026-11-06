@@ -56,9 +56,10 @@ import hashlib
 import inspect
 import json
 import logging
+import os
 from pathlib import Path
 import re
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Callable, Literal, Optional, TYPE_CHECKING
 
 from .exceptions import (
     ApprovalPendingError,
@@ -75,6 +76,9 @@ from .validator import (
     load_contract,
     validate_contract,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing-only import, avoids any runtime cycle
+    from .registry import ContractRegistry
 
 logger = logging.getLogger("scyvera.enforcer")
 
@@ -175,6 +179,111 @@ class AuditEntry:
 
 
 # =============================================================================
+# Contract Identity (M1.3, T12/T14)
+# =============================================================================
+
+IDENTITY_NOT_CHECKED = "not-checked"
+IDENTITY_MATCHES_REGISTRY = "matches-registry"
+IDENTITY_STALE_REGISTRY = "stale-registry"
+IDENTITY_DIVERGENT_REGISTRY = "divergent-registry"
+IDENTITY_UNREGISTERED = "unregistered"
+
+
+@dataclass(frozen=True)
+class ContractIdentity:
+    """Pinned identity receipt for a loaded contract (roadmap M1.3, T12/T14).
+
+    ``canonical_path`` is the :meth:`Path.resolve` target captured exactly once
+    at load time; later integrity checks read that path instead of re-resolving
+    the caller-supplied path (T14). ``requested_path`` is the absolute lexical
+    path the caller addressed; it is kept only so a post-load symlink swap can
+    be detected. ``load_hash`` is the SHA-256 of the canonical file bytes at
+    load time (T5/T12). ``resolved_symlink`` records whether a symlink was
+    walked at or below the addressed directory.
+
+    ``crosscheck`` is one of :data:`IDENTITY_NOT_CHECKED`,
+    :data:`IDENTITY_MATCHES_REGISTRY`, :data:`IDENTITY_STALE_REGISTRY`,
+    :data:`IDENTITY_DIVERGENT_REGISTRY`, or :data:`IDENTITY_UNREGISTERED`.
+    Warnings are both logged by :meth:`ContractEnforcer.load` and preserved in
+    ``warnings`` so callers can act on them without parsing log output.
+    """
+
+    canonical_path: Optional[Path]
+    requested_path: Optional[Path]
+    load_hash: str
+    resolved_symlink: bool
+    crosscheck: str = IDENTITY_NOT_CHECKED
+    registry_entry_id: Optional[str] = None
+    registry_version: Optional[int] = None
+    reseal_authorized: bool = False
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def is_registered(self) -> bool:
+        """Whether the contract matched a registry entry (current or stale)."""
+        return self.crosscheck in (
+            IDENTITY_MATCHES_REGISTRY,
+            IDENTITY_STALE_REGISTRY,
+        )
+
+
+def _absolute_lexical_path(path: str | Path) -> Path:
+    """Return an absolute, normalized path without resolving symlinks."""
+    return Path(os.path.abspath(os.fspath(path)))
+
+
+def _is_under(candidate: Path, root: Path) -> bool:
+    """Return whether ``candidate`` is at or below ``root`` (no I/O)."""
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _uses_symlink(path: Path, stop: Path) -> bool:
+    """Return whether any component from ``stop`` down to ``path`` is a link.
+
+    Walking only to the addressed directory keeps unrelated platform symlinks
+    (for example macOS ``/tmp``) out of the identity receipt while still
+    covering every component the caller actually addressed.
+    """
+    current = path
+    while True:
+        if current.is_symlink():
+            return True
+        if current == stop:
+            return False
+        parent = current.parent
+        if parent == current:
+            return False
+        current = parent
+
+
+def _coerce_registry(registry: Any) -> Optional[ContractRegistry]:
+    """Normalize the additive ``registry=`` load argument (M1.3, T12).
+
+    ``None`` disables the cross-check (today's default behavior). A
+    :class:`~scyvera.registry.ContractRegistry` is used as-is, and a string or
+    path opens the registry at that location. Anything else is a caller bug and
+    fails closed rather than silently skipping the identity check.
+    """
+    if registry is None:
+        return None
+
+    from .registry import ContractRegistry
+
+    if isinstance(registry, ContractRegistry):
+        return registry
+    if isinstance(registry, (str, Path)):
+        return ContractRegistry(path=str(registry))
+    raise TypeError(
+        "registry must be a ContractRegistry, a str/Path, or None; "
+        f"got {type(registry).__name__}"
+    )
+
+
+# =============================================================================
 # Contract Enforcer (Core Runtime Engine)
 # =============================================================================
 
@@ -192,6 +301,7 @@ class ContractEnforcer:
         integrity_hash: str,
         contract_source: str = "file",
         sealed_declaration: Optional[dict[str, Any]] = None,
+        identity: Optional[ContractIdentity] = None,
     ) -> None:
         self._contract_path = contract_path
         self._integrity_hash = integrity_hash
@@ -202,6 +312,16 @@ class ContractEnforcer:
         self._contract_source: str = contract_source
         self._sealed_declaration: Optional[dict[str, Any]] = sealed_declaration
         self._registry_entry_id: Optional[str] = None
+        if identity is None:
+            identity = ContractIdentity(
+                canonical_path=(
+                    contract_path.resolve() if contract_path is not None else None
+                ),
+                requested_path=contract_path,
+                load_hash=integrity_hash,
+                resolved_symlink=False,
+            )
+        self._identity: ContractIdentity = identity
 
     @property
     def integrity_hash(self) -> str:
@@ -215,8 +335,23 @@ class ContractEnforcer:
 
     @property
     def contract_path(self) -> Optional[Path]:
-        """Path to the loaded contract file. None for declaration contracts."""
+        """Path to the loaded contract file. None for declaration contracts.
+
+        After :meth:`load`, this is the canonical absolute path pinned once at
+        load time (M1.3/T14), not the caller's lexical path.
+        """
         return self._contract_path
+
+    @property
+    def contract_identity(self) -> ContractIdentity:
+        """Pinned load-time identity receipt (roadmap M1.3, T12/T14).
+
+        Exposes the canonical path, the load-time SHA-256, whether a symlink
+        was resolved, the optional registry cross-check verdict, and any
+        identity warnings. The value is frozen, so a caller cannot rewrite the
+        receipt after load.
+        """
+        return self._identity
 
     @property
     def contract_source(self) -> str:
@@ -245,57 +380,188 @@ class ContractEnforcer:
     # -------------------------------------------------------------------------
 
     @classmethod
-    def load(cls, path: str | Path) -> ContractEnforcer:
-        """Load and validate a contract.yaml file, freezing it for runtime enforcement.
+    def load(
+        cls,
+        path: str | Path,
+        *,
+        registry: Optional[ContractRegistry | str | Path] = None,
+        allow_unsealed_reseal: bool = False,
+    ) -> ContractEnforcer:
+        """Load and validate a contract.yaml file, freezing it for enforcement.
+
+        Implements roadmap M1.3 (contract identity pinning, T12/T14) and the
+        M1.4 dev escape hatch. The caller-supplied path is resolved to its
+        canonical absolute form exactly once; every later integrity check uses
+        that captured path, so a post-load symlink swap cannot redirect
+        verification to a different file (T14).
+
+        *Escape* means the canonical target is not under the lexical parent
+        directory of the originally passed path. A symlink that stays inside
+        that addressed directory is allowed and recorded in
+        :attr:`contract_identity`; an escaping symlink raises
+        :class:`ContractViolationError` before any content is read.
+
+        Args:
+            path: Contract file path (relative or absolute).
+            registry: Optional :class:`~scyvera.registry.ContractRegistry` (or
+                a registry path). When supplied, the load-time hash is
+                cross-checked against the latest entry for this canonical path
+                (T12) and the verdict is recorded in the frozen identity
+                receipt. File contracts have no ``node_id``, so the canonical
+                path is their stable identity key (T14); declaration
+                registrations remain ``node_id``-keyed. Default ``None`` keeps
+                the pre-M1.3 behavior exactly.
+            allow_unsealed_reseal: Documented dev/test escape hatch. When a
+                contract's canonical path is already registered but the file
+                no longer matches any registered hash (a regeneration), the
+                default is to refuse unless this flag is true. Production
+                regeneration must go through :func:`scyvera.reseal.reseal`.
+                Default ``False``; it never changes ordinary first loads.
 
         Raises:
             FileNotFoundError: If the contract file does not exist.
             ContractFileNameError: If the file uses .yml instead of .yaml.
             ContractValidationError: If structural/schema validation fails.
             ContractVersionError: If version constraints or invariants are violated.
+            ContractViolationError: If the contract escapes through a symlink,
+                or if a regenerated contract bypasses the re-seal ritual.
         """
-        contract_path = Path(path)
-        if not contract_path.exists():
-            raise FileNotFoundError(f"Contract file not found at: {contract_path}")
+        lexical_path = _absolute_lexical_path(path)
+        if not lexical_path.exists():
+            raise FileNotFoundError(f"Contract file not found at: {lexical_path}")
 
-        # Compute SHA-256 file hash before loading content (T5)
-        content_bytes = contract_path.read_bytes()
+        canonical_path = lexical_path.resolve()
+        addressed_dir = lexical_path.parent
+        if not _is_under(canonical_path, addressed_dir):
+            raise ContractViolationError(
+                action_name="load",
+                contract_path=str(lexical_path),
+                suggestion=(
+                    "Keep contract.yaml inside the addressed directory, or "
+                    "pass the real path explicitly."
+                ),
+                reason=(
+                    f"Refusing to load contract '{lexical_path}': it resolves "
+                    f"to '{canonical_path}', which is outside the addressed "
+                    f"directory '{addressed_dir}' (T14 symlink escape)."
+                ),
+            )
+        resolved_symlink = _uses_symlink(lexical_path, addressed_dir) or (
+            canonical_path != lexical_path
+        )
+
+        # Compute SHA-256 file hash before loading content (T5). The canonical
+        # path is pinned here and used for every later read.
+        content_bytes = canonical_path.read_bytes()
         integrity_hash = hashlib.sha256(content_bytes).hexdigest()
 
         # Step 1: Structural load & validation (checks .yaml naming & schema)
-        raw_data = load_contract(contract_path)
+        raw_data = load_contract(canonical_path)
         if not isinstance(raw_data, dict):
             raise ContractValidationError(
-                f"Contract file '{contract_path}' must contain a YAML mapping, got {type(raw_data).__name__}."
+                f"Contract file '{canonical_path}' must contain a YAML mapping, "
+                f"got {type(raw_data).__name__}."
             )
 
         # Step 2: Version and Invariant Check (T10)
-        cls._validate_version_invariants(raw_data, contract_path)
+        cls._validate_version_invariants(raw_data, canonical_path)
 
         # Step 3: Threat Mitigation Constraints (T7, T8)
-        cls._validate_security_constraints(raw_data, contract_path)
+        cls._validate_security_constraints(raw_data, canonical_path)
 
         # Step 4: Structural schema validation
-        val_result = validate_contract(contract_path)
+        val_result = validate_contract(canonical_path)
         if not val_result.valid:
             err_msgs = [f"{e.path}: {e.message}" if e.path else e.message for e in val_result.errors]
             raise ContractValidationError(
-                f"Contract validation failed for '{contract_path}': " + "; ".join(err_msgs),
+                f"Contract validation failed for '{canonical_path}': " + "; ".join(err_msgs),
                 errors=val_result.errors,
             )
-        cls._validate_security_constraints(raw_data, contract_path)
+        cls._validate_security_constraints(raw_data, canonical_path)
 
-        # Step 4: Apply backward compatibility defaults if omitted
+        # Step 5: Optional registry identity cross-check (M1.3/M1.4, T12).
+        registry_obj = _coerce_registry(registry)
+        crosscheck = IDENTITY_NOT_CHECKED
+        registry_entry_id: Optional[str] = None
+        registry_version: Optional[int] = None
+        identity_warnings: list[str] = []
+        if registry_obj is not None:
+            history = registry_obj.get_history_by_path(canonical_path)
+            if not history:
+                crosscheck = IDENTITY_UNREGISTERED
+                message = (
+                    f"Contract '{canonical_path}' has never been registered "
+                    f"(registry '{getattr(registry_obj, '_path', registry)}'). "
+                    "It will be enforced with an identity warning (T12)."
+                )
+                identity_warnings.append(message)
+                logger.warning(message)
+            else:
+                latest = history[-1]
+                registry_entry_id = latest.entry_id
+                registry_version = latest.version
+                if latest.contract_hash == integrity_hash:
+                    crosscheck = IDENTITY_MATCHES_REGISTRY
+                elif any(entry.contract_hash == integrity_hash for entry in history):
+                    crosscheck = IDENTITY_STALE_REGISTRY
+                    message = (
+                        f"Contract '{canonical_path}' matches an older registry "
+                        f"entry (version {latest.version} is latest). The loaded "
+                        "contract is stale relative to the registered intent "
+                        "(T12); reload the current version."
+                    )
+                    identity_warnings.append(message)
+                    logger.warning(message)
+                else:
+                    crosscheck = IDENTITY_DIVERGENT_REGISTRY
+                    message = (
+                        f"Contract '{canonical_path}' has changed since it was "
+                        "registered, but no re-seal ritual was recorded. "
+                        "Regeneration must go through scyvera.reseal.reseal() "
+                        "(T12); otherwise the contract is not governable."
+                    )
+                    if not allow_unsealed_reseal:
+                        raise ContractViolationError(
+                            action_name="load",
+                            contract_path=str(canonical_path),
+                            suggestion=(
+                                "Call scyvera.reseal.reseal() for the new "
+                                "contract, or pass allow_unsealed_reseal=True "
+                                "for a documented dev/test scaffold."
+                            ),
+                            reason=message,
+                        )
+                    identity_warnings.append(message)
+                    logger.warning(
+                        "%s Explicitly allowed by allow_unsealed_reseal=True "
+                        "(dev/test only).",
+                        message,
+                    )
+
+        identity = ContractIdentity(
+            canonical_path=canonical_path,
+            requested_path=lexical_path,
+            load_hash=integrity_hash,
+            resolved_symlink=resolved_symlink,
+            crosscheck=crosscheck,
+            registry_entry_id=registry_entry_id,
+            registry_version=registry_version,
+            reseal_authorized=allow_unsealed_reseal,
+            warnings=tuple(identity_warnings),
+        )
+
+        # Step 6: Apply backward compatibility defaults if omitted
         raw_copy = dict(raw_data)
         if "lifecycle" not in raw_copy:
             raw_copy["lifecycle"] = dict(LIFECYCLE_DEFAULTS)
 
         return cls(
-            contract_path=contract_path,
+            contract_path=canonical_path,
             raw_contract=raw_copy,
             integrity_hash=integrity_hash,
             contract_source="file",
             sealed_declaration=None,
+            identity=identity,
         )
 
     @classmethod
@@ -386,7 +652,12 @@ class ContractEnforcer:
     })
 
     @classmethod
-    def from_declaration(cls, declaration: dict[str, Any]) -> ContractEnforcer:
+    def from_declaration(
+        cls,
+        declaration: dict[str, Any],
+        *,
+        allow_unsealed_reseal: bool = False,
+    ) -> ContractEnforcer:
         """Create a fully governed ContractEnforcer from a runtime declaration dict.
 
         The resulting enforcer has identical enforcement properties to a file-based
@@ -399,6 +670,11 @@ class ContractEnforcer:
                 ``permissions`` (list of str). Optional keys: ``side_effects``,
                 ``approval_points``, ``lifecycle``, ``state``, ``recovery_strategy``,
                 ``observability``.
+            allow_unsealed_reseal: Additive M1.4 dev/test marker, default
+                ``False``. Declaration enforcers have no file identity and no
+                registry cross-check at construction, so this only records the
+                caller's intent in :attr:`contract_identity`; production
+                regeneration still goes through :func:`scyvera.reseal.reseal`.
 
         Returns:
             A sealed ContractEnforcer instance with contract_source="declaration".
@@ -577,6 +853,13 @@ class ContractEnforcer:
             integrity_hash=integrity_hash,
             contract_source="declaration",
             sealed_declaration=sealed,
+            identity=ContractIdentity(
+                canonical_path=None,
+                requested_path=None,
+                load_hash=integrity_hash,
+                resolved_symlink=False,
+                reseal_authorized=allow_unsealed_reseal,
+            ),
         )
 
     # -------------------------------------------------------------------------
@@ -586,11 +869,16 @@ class ContractEnforcer:
     def verify_integrity(self) -> bool:
         """Verify that the contract source has not been modified since load/seal time.
 
-        For file contracts: re-reads the file and compares SHA-256 hash.
+        For file contracts: re-reads the *canonical* path pinned at load time
+        and compares SHA-256 hashes (T5). Before reading, it re-resolves the
+        originally requested lexical path; if that now points to a different
+        canonical target, a symlink/path swap occurred after load and fails
+        closed with :class:`ContractTamperError` (T14).
         For declaration contracts: re-hashes the sealed declaration and compares.
 
         Raises:
-            ContractTamperError: If the content hash has changed or file is missing.
+            ContractTamperError: If the content hash has changed, the file is
+                missing, or the requested path now resolves elsewhere.
         """
         if self._contract_source == "declaration":
             content = json.dumps(self._sealed_declaration, sort_keys=True).encode()
@@ -602,8 +890,30 @@ class ContractEnforcer:
                 )
             return True
 
-        # File contract integrity check (existing behavior)
-        if not self._contract_path.exists():
+        # File contract integrity check (T5 + T14). The requested path is
+        # re-resolved only to detect a symlink swap; reads still use the
+        # canonical path captured at load, never the newly resolved target.
+        requested_path = self._identity.requested_path
+        canonical_path = self._identity.canonical_path
+        if requested_path is not None and canonical_path is not None:
+            try:
+                current_target = requested_path.resolve()
+            except OSError as exc:
+                raise ContractTamperError(
+                    f"Contract path '{requested_path}' could not be resolved "
+                    f"after load: {exc}. Reload the contract or restart the "
+                    "agent to recover."
+                ) from exc
+            if current_target != canonical_path:
+                raise ContractTamperError(
+                    f"Contract path '{requested_path}' now resolves to "
+                    f"'{current_target}', but it was pinned to "
+                    f"'{canonical_path}' at load time. A symlink or path swap "
+                    "was detected after load (T14). Reload the contract or "
+                    "restart the agent to recover."
+                )
+
+        if self._contract_path is None or not self._contract_path.exists():
             raise ContractTamperError(
                 f"Contract file '{self._contract_path}' was removed from disk after load! "
                 "Reload the contract or restart the agent to recover."
