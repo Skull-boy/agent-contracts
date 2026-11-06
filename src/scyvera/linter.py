@@ -2,7 +2,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .validator import load_contract, validate_contract
+from .validator import (
+    ContractVersion,
+    detect_contract_version,
+    load_contract,
+    validate_contract,
+)
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,26 @@ def lint_contract(contract_path: str | Path) -> LintResult:
         return LintResult(valid_structure=True, warnings=())
 
     warnings: list[LintWarning] = []
+
+    # Rule AC701: guardrails present on a pre-v1.2 contract are ignored
+    # RFC 0003 §C5 adds guardrails only in v1.2. Older schemas tolerate the
+    # top-level key (additionalProperties: true), so without this warning a
+    # team could believe a budget is enforced when the runtime ignored it.
+    version = detect_contract_version(contract)
+    if version in (ContractVersion.V1, ContractVersion.V1_1) and "guardrails" in contract:
+        warnings.append(
+            LintWarning(
+                rule_id="AC701",
+                title="Guardrails Ignored by Contract Version",
+                message=(
+                    "Contract declares a 'guardrails' block but its version is "
+                    f"{version.value}; guardrails require version 1.2 and are "
+                    "IGNORED by this contract version. Bump 'version' (or "
+                    "'contract_version') to 1.2 to enforce them."
+                ),
+                severity="warning",
+            )
+        )
 
     # Rule AC101: Permission write action without declared side effect
     permissions = contract.get("permissions", [])
