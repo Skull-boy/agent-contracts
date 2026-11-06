@@ -1,0 +1,462 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Contract v1.2",
+  "description": "Normative machine-readable schema for Agent Contracts v1.2 (additive guardrails slice over v1.1).",
+  "type": "object",
+
+  "required": [
+    "version"
+  ],
+
+  "anyOf": [
+    { "required": ["system"] },
+    { "required": ["agent"] },
+    { "required": ["workflow"] }
+  ],
+
+  "if": {
+    "properties": {
+      "lifecycle": {
+        "properties": {
+          "mode": { "const": "persistent" }
+        }
+      }
+    },
+    "required": ["lifecycle"]
+  },
+  "then": {
+    "properties": {
+      "lifecycle": {
+        "required": ["mode", "idle_behavior"]
+      }
+    }
+  },
+
+  "properties": {
+    "version": {
+      "oneOf": [
+        { "type": "number", "const": 1.2 },
+        { "type": "string", "const": "1.2" }
+      ]
+    },
+
+    "contract_version": {
+      "type": "string",
+      "description": "Explicit version discriminator for schema selection (e.g. '1.1')"
+    },
+
+    "lifecycle": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["request-response", "persistent", "scheduled"],
+          "description": "Execution model of the system. Closed enum — new modes require a spec RFC."
+        },
+        "idle_behavior": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "What the system may do between triggers. Required when mode is persistent."
+        },
+        "initiation": {
+          "type": "string",
+          "enum": ["human-only", "schedule", "self", "agent"],
+          "description": "Who or what can trigger this system to act."
+        },
+        "resumability": {
+          "type": "string",
+          "enum": ["stateless", "context-snapshot", "replay-from-log"],
+          "description": "What 'restart' means for this system."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "system": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "purpose": { "type": "string" },
+        "version": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+
+    "agent": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "purpose": { "type": "string" },
+        "version": { "type": "string" }
+      },
+      "additionalProperties": true,
+      "description": "Legacy alias for system identity"
+    },
+
+    "workflow": {
+      "type": "string",
+      "description": "Legacy v1 alias for system.name"
+    },
+
+    "domain": {
+      "type": "string",
+      "description": "Operational application domain (e.g. healthcare, finance, education, research, software, business)"
+    },
+
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+
+    "resources": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "access": { "type": "string" },
+              "scope": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+
+    "inputs": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "required": { "type": "boolean" },
+              "description": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+
+    "outputs": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+
+    "permissions": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_\\-]+:[a-zA-Z0-9_\\-:]+$",
+            "not": {
+              "enum": ["*", "all", "any"]
+            }
+          },
+          {
+            "type": "object"
+          }
+        ]
+      }
+    },
+
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string" },
+          "maximum": { "type": "number" },
+          "minimum": { "type": "number" },
+          "currency": { "type": "string" },
+          "unit": { "type": "string" },
+          "allowed": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "description": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+
+    "side_effects": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string" },
+              "resource": { "type": "string" },
+              "description": { "type": "string" },
+              "irreversible": {
+                "type": "boolean",
+                "default": false,
+                "description": "Whether this side effect is irreversible. When true and approval_points is empty, a linter warning is emitted."
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+
+    "approvals": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["action"],
+            "properties": {
+              "action": { "type": "string" },
+              "required": { "type": "boolean" },
+              "approver": { "type": "string" },
+              "condition": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "required": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+
+    "state": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["persistence"],
+          "properties": {
+            "persistence": {
+              "type": "string",
+              "enum": ["none", "session", "persistent", "ephemeral"]
+            },
+            "scope": { "type": "string" },
+            "storage": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+
+    "recovery": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["strategy"],
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": ["stop", "retry", "rollback", "human_escalation", "fallback"]
+            },
+            "details": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+
+    "replay": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["mode"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["idempotent", "non_idempotent", "conditional", "prohibited"]
+            },
+            "details": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+
+    "observability": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        {
+          "type": "object",
+          "required": ["level"],
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": ["none", "basic", "audit", "verbose"]
+            },
+            "sinks": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["model", "dataset", "document", "package", "executable", "configuration", "tool", "dependency"]
+          },
+          "source": { "type": "string" },
+          "integrity_required": { "type": "boolean" },
+          "provenance_required": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    },
+
+    "security": {
+      "type": "object",
+      "properties": {
+        "transport_security": { "type": "string" },
+        "sandbox_required": { "type": "boolean" },
+        "auth_required": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+
+    "risk": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "category": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+
+    "implementation": {
+      "type": "object",
+      "properties": {
+        "framework": { "type": "string" },
+        "runtime": { "type": "string" },
+        "language": { "type": "string" },
+        "repository": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+
+    "guardrails": {
+      "type": "object",
+      "description": "Optional behavioral bounds (RFC 0003 C5). v1.2-only; older contract versions ignore this object.",
+      "properties": {
+        "fail_closed": {
+          "type": "boolean",
+          "description": "Deny instead of permit when guardrail evaluation fails."
+        },
+        "budgets": {
+          "type": "object",
+          "required": ["side_effects_per_window", "window"],
+          "properties": {
+            "side_effects_per_window": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "window": {
+              "type": "string",
+              "pattern": "^[0-9]+(s|m|h|d)$",
+              "description": "Sliding budget window, e.g. '30m', '1h', '7d'."
+            }
+          },
+          "additionalProperties": false
+        },
+        "rate_limit": {
+          "type": "object",
+          "required": ["max_calls_per_minute"],
+          "properties": {
+            "max_calls_per_minute": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "additionalProperties": true
+}

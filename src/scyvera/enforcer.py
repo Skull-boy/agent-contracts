@@ -50,7 +50,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 import copy
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import functools
 import hashlib
 import inspect
@@ -68,6 +68,16 @@ from .exceptions import (
     ContractVersionError,
     ContractViolationError,
     DeclarationValidationError,
+    GuardrailViolationError,
+)
+from .guardrails import (
+    BUDGETS_FIELD_REFERENCE,
+    FAIL_CLOSED_FIELD_REFERENCE,
+    RATE_LIMIT_FIELD_REFERENCE,
+    RATE_LIMIT_WINDOW_SECONDS,
+    GuardrailConfigError,
+    Guardrails,
+    parse_guardrails,
 )
 from .validator import (
     LIFECYCLE_DEFAULTS,
@@ -302,6 +312,8 @@ class ContractEnforcer:
         contract_source: str = "file",
         sealed_declaration: Optional[dict[str, Any]] = None,
         identity: Optional[ContractIdentity] = None,
+        guardrails: Optional[Guardrails] = None,
+        clock: Optional[Callable[[], datetime]] = None,
     ) -> None:
         self._contract_path = contract_path
         self._integrity_hash = integrity_hash
@@ -322,6 +334,20 @@ class ContractEnforcer:
                 resolved_symlink=False,
             )
         self._identity: ContractIdentity = identity
+        # RFC 0003 §C5 guardrails (roadmap M2.6). Omitted block -> None, and
+        # every guardrail code path below is skipped, so behavior is exactly
+        # the pre-M2.6 behavior. Counters are per enforcer instance / process.
+        self._guardrails: Optional[Guardrails] = guardrails
+        if clock is not None and not callable(clock):
+            raise TypeError(
+                "clock must be a callable returning datetime, or None; "
+                f"got {type(clock).__name__}"
+            )
+        self._clock: Callable[[], datetime] = clock or (
+            lambda: datetime.now(timezone.utc)
+        )
+        self._guardrail_attempts: list[datetime] = []
+        self._guardrail_admissions: list[datetime] = []
 
     @property
     def integrity_hash(self) -> str:
@@ -359,6 +385,16 @@ class ContractEnforcer:
         return self._contract_source
 
     @property
+    def guardrails(self) -> Optional[Guardrails]:
+        """Frozen RFC 0003 §C5 guardrail record, or ``None`` when omitted.
+
+        An empty ``guardrails: {}`` block yields a :class:`Guardrails` value
+        with ``fail_closed=False``, no budgets, and no rate limit — an explicit
+        no-op that behaves exactly like an omitted block.
+        """
+        return self._guardrails
+
+    @property
     def node_id(self) -> Optional[str]:
         """Returns the node_id if declared, None otherwise.
 
@@ -386,6 +422,7 @@ class ContractEnforcer:
         *,
         registry: Optional[ContractRegistry | str | Path] = None,
         allow_unsealed_reseal: bool = False,
+        clock: Optional[Callable[[], datetime]] = None,
     ) -> ContractEnforcer:
         """Load and validate a contract.yaml file, freezing it for enforcement.
 
@@ -417,6 +454,11 @@ class ContractEnforcer:
                 default is to refuse unless this flag is true. Production
                 regeneration must go through :func:`scyvera.reseal.reseal`.
                 Default ``False``; it never changes ordinary first loads.
+            clock: Optional callable returning a timezone-aware
+                ``datetime``. Defaults to ``datetime.now(timezone.utc)`` and is
+                used ONLY for RFC 0003 §C5 guardrail windows, so tests can
+                prove window expiry with zero sleeps. Audit timestamps always
+                use the real wall clock.
 
         Raises:
             FileNotFoundError: If the contract file does not exist.
@@ -478,6 +520,17 @@ class ContractEnforcer:
                 errors=val_result.errors,
             )
         cls._validate_security_constraints(raw_data, canonical_path)
+
+        # Step 4b: Parse optional v1.2 guardrails (RFC 0003 §C5, M2.6).
+        # The schema already enforced the shape; parsing here produces the
+        # frozen runtime record and fails closed if the two ever diverge.
+        try:
+            guardrails = parse_guardrails(raw_data.get("guardrails"))
+        except GuardrailConfigError as exc:
+            raise ContractValidationError(
+                f"Contract validation failed for '{canonical_path}': "
+                f"invalid guardrails block: {exc}"
+            ) from exc
 
         # Step 5: Optional registry identity cross-check (M1.3/M1.4, T12).
         registry_obj = _coerce_registry(registry)
@@ -562,6 +615,8 @@ class ContractEnforcer:
             contract_source="file",
             sealed_declaration=None,
             identity=identity,
+            guardrails=guardrails,
+            clock=clock,
         )
 
     @classmethod
@@ -582,7 +637,7 @@ class ContractEnforcer:
         if version is None:
             raise ContractVersionError(
                 f"Unsupported or unrecognized contract version in '{path}'. "
-                f"Expected '1' or '1.1', found version={ver_num}, contract_version={cv_explicit}."
+                f"Expected '1', '1.1', or '1.2', found version={ver_num}, contract_version={cv_explicit}."
             )
 
     @classmethod
@@ -649,6 +704,7 @@ class ContractEnforcer:
     _DECLARATION_KNOWN_KEYS = frozenset({
         "node_id", "permissions", "side_effects", "approval_points",
         "lifecycle", "state", "recovery_strategy", "observability",
+        "guardrails",
     })
 
     @classmethod
@@ -657,6 +713,7 @@ class ContractEnforcer:
         declaration: dict[str, Any],
         *,
         allow_unsealed_reseal: bool = False,
+        clock: Optional[Callable[[], datetime]] = None,
     ) -> ContractEnforcer:
         """Create a fully governed ContractEnforcer from a runtime declaration dict.
 
@@ -669,12 +726,15 @@ class ContractEnforcer:
                 are ``node_id`` (str matching ``^[a-z][a-z0-9-]*-v[0-9]+$``) and
                 ``permissions`` (list of str). Optional keys: ``side_effects``,
                 ``approval_points``, ``lifecycle``, ``state``, ``recovery_strategy``,
-                ``observability``.
+                ``observability``, and the additive v1.2 ``guardrails`` block.
             allow_unsealed_reseal: Additive M1.4 dev/test marker, default
                 ``False``. Declaration enforcers have no file identity and no
                 registry cross-check at construction, so this only records the
                 caller's intent in :attr:`contract_identity`; production
                 regeneration still goes through :func:`scyvera.reseal.reseal`.
+            clock: Optional guardrail clock, identical to :meth:`load`'s
+                ``clock`` parameter. Used only for RFC 0003 §C5 windows; audit
+                timestamps keep the real wall clock.
 
         Returns:
             A sealed ContractEnforcer instance with contract_source="declaration".
@@ -821,6 +881,15 @@ class ContractEnforcer:
                 reason=f"must be a dict, got {type(observability).__name__}",
             )
 
+        # --- guardrails (optional, v1.2 / RFC 0003 §C5) ---
+        try:
+            guardrails = parse_guardrails(declaration.get("guardrails"))
+        except GuardrailConfigError as exc:
+            raise DeclarationValidationError(
+                field="guardrails",
+                reason=str(exc),
+            ) from exc
+
         # --- Deep copy and seal ---
         sealed = copy.deepcopy(declaration)
 
@@ -846,6 +915,8 @@ class ContractEnforcer:
             raw_contract["recovery_strategy"] = recovery_strategy
         if observability is not None:
             raw_contract["observability"] = observability
+        if "guardrails" in sealed:
+            raw_contract["guardrails"] = sealed["guardrails"]
 
         return cls(
             contract_path=None,
@@ -860,6 +931,8 @@ class ContractEnforcer:
                 resolved_symlink=False,
                 reseal_authorized=allow_unsealed_reseal,
             ),
+            guardrails=guardrails,
+            clock=clock,
         )
 
     # -------------------------------------------------------------------------
@@ -1019,6 +1092,12 @@ class ContractEnforcer:
         """Perform pre-execution contract evaluation."""
         now = datetime.now(timezone.utc).isoformat()
 
+        # RFC 0003 §C5 (M2.6): every gated attempt is counted for the rate
+        # limiter before any decision, so denied and pending calls consume the
+        # same budget as allowed ones. Guardrail *evaluation* still happens
+        # after the contract steps below; this only updates in-memory counters.
+        guardrail_now = self._record_guardrail_attempt(action_name, action_type, now)
+
         # Step 0: Verify integrity first (Threat T5 — fail closed on tamper)
         try:
             self.verify_integrity()
@@ -1076,6 +1155,12 @@ class ContractEnforcer:
             self._audit_log.append(entry)
             raise ApprovalPendingError(action_name=action_name, approval_config=approval_config)
 
+        # Step 2b: Optional v1.2 guardrails (RFC 0003 §C5, M2.6). Evaluated
+        # only for an otherwise-admissible action, so an undeclared action or a
+        # pending approval is never masked by a guardrail denial.
+        if guardrail_now is not None:
+            self._enforce_guardrails(action_name, action_type, guardrail_now, now)
+
         # Step 3: Allowed execution
         entry = AuditEntry(
             timestamp=now,
@@ -1086,6 +1171,206 @@ class ContractEnforcer:
             contract_field_reference=field_ref,
         )
         self._audit_log.append(entry)
+
+    # -------------------------------------------------------------------------
+    # Guardrail Enforcement (RFC 0003 §C5, roadmap M2.6)
+    # -------------------------------------------------------------------------
+
+    def _guardrail_contract_path(self) -> str:
+        """Return a deterministic contract label for guardrail messages."""
+        if self._contract_source == "declaration":
+            return self.node_id or "<declaration>"
+        if self._contract_path is not None:
+            return self._contract_path.name
+        return "<unknown>"
+
+    def _audit_guardrail_denial(
+        self,
+        action_name: str,
+        action_type: str,
+        timestamp: str,
+        field_reference: str,
+        reason: str,
+    ) -> None:
+        """Append the DENIED audit entry shared by all guardrail paths."""
+        self._audit_log.append(
+            AuditEntry(
+                timestamp=timestamp,
+                action_name=action_name,
+                action_type=action_type,
+                decision="DENIED",
+                reason=reason,
+                contract_field_reference=field_reference,
+            )
+        )
+
+    def _record_guardrail_attempt(
+        self,
+        action_name: str,
+        action_type: str,
+        audit_timestamp: str,
+    ) -> Optional[datetime]:
+        """Record one gated attempt and return the guardrail clock reading.
+
+        Returns ``None`` when guardrails are omitted, or when clock/state
+        evaluation failed and ``fail_closed`` is false (RFC 0003 §C5 permits
+        that explicit fail-open choice). With ``fail_closed: true`` the failure
+        is audited as ``DENIED`` and raises :class:`GuardrailViolationError`.
+        """
+        if self._guardrails is None:
+            return None
+
+        try:
+            moment = self._clock()
+            if not isinstance(moment, datetime):
+                raise TypeError(
+                    "guardrail clock must return datetime, got "
+                    f"{type(moment).__name__}"
+                )
+            cutoff = moment - timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
+            self._guardrail_attempts = [
+                attempt
+                for attempt in self._guardrail_attempts
+                if attempt >= cutoff
+            ]
+            self._guardrail_attempts.append(moment)
+            return moment
+        except Exception as error:  # noqa: BLE001 - fail-closed boundary
+            if self._guardrails.fail_closed:
+                reason = (
+                    f"Guardrail evaluation failed for action '{action_name}' "
+                    f"and fail_closed is true: {error}. Denying by policy."
+                )
+                self._audit_guardrail_denial(
+                    action_name,
+                    action_type,
+                    audit_timestamp,
+                    FAIL_CLOSED_FIELD_REFERENCE,
+                    reason,
+                )
+                raise GuardrailViolationError(
+                    "fail_closed",
+                    action_name,
+                    reason=reason,
+                    contract_path=self._guardrail_contract_path(),
+                ) from error
+            logger.warning(
+                "Guardrail evaluation failed for action '%s' (fail_closed is "
+                "false; permitting): %s",
+                action_name,
+                error,
+            )
+            return None
+
+    def _enforce_guardrails(
+        self,
+        action_name: str,
+        action_type: str,
+        moment: datetime,
+        audit_timestamp: str,
+    ) -> None:
+        """Apply rate-limit then budget checks for one admissible action.
+
+        Rate limiting counts every gated attempt. Side-effect budgets count
+        only *admitted* ``side_effect`` executions, so permission/read calls
+        never consume the budget and a pending approval never does either.
+        """
+        guardrails = self._guardrails
+        if guardrails is None:  # pragma: no cover - caller checks this
+            return
+
+        try:
+            rate_limit = guardrails.rate_limit
+            if rate_limit is not None:
+                cutoff = moment - timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
+                recent = [
+                    attempt
+                    for attempt in self._guardrail_attempts
+                    if attempt >= cutoff
+                ]
+                self._guardrail_attempts = recent
+                if len(recent) > rate_limit.max_calls_per_minute:
+                    reason = (
+                        f"Guardrail 'rate_limit' denied action '{action_name}': "
+                        f"max_calls_per_minute={rate_limit.max_calls_per_minute} "
+                        f"exceeded ({len(recent)} gated attempts in the "
+                        f"trailing {RATE_LIMIT_WINDOW_SECONDS}s window)."
+                    )
+                    self._audit_guardrail_denial(
+                        action_name,
+                        action_type,
+                        audit_timestamp,
+                        RATE_LIMIT_FIELD_REFERENCE,
+                        reason,
+                    )
+                    raise GuardrailViolationError(
+                        "rate_limit",
+                        action_name,
+                        reason=reason,
+                        limit=rate_limit.max_calls_per_minute,
+                        window=f"{RATE_LIMIT_WINDOW_SECONDS}s",
+                        contract_path=self._guardrail_contract_path(),
+                    )
+
+            budgets = guardrails.budgets
+            if budgets is not None and action_type == "side_effect":
+                cutoff = moment - timedelta(seconds=budgets.window_seconds)
+                admitted = [
+                    admission
+                    for admission in self._guardrail_admissions
+                    if admission >= cutoff
+                ]
+                self._guardrail_admissions = admitted
+                if len(admitted) >= budgets.side_effects_per_window:
+                    reason = (
+                        f"Guardrail 'budgets' denied action '{action_name}': "
+                        f"side_effects_per_window="
+                        f"{budgets.side_effects_per_window} reached within "
+                        f"window '{budgets.window}'."
+                    )
+                    self._audit_guardrail_denial(
+                        action_name,
+                        action_type,
+                        audit_timestamp,
+                        BUDGETS_FIELD_REFERENCE,
+                        reason,
+                    )
+                    raise GuardrailViolationError(
+                        "budgets",
+                        action_name,
+                        reason=reason,
+                        limit=budgets.side_effects_per_window,
+                        window=budgets.window,
+                        contract_path=self._guardrail_contract_path(),
+                    )
+                self._guardrail_admissions.append(moment)
+        except GuardrailViolationError:
+            raise
+        except Exception as error:  # noqa: BLE001 - fail-closed boundary
+            if guardrails.fail_closed:
+                reason = (
+                    f"Guardrail evaluation failed for action '{action_name}' "
+                    f"and fail_closed is true: {error}. Denying by policy."
+                )
+                self._audit_guardrail_denial(
+                    action_name,
+                    action_type,
+                    audit_timestamp,
+                    FAIL_CLOSED_FIELD_REFERENCE,
+                    reason,
+                )
+                raise GuardrailViolationError(
+                    "fail_closed",
+                    action_name,
+                    reason=reason,
+                    contract_path=self._guardrail_contract_path(),
+                ) from error
+            logger.warning(
+                "Guardrail evaluation failed for action '%s' (fail_closed is "
+                "false; permitting): %s",
+                action_name,
+                error,
+            )
 
     def _is_action_declared(self, action_name: str, action_type: str) -> tuple[bool, str]:
         """Check if an action is declared in the loaded contract."""

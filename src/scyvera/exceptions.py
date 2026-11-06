@@ -66,6 +66,44 @@ class ContractTamperError(Exception):
         super().__init__(message)
 
 
+class GuardrailViolationError(ContractViolationError):
+    """Raised when an optional v1.2 guardrail denies an otherwise-gated call.
+
+    Implements RFC 0003 §C5. This is a :class:`ContractViolationError`
+    subclass, so existing ``except ContractViolationError`` blocks keep
+    catching it unchanged. The extra attributes identify which guardrail
+    fired and the limit/window that was exceeded.
+
+    ``guardrail`` is one of ``"rate_limit"``, ``"budgets"``, or
+    ``"fail_closed"``. ``limit`` and ``window`` are populated where the
+    guardrail has them (``None`` for ``fail_closed``). Messages contain no
+    wall-clock value, so repeated denials serialize deterministically.
+    """
+
+    def __init__(
+        self,
+        guardrail: str,
+        action_name: str,
+        *,
+        reason: str,
+        limit: int | None = None,
+        window: str | None = None,
+        contract_path: str = "contract",
+    ) -> None:
+        self.guardrail = guardrail
+        self.limit = limit
+        self.window = window
+        super().__init__(
+            action_name=action_name,
+            contract_path=contract_path,
+            suggestion=(
+                f"Adjust 'guardrails.{guardrail}' in contract.yaml, wait for "
+                f"the window to pass, or remove the guardrail block."
+            ),
+            reason=reason,
+        )
+
+
 class ApprovalPendingError(Exception):
     """Raised when an action matches an approval boundary and requires human confirmation.
 

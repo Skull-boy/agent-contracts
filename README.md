@@ -660,7 +660,7 @@ agent-contracts/
 
 ### Available Now
 
-- **Agent Contracts v1 & v1.1 Specifications**: schemas and field references for identity, capabilities, permissions, constraints, side effects, approvals, dependencies, lifecycle, recovery, replay, observability, and risk.
+- **Agent Contracts v1 & v1.1 Specifications**: schemas and field references for identity, capabilities, permissions, constraints, side effects, approvals, dependencies, lifecycle, recovery, replay, observability, and risk. A v1.2 slice adds an optional `guardrails` object (fail-closed, per-window side-effect budgets, and per-minute rate limits) as a strict superset of v1.1.
 - **Audit funnel (`scyvera audit`)**: deterministic AUxxx scan, band-first **Blast Radius** report, `--badge`, `--fail-under`, `--generate` drafts, and `--pack` Policy Packs.
 - **Conformance tiers (`scyvera check`)**: Tier 0 structural superset of `validate` + `lint`; Tier 1 static adapters for **n8n** and **LangGraph** with `T101`/`T102`/`T103` findings. Tier 2 (runtime trace) is reserved and fails loudly.
 - **Static validation and lint**: CLI and Python API (`validate_contract`, `lint_contract`) across both schema versions.
