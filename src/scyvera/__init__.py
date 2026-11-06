@@ -1,6 +1,14 @@
 from .builder import AgentIdentity, Contract, SystemIdentity
 from .audit import AuditReport, AuditError, SymlinkTargetError, scan_tree
 from .audit_rules import RULES, SEVERITY_WEIGHTS, AuditRule, Finding
+from .chain import (
+    GENESIS_HASH,
+    ChainInterval,
+    canonical_entry_bytes,
+    compute_chain_intervals,
+    next_prev_hash,
+    verify_chain_entries,
+)
 from .conformance import (
     CheckReport,
     CheckTier,
@@ -73,9 +81,11 @@ __all__ = [
     "ContractVersion",
     "ContractVersionError",
     "ContractViolationError",
+    "ChainInterval",
     "DeclarationValidationError",
     "DraftContract",
     "Finding",
+    "GENESIS_HASH",
     "GatewayError",
     "GitHubGateway",
     "LIFECYCLE_DEFAULTS",
@@ -103,17 +113,21 @@ __all__ = [
     "apply_lifecycle_defaults",
     "available_packs",
     "build_draft",
+    "canonical_entry_bytes",
     "canonical_service",
     "check_contract",
+    "compute_chain_intervals",
     "declaration_token",
     "detect_contract_version",
     "extract_contract_declarations",
     "lint_contract",
     "load_pack",
+    "next_prev_hash",
     "render_badge",
     "render_check",
     "render_report",
     "scan_tree",
     "validate_contract",
+    "verify_chain_entries",
     "write_draft",
 ]
