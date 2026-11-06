@@ -12,18 +12,17 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 [![License](https://img.shields.io/github/license/Skull-boy/agent-contracts)](./LICENSE)
 [![Tests](https://github.com/Skull-boy/agent-contracts/actions/workflows/validate-contracts.yml/badge.svg)](https://github.com/Skull-boy/agent-contracts/actions/workflows/validate-contracts.yml)
 [![PyPI](https://img.shields.io/pypi/v/scyvera)](https://pypi.org/project/scyvera/)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.10%E2%80%933.14-blue)](pyproject.toml)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#-install-and-platform-support)
 [![Security Policy](https://img.shields.io/badge/security-policy-blue)](./SECURITY.md)
 [![Blast Radius](https://img.shields.io/badge/blast%20radius-shielded-green)](#-the-2-minute-demo)
-
-<!-- TODO(G1): drop assets/scyvera-audit.gif (terminal capture of a blocked agent action, <2 MB) — recorded by maintainer, see roadmap G2 -->
 </div>
 
 ---
 
-> **Try it, read nothing first:** `pip install "scyvera @ git+https://github.com/Skull-boy/agent-contracts.git" && scyvera audit .`
+> **Try it, read nothing first:** `pip install scyvera && scyvera audit .`
 >
-> The audit funnel is on `main` and ships in the 1.3.0 release. Installs from 1.2.0 and earlier provide validation, linting, and enforcement only.
+> **Version status:** PyPI `1.3.0` ships the audit funnel, Blast Radius report, contract drafts, and Policy Packs. `main` adds the hash-chained registry, contract identity pinning, the re-seal ritual, and `scyvera check --tier 0/1`. The next release adds `scyvera self-check` and signed release attestations.
 
 ---
 
@@ -38,7 +37,6 @@ And this is `scyvera audit .` run inside the Scyvera repository itself:
 ```text
 WARN  .
       Blast Radius: 92/100 (Shielded)
-      Scanned 154 files (5 manifests, 9 workflow files, 44 source files, 6 shell scripts, 2 container files, 1 env file, 36 doc files, 51 other files)
 
       MEDIUM    [AU-N8N-001] n8n workflow with external writes
                 implementations/n8n/competitor-feature-parity-watcher/workflow.json:169 + 3 more
@@ -120,18 +118,152 @@ The pack's constraints win over heuristic-derived entries; finding-only extras a
 
 ---
 
+## 💻 Install and Platform Support
+
+```bash
+pip install scyvera
+
+# Optional adapters, only if you use the gated gateways
+pip install "scyvera[github]"     # PyGithub
+pip install "scyvera[qdrant]"     # qdrant-client
+pip install "scyvera[all]"        # both
+```
+
+Scyvera is a pure-Python wheel (`py3-none-any`): no compiler, no native extension, no OS-specific build step.
+
+| Platform | Status | Notes |
+|---|---|---|
+| **Windows 10/11** | ✅ tested in CI | Narrow-console safe: the report falls back from `—` to `->` on cp437/cp850. Symlink tests skip where the OS denies link creation. |
+| **Linux** | ✅ tested in CI | `ubuntu-latest`, all supported Python versions. |
+| **macOS** | ✅ tested in CI | `macos-latest`, all supported Python versions. |
+| **Python** | ✅ 3.10 – 3.14 | 15-cell matrix: 3 operating systems × 5 Python versions, `fail-fast: false`. |
+
+From a checkout instead:
+
+```bash
+git clone https://github.com/Skull-boy/agent-contracts.git
+cd agent-contracts
+pip install -e ".[dev]"
+scyvera audit .
+```
+
+### Verify the installed distribution
+
+The command that makes an install self-checking:
+
+```bash
+scyvera self-check
+```
+
+```text
+PASS  self-check  scyvera 1.3.0
+      manifest: 1
+      verified: 26 files
+```
+
+`self-check` verifies the **installed** package — never the current directory — against the `_self_manifest.json` shipped inside the wheel. It resolves the package through `importlib.resources`, cross-checks the manifest version against installed distribution metadata, and fails closed:
+
+- a **modified** runtime file (any byte change) fails and is named;
+- a **missing** listed file fails;
+- an **unlisted addition** fails — a dropped-in module override is tampering surface (T5-consistent);
+- a missing, malformed, or unsupported manifest is **unverifiable**, not silently OK.
+
+Exit codes are deliberate:
+
+| Code | Meaning |
+|---|---|
+| `0` | Every listed file matches; no unlisted additions. |
+| `1` | A verifiable manifest disagrees with the installed files, or manifest/installed versions differ. |
+| `2` | Unverifiable: missing/malformed/unsupported manifest, or an IO/installed-distribution problem. A pre-manifest install is `2`, not `1`. |
+
+Machine-readable output:
+
+```bash
+scyvera self-check --json
+```
+
+The JSON report is `self_check_version: 1` and uses the same conventions as the audit report (deterministic, no timestamps).
+
+### Signed releases and the attestation bundle
+
+Every tag release is attested with Sigstore build provenance. The release page carries:
+
+| Artifact | What it proves |
+|---|---|
+| `scyvera-<version>-py3-none-any.whl` | The exact wheel published to PyPI. |
+| `scyvera.cdx.json` | A deterministic CycloneDX **1.5** SBOM: scyvera, its declared runtime dependencies, and optional `pydantic` when present. |
+| `release-manifest.json` | RFC 0003 §C6 bundle binding `{wheel_hash, schema_version, adapter_floors, self_check_manifest}`. |
+
+The attested wheel is the published wheel **by construction**: the attestation workflow downloads the completed publish run's `dist` artifact instead of rebuilding, installs that wheel in a clean venv, regenerates the self manifest from the installed tree, runs `scyvera self-check` as a gate, and signs the result. It never attests bytes that were not uploaded.
+
+Verify a download yourself:
+
+```bash
+gh attestation verify dist/scyvera-<version>-py3-none-any.whl \
+  --repo Skull-boy/agent-contracts
+```
+
+---
+
+## 🔍 Conformance: Check What the Code Actually Does
+
+`scyvera check` implements the RFC 0003 §C3 tiers. Tier 0 is a strict superset of `validate` + `lint`; Tier 1 inspects implementation source against the declared contract.
+
+```bash
+# Tier 0 — structural: schema errors + ACxxx semantic warnings in one report
+scyvera check contract.yaml
+
+# Tier 1 — static: an n8n workflow or LangGraph implementation directory
+scyvera check implementations/n8n/duplicate-issue-detector --tier 1
+scyvera check implementations/langgraph/duplicate-issue-detector --tier 1
+```
+
+```text
+FAIL  implementations/n8n/duplicate-issue-detector/contract.yaml (tier 1 (static): 2 tier-1 finding(s))
+      [T101] undeclared action: node 'Embed New Issue (Ollama)' reaches 'local-llm' ...
+
+WARN  implementations/langgraph/duplicate-issue-detector/contract.yaml (tier 1 (static): 6 tier-1 finding(s))
+      [T103] unused declaration: contract declares a permission for 'github.close' ...
+```
+
+The n8n reference intentionally reports `T101` for its two Ollama endpoints; the LangGraph reference is `T103`-only, which is warn-only and exits `0`. Both behaviours are pinned in `tests/test_tier1_n8n.py` and `tests/test_tier1_langgraph.py`.
+
+Tier behaviour is explicit, never silent:
+
+- `--tier auto` (default) resolves to the highest implemented tier and prints a `note:` saying which one it chose.
+- `--tier 1` dispatches to the adapter that claims the target (n8n workflow JSON or LangGraph Python source). An unclaimed target exits `2` with one actionable line.
+- `--tier 2` (runtime trace) is reserved and fails loudly with exit `2` until the trace adapter ships.
+
+Tier 1 finding taxonomy:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `T101` | error | **Undeclared action** — the implementation reaches an external service the contract does not declare. |
+| `T102` | error | **Ungated call** — a write-capable path is reachable from a trigger without traversing a declared approval gate. |
+| `T103` | warning | **Unused declaration** — the contract declares something the implementation never exercises. Additive symmetry, never fails a check on its own. |
+
+Exit codes: `0` pass (or warn-only), `1` a T101/error-severity T102, `2` usage/IO or an unavailable tier.
+
+The adapters never import or execute the target: n8n is parsed as JSON, LangGraph as Python `ast`. Unknown externally-reaching node types, unknown hosts, and unparseable source fail closed as findings rather than being skipped.
+
+---
+
 ## 🛡️ Governing for Real
 
 Scanning shows what the environment can do. This section turns that into enforcement: the draft from step 2d is a normal v1.1 contract, so it loads into the enforcer, and the registry makes the boundary provable after the fact.
 
-Scyvera provides four complementary governance layers:
+Scyvera provides complementary governance layers:
 
 | Layer | Component | Responsibility | Trust Level |
 |---|---|---|---|
-| **Tier 1 & 2: Static Verification** | `validate_contract()`, `lint_contract()` | Validates that a `contract.yaml` is structurally and semantically well-formed against JSON schemas and semantic rules (ACxxx taxonomy). | Declaration conformance |
-| **Runtime Enforcement Engine** | `ContractEnforcer` (`load()`, `from_declaration()`) | Gates Python calls against declared permissions and side effects using **Default-Deny** semantics. Intercepts execution on approval boundaries (`ApprovalPendingError`). Cryptographically seals contracts with SHA-256. | Execution boundary enforcement |
-| **Gateway Boundary Isolation** | `BaseGateway`, `GitHubGateway`, `QdrantGateway` | Single enforcement boundary: holds credentials privately and gates every external API call, structurally preventing gate bypass. | Credential & API isolation |
-| **Contract Registry** | `ContractRegistry`, `RegistryEntry` | Append-only, versioned, persistent store of all contracts governed by Scyvera. Answers what contract governed which agent at any historical moment (`get_at_time()`). | Cryptographic provenance & audit |
+| **Tier 0: Structural** | `validate_contract()`, `lint_contract()` | Validates that `contract.yaml` is structurally and semantically well-formed against JSON Schemas and the ACxxx rules. | Declaration conformance |
+| **Tier 1: Static** | `check_contract()`, `Tier1Adapter` | Compares exercised services and approval paths in n8n/LangGraph code against the contract. | Static conformance |
+| **Runtime Enforcement** | `ContractEnforcer` (`load()`, `from_declaration()`) | Gates Python calls against declared permissions and side effects with **Default-Deny**; interrupts at approval boundaries; seals contracts with SHA-256. | Execution boundary |
+| **Identity Pinning** | `ContractIdentity`, `verify_integrity()` | Pins the canonical path and load-time hash, refuses symlink escapes, and detects post-load path swaps. | Substitution defense (T5/T12/T14) |
+| **Gateway Isolation** | `BaseGateway`, `GitHubGateway`, `QdrantGateway` | Holds credentials privately and gates every external API call, structurally preventing gate bypass. | Credential & API isolation |
+| **Provenance Registry** | `ContractRegistry`, `RegistryEntry` | Append-only, hash-chained, versioned store. Answers what contract governed which agent at any historical moment. | Cryptographic provenance (T13) |
+| **Re-seal Ritual** | `reseal()` | The only sanctioned regeneration path: validate → lint → re-register → fresh sealed enforcer, with an audit record. | Authoring integrity (T12) |
+| **Distribution Integrity** | `self_check()`, release attestation | Verifies the installed runtime files against the signed manifest and binds the wheel to Sigstore provenance + SBOM. | Install integrity (T11) |
 
 ### Contract CLI
 
@@ -153,7 +285,7 @@ PASS  contract.yaml (tier 0 (structural): 0 schema errors, 0 semantic warnings)
 
 `lint` runs the Tier 2 ACxxx rules: unbounded write permissions (AC101), high-risk systems without approvals (AC201), vague idle behavior (AC301), and irreversible actions without an approval boundary (AC302).
 
-`check` (RFC 0003 §C3) runs the Tier 0 conformance check — `validate` + `lint` in one report, with `--tier {0,1,2,auto}` resolving to the highest implemented tier and never degrading silently. Tier 1 (`--tier 1`) now inspects n8n workflows and LangGraph implementations, comparing exercised services and approval gates against `contract.yaml` and reporting T101/T102/T103 findings (roadmap M2.2/M2.3).
+`check` runs the conformance tiers described above. Use it in CI in place of the two separate commands when you want one auditor-readable report.
 
 ### Runtime Enforcer
 
@@ -162,10 +294,9 @@ The `ContractEnforcer` protects your agent's execution boundaries in Python by e
 #### File-based contract gating
 
 ```python
-from pathlib import Path
 from scyvera import ContractEnforcer, ContractViolationError, ApprovalPendingError
 
-# 1. Load, validate, and freeze contract.yaml from disk
+# 1. Load, validate, pin identity, and freeze contract.yaml from disk
 enforcer = ContractEnforcer.load("implementations/n8n/duplicate-issue-detector/contract.yaml")
 
 # 2. Gate sensitive tools and operations
@@ -191,8 +322,18 @@ except ContractViolationError as e:
 for entry in enforcer.get_audit_log():
     print(f"[{entry.timestamp}] {entry.decision} - {entry.action_name} ({entry.reason})")
 
-# 6. Verify file integrity on disk (Threat T5 defense)
-enforcer.verify_integrity()  # Raises ContractTamperError if contract.yaml was modified
+# 6. Verify file integrity on disk (T5/T14 defense)
+enforcer.verify_integrity()  # raises on modification or a post-load symlink swap
+```
+
+The pinned identity is available for inspection:
+
+```python
+identity = enforcer.contract_identity
+print(identity.canonical_path)      # resolved once at load time (None for declarations)
+print(identity.load_hash)           # SHA-256 of the sealed contract
+print(identity.resolved_symlink)    # True if a symlink was walked at/below the addressed dir
+print(identity.crosscheck)          # matches-registry / stale-registry / unregistered / ...
 ```
 
 #### Dynamic runtime declarations (no YAML file required)
@@ -230,7 +371,7 @@ In agent architectures, security boundaries fail if agents can bypass enforcers 
 - **Single Enforcement Boundary**: API credentials and raw SDK clients (e.g. `PyGithub`, `qdrant-client`) are encapsulated privately within the gateway. No outside node holds credentials or raw clients.
 - **Structural Gating**: Every public method is decorated per-instance with `@enforcer.gate(...)`. Any undeclared or unapproved action halts execution immediately via `ContractViolationError` or `ApprovalPendingError`.
 - **Exception Normalization**: Client exceptions are caught and wrapped into `GatewayError` to ensure deterministic fault isolation.
-- **CI Linting**: Scyvera includes a GitHub Actions workflow (`.github/workflows/lint-gateway.yml`) that scans the codebase and fails the build if any raw API client is imported outside `gateway.py`.
+- **CI Linting**: `.github/workflows/lint-gateway.yml` scans the codebase and fails the build if any raw API client is imported outside `gateway.py`.
 
 Install optional adapters with `pip install "scyvera[github]"`, `pip install "scyvera[qdrant]"`, or `pip install "scyvera[all]"`.
 
@@ -253,9 +394,11 @@ except ContractViolationError as e:
     print(f"Blocked by Scyvera: {e}")
 ```
 
-### Contract Registry
+### Contract Registry: Hash-Chained Provenance
 
-The `ContractRegistry` provides a versioned, append-only, persistent record of every contract that has governed any agent in your ecosystem. It answers: *"What contract governed this agent at this exact moment, and has that contract ever changed?"*
+The `ContractRegistry` is a versioned, append-only, persistent record of every contract that has governed any agent in your ecosystem. It answers: *"What contract governed this agent at this exact moment, and has that contract ever changed?"*
+
+Every new entry carries `prev_hash`, the SHA-256 of the previous entry's canonical bytes (or a fixed genesis hash). The chain is recomputable from `registry.jsonl` alone, so a break, splice, reorder, edit, or fabricated insertion fails closed — the T13 mitigation.
 
 ```python
 from scyvera import ContractEnforcer, ContractRegistry
@@ -274,19 +417,48 @@ entry = enforcer.register(registry)
 print(f"Registered Version: {entry.version}")
 print(f"Registry Entry ID: {entry.entry_id}")
 print(f"Integrity Hash: {entry.contract_hash}")
+print(f"Chain Link: {entry.prev_hash}")
 
-# 3. Query the latest contract for an agent
+# 3. Recompute and verify the chain from the file alone
+registry.verify_chain()  # raises RegistryError on any break
+
+# 4. Query the latest contract for an agent
 latest_entry = registry.get_latest("triage-agent-v1")
 
-# 4. Time-travel audit query: get the contract active at an exact historical timestamp
+# 5. Time-travel audit query: the contract active at an exact historical timestamp
 historical_entry = registry.get_at_time(
     node_id="triage-agent-v1",
     timestamp="2026-10-20T12:00:00+00:00",
 )
 
-# 5. Inspect the full version history for a node
+# 6. Inspect the full version history for a node, or for a file contract by path
 history = registry.get_history("triage-agent-v1")
+file_history = registry.get_history_by_path("contract.yaml")
+
+# 7. Migrate a pre-chain registry explicitly — idempotent, never silent
+snapshot = registry.upgrade_chain()  # writes <registry>.prechain; None if already chained
 ```
+
+Pre-chain files remain readable but refuse new `register()` calls until the explicit `upgrade_chain()` migration. The snapshot sidecar and warning make the historical boundary explicit: backfilled hashes prove integrity from the upgrade moment, not before it.
+
+### Identity Pinning and the Re-seal Ritual
+
+`ContractEnforcer.load()` refuses contracts that escape through symlinks and pins the canonical path at load time. When a contract changes, the supported path is `reseal()` — validate → lint with zero errors → chain-verified register → fresh enforcer, plus a frozen audit record:
+
+```python
+from scyvera import reseal, ResealError
+
+try:
+    result = reseal("contract.yaml", ".scyvera/registry.jsonl")
+except ResealError as error:
+    raise SystemExit(f"re-seal refused: {error}")
+
+enforcer = result.enforcer          # a fresh, governable enforcer
+record = result.record
+print(record.version, record.contract_hash, record.lint_warnings)
+```
+
+A skipped or partial registration raises `ResealError` instead of returning a governable enforcer. `allow_unsealed_reseal=True` (default `False`) exists only for test scaffolds and documented dev iteration.
 
 ### Programmatic Contract Builder
 
@@ -336,17 +508,21 @@ It is **NOT**:
 - an OS-level sandbox or anti-malware scanner
 
 It **IS**:
-A framework-independent and domain-independent governance layer describing and enforcing system identity, capabilities, resources, inputs, outputs, permissions, constraints, side effects, approvals, dependencies, state persistence, failure recovery, replay semantics, observability, and risk.
+A framework-independent and domain-independent governance layer describing and enforcing system identity, capabilities, resources, inputs, outputs, permissions, constraints, side effects, approvals, dependencies, state persistence, failure recovery, replay semantics, observability, and risk — with distribution integrity you can verify after install.
 
 ---
 
 ## ⚠️ What Scyvera Does Not Guarantee
 
-Scyvera provides structural verification, runtime gating, gateway isolation, and registry provenance, but security is an end-to-end discipline:
+Scyvera provides structural verification, static conformance, runtime gating, gateway isolation, chained provenance, and install-integrity checks. Security is still an end-to-end discipline:
 
-1. **Gate Bypass at Call Sites (Threat T4)**: Scyvera enforces boundaries at the `@enforcer.gate(...)` decorator. To eliminate the risk of ungated bypass, applications should use Scyvera **Gateways** (`BaseGateway`, `GitHubGateway`, `QdrantGateway`), where credentials and raw SDK clients are kept strictly private. If invoking custom functions directly, integrators should use `ContractEnforcer.assert_gated(fn)` in integration test suites.
-2. **Internal Third-Party Behavior / String Spoofing (Threat T6)**: Scyvera verifies that a declared intent (e.g. `github:issues:write`) matches an allowed permission in the contract. It does not perform dynamic bytecode analysis or network-packet inspection to guarantee that a third-party library does not execute unauthorized background network calls.
-3. **Pre-Load File Tampering (Threat T5)**: The SHA-256 integrity check in `verify_integrity()` protects against file replacement AFTER load. It does not protect against a tampered `contract.yaml` present BEFORE `ContractEnforcer.load()` is called. For dynamic contracts created in-memory, `from_declaration()` seals the dictionary immediately upon construction.
+1. **Gate bypass at call sites (T4)**: enforcement happens at `@enforcer.gate(...)`. Use the **Gateways** so credentials and raw SDK clients stay private, and call `ContractEnforcer.assert_gated(fn)` in integration tests for custom functions.
+2. **Internal third-party behaviour / string spoofing (T6)**: Scyvera verifies that a declared intent (e.g. `github:issues:write`) matches an allowed permission. It does not do bytecode analysis or packet inspection to prove that a third-party library makes no unauthorised background calls.
+3. **Pre-load file tampering (T5)**: `verify_integrity()` catches replacement after load. It cannot prove that a tampered `contract.yaml` was clean before it was loaded; that is what the registry cross-check, identity pinning, and the re-seal ritual are for.
+4. **Install integrity is not sandboxing (T11)**: `self-check` detects changes to the installed `scyvera` package after install, and Sigstore attestation proves which wheel was built and published. Neither verifies your Python interpreter, your site-packages as a whole, or code you installed beside Scyvera. Optional extras execute their own dependencies.
+5. **The manifest is only as trustworthy as its delivery**: an attacker who can rewrite both the package files and the manifest on disk can make `self-check` pass. The root of trust is the signed release attestation, not the manifest alone.
+
+Threat models: [`docs/threat-model-lifecycle.md`](./docs/threat-model-lifecycle.md), [`docs/threat-model-enforcer.md`](./docs/threat-model-enforcer.md), [`docs/threat-model-distribution.md`](./docs/threat-model-distribution.md).
 
 ---
 
@@ -360,6 +536,29 @@ See [`examples/v1.1/`](./examples/v1.1) for runnable, validated v1.1 contracts a
 | **Research** | [`research-assistant.yaml`](./examples/v1.1/research-assistant.yaml) | Scientific literature analysis, arXiv API dependency |
 | **Finance** | [`financial-operations.yaml`](./examples/v1.1/financial-operations.yaml) | Critical risk, payment caps ($5000 USD limit), controller approval gate |
 | **Healthcare** | [`clinical-information-assistant.yaml`](./examples/v1.1/clinical-information-assistant.yaml) | High risk, EHR database access, physician approval gate, model integrity requirements |
+| **Business automation** | [`business-automation.yaml`](./examples/v1.1/business-automation.yaml) | Back-office workflow with declared side effects |
+| **Software development** | [`software-development-agent.yaml`](./examples/v1.1/software-development-agent.yaml) | Coding agent with repository and CI boundaries |
+
+---
+
+## 📚 Documentation Map
+
+| Document | What it answers |
+|---|---|
+| [`WORKFLOW-CONTRACT-SPEC.md`](./WORKFLOW-CONTRACT-SPEC.md) | The formal field reference for v1 and v1.1 contracts. |
+| [`docs/contract-model-v1.1.md`](./docs/contract-model-v1.1.md) | Normative v1.1 specification model. |
+| [`docs/contract-reference.md`](./docs/contract-reference.md) | Field-by-field cheat sheet. |
+| [`docs/design-principles.md`](./docs/design-principles.md) | The normative design principles behind the model. |
+| [`docs/architecture.md`](./docs/architecture.md) | Repository layers and module responsibilities. |
+| [`docs/roadmap.md`](./docs/roadmap.md) | Task-level implementation plan and shipped notes. |
+| [`docs/policy-packs.md`](./docs/policy-packs.md) | Policy Pack format, merge semantics, and how to add one. |
+| [`docs/terminology.md`](./docs/terminology.md) | Shared vocabulary. |
+| [`docs/vision.md`](./docs/vision.md) | Strategic direction. |
+| [`docs/workflow-engineering.md`](./docs/workflow-engineering.md) | Engineering philosophy. |
+| [`docs/concepts/`](./docs/concepts) | Deep dives: approvals, permissions, recovery, replay, side effects. |
+| [`docs/spec/contract-v1.1-design.md`](./docs/spec/contract-v1.1-design.md) | v1.1 design record. |
+| [`rfcs/`](./rfcs) | Permanent numbered decision records (RFC 0002–0004). |
+| [`SECURITY.md`](./SECURITY.md) | Supported versions and coordinated disclosure. |
 
 ---
 
@@ -372,107 +571,85 @@ agent-contracts/
 ├── CHANGELOG.md                        # Version history and releases
 ├── CONTRIBUTING.md                     # Contribution guidelines and testing
 ├── CONTRIBUTORS.md                     # Project contributors
+├── SECURITY.md                         # Supported versions and disclosure policy
 ├── LICENSE                             # MIT License
-├── pyproject.toml                      # Build, packaging, and test configuration
+├── pyproject.toml                      # Build, packaging, dependencies, test config
 ├── requirements-dev.txt                # Development dependencies
 ├── .gitguardian.yaml                   # Scanner exclusion for synthetic audit fixtures
 ├── .github/workflows/
 │   ├── lint-gateway.yml                # Fails on raw API client imports outside gateway.py
-│   ├── publish-pypi.yml                # Tag-triggered wheel build and PyPI publish
-│   └── validate-contracts.yml          # Build wheel, run tests, verify CLI
-├── assets/                             # Logo and image assets
+│   ├── publish-pypi.yml                # Tag-triggered wheel build, dist upload, PyPI publish
+│   ├── release-attest.yml              # Sigstore attestation, SBOM, release manifest
+│   └── validate-contracts.yml          # 15-cell OS × Python test matrix and wheel verification
+├── assets/                             # Logo and demo assets
 ├── docs/
-│   ├── contract-model-v1.1.md          # Normative v1.1 Specification Model
-│   ├── contract-reference.md           # Contract Field Reference Cheatsheet
-│   ├── design-principles.md            # Normative Design Principles
-│   ├── threat-model-enforcer.md        # Runtime Threat Model (T4–T10)
-│   ├── threat-model-distribution.md    # Distribution Threat Model (T11–T14)
-│   ├── threat-model-lifecycle.md       # Lifecycle Governance Threat Model (T1–T3)
-│   ├── roadmap.md                      # Implementation Roadmap & Task Sequencing
-│   ├── terminology.md                  # Specification Terminology
-│   ├── architecture.md                 # Repository Architectural Model
-│   ├── policy-packs.md                 # Policy Pack format, packs, and merge rules
-│   ├── vision.md                       # Strategic Project Vision
-│   ├── workflow-engineering.md         # Engineering Philosophy
-│   ├── concepts/                       # Concept deep-dives
-│   │   ├── approval-boundaries.md
-│   │   ├── permissions.md
-│   │   ├── recovery.md
-│   │   ├── replay-semantics.md
-│   │   └── side-effects.md
-│   └── spec/
-│       └── contract-v1.1-design.md     # v1.1 design record
+│   ├── architecture.md                 # Repository layers and module roles
+│   ├── contract-model-v1.1.md          # Normative v1.1 specification model
+│   ├── contract-reference.md           # Contract field reference cheat sheet
+│   ├── design-principles.md            # Normative design principles
+│   ├── policy-packs.md                 # Policy Pack format and merge rules
+│   ├── roadmap.md                      # Implementation roadmap and shipped notes
+│   ├── terminology.md                  # Specification terminology
+│   ├── threat-model-enforcer.md        # Runtime threat model (T4–T10)
+│   ├── threat-model-distribution.md    # Distribution threat model (T11–T14)
+│   ├── threat-model-lifecycle.md       # Lifecycle threat model (T1–T3)
+│   ├── vision.md                       # Strategic project vision
+│   ├── workflow-engineering.md         # Engineering philosophy
+│   ├── concepts/                       # Approval, permission, recovery, replay, side-effect deep dives
+│   └── spec/                           # v1.1 design record
 ├── examples/
 │   ├── tamper_demo.py                  # Integrity-check demonstration
 │   └── v1.1/                           # Validated v1.1 domain examples
-│       ├── business-automation.yaml
-│       ├── clinical-information-assistant.yaml
-│       ├── education-tutor.yaml
-│       ├── financial-operations.yaml
-│       ├── research-assistant.yaml
-│       └── software-development-agent.yaml
 ├── patterns/                           # Reusable contract patterns
-│   ├── detect-judge-approve-act.md
-│   └── monitor-alert-escalate.md
-├── packs/                              # Policy Packs (six golden packs, RFC 0004 §6)
-│   ├── dev-agent.yaml
-│   ├── devops-safe.yaml
-│   ├── email-triage.yaml
-│   ├── finance-ops.yaml
-│   ├── github-safe.yaml
-│   └── research-assistant.yaml
-├── rfcs/                               # Specification RFCs
-│   ├── 0002-lifecycle-field.md         # Lifecycle Field (v1.1, implemented)
-│   ├── 0003-harness-distribution-eval-and-integrity.md
-│   └── 0004-audit-cli-blast-radius-and-policy-packs.md
-├── schemas/                            # Packaged JSON Schemas (v1 and v1.1)
-│   ├── v1/contract.schema.json
-│   └── v1.1/contract.schema.json
+├── packs/                              # Six golden Policy Packs (RFC 0004 §6)
+├── rfcs/                               # Numbered specification and architecture RFCs
+├── schemas/                            # JSON Schemas (v1 and v1.1)
 ├── scripts/
 │   └── validate_contracts.py           # Repository-wide contract validation
 ├── src/scyvera/                        # Python governance package
 │   ├── __init__.py                     # Public API exports
+│   ├── _self_manifest.json             # Signed package-file manifest (RFC 0003 §C2)
 │   ├── audit.py                        # Deterministic audit scan engine
-│   ├── audit_rules.py                  # AUxxx rule registry and suggestion fragments
+│   ├── audit_rules.py                  # AUxxx rule registry and suggestions
 │   ├── builder.py                      # Programmatic Contract Builder API
-│   ├── cli.py                          # CLI (audit, validate, lint, init)
-│   ├── enforcer.py                     # Runtime enforcer and dynamic declarations
-│   ├── exceptions.py                   # Custom exception hierarchy
+│   ├── chain.py                        # Pure hash-chain mechanics (RFC 0003 §C1)
+│   ├── cli.py                          # CLI: validate, lint, check, self-check, audit, init
+│   ├── conformance.py                  # Tier 0/1 conformance engine and T101–T103
+│   ├── enforcer.py                     # Runtime enforcer, identity pinning, dynamic declarations
+│   ├── exceptions.py                   # Exception hierarchy
 │   ├── gateway.py                      # Gated gateway layer (base, GitHub, Qdrant)
 │   ├── generate.py                     # Schema-valid contract draft generator
-│   ├── linter.py                       # Tier 2 semantic linter (ACxxx taxonomy)
-│   ├── packs.py                        # Policy Pack loader, validation, and errors
+│   ├── linter.py                       # Tier 2 semantic linter (ACxxx)
+│   ├── packs.py                        # Policy Pack loader and validation
 │   ├── packs/                          # Packaged Policy Packs (wheel data)
-│   ├── registry.py                     # Versioned append-only contract registry
+│   ├── registry.py                     # Versioned, hash-chained contract registry
 │   ├── report.py                       # Band-first Blast Radius renderer and badge
+│   ├── reseal.py                       # M1.4 re-seal ritual
+│   ├── selfcheck.py                    # Package self-integrity engine (RFC 0003 §C2)
 │   ├── validator.py                    # Multi-version schema validation engine
 │   └── schemas/                        # Bundled schemas (v1 and v1.1)
-│       ├── v1/contract.schema.json
-│       └── v1.1/contract.schema.json
+├── tools/                              # Release tooling (stdlib-only)
+│   ├── generate_self_manifest.py       # Writes the canonical self manifest
+│   ├── generate_sbom.py                # Deterministic CycloneDX 1.5 SBOM
+│   └── build_release_manifest.py       # RFC 0003 §C6 attestation bundle
 ├── tests/
-│   ├── fixtures/                       # Validator fixtures and the audit corpus
-│   ├── test_audit.py                   # Rule, report shape, and exit-code tests
-│   ├── test_audit_contexts.py          # Executable-context and quarantine tests
-│   ├── test_audit_dogfood.py           # Permanent Shielded-band dogfood gate
-│   ├── test_audit_generate.py          # Draft schema-accuracy and CLI sweep
-│   ├── test_audit_report.py            # Terminal renderer, badge, and CI gate
-│   ├── test_builder.py
-│   ├── test_cli.py
-│   ├── test_declaration.py             # Dynamic declaration and sealing tests
-│   ├── test_duplicate_issue_detector_workflow.py
-│   ├── test_enforcer.py                # Runtime enforcer tests (T1–T10)
-│   ├── test_filename_enforcement.py
-│   ├── test_gate_integrity.py
+│   ├── fixtures/                       # Validator fixtures and audit corpus
+│   ├── test_audit*.py                  # Rules, contexts, dogfood, drafts, report
+│   ├── test_conformance_cli.py         # Tier 0 CLI and exit codes
+│   ├── test_tier1_n8n.py               # n8n static adapter findings
+│   ├── test_tier1_langgraph.py         # LangGraph static adapter findings
+│   ├── test_registry.py                # Registry behavior
+│   ├── test_registry_chain.py          # Hash chain, tamper, migration (T13)
+│   ├── test_contract_identity.py       # Identity pinning and symlink refusal (T12/T14)
+│   ├── test_reseal.py                  # Re-seal ritual fail-closed paths
+│   ├── test_self_check.py              # Tamper detection and CLI exit codes
 │   ├── test_gateway.py                 # Gateway boundary tests
-│   ├── test_lifecycle.py
-│   ├── test_linter.py
-│   ├── test_packs.py                   # Policy Pack schema/lint sweep and CLI merge tests
-│   ├── test_registry.py                # Contract registry tests
-│   ├── test_schemas_sync.py
-│   ├── test_validator.py
-│   └── test_validator_v1_1.py
+│   ├── test_enforcer.py                # Runtime enforcer tests (T1–T10)
+│   ├── test_declaration.py             # Dynamic declaration and sealing
+│   ├── test_yaml_pin.py                # Safe YAML deserialization pin (PD-4)
+│   └── ...                             # Builder, CLI, linter, lifecycle, schema sync, packs
 └── implementations/                    # Multi-framework reference implementations
-    ├── n8n/                            # Four reference n8n workflows
+    ├── n8n/                            # Reference n8n workflows
     ├── langgraph/                      # LangGraph reference implementation
     └── rfcs/                           # Implementation design records
 ```
@@ -483,28 +660,28 @@ agent-contracts/
 
 ### Available Now
 
-- **Agent Contracts v1 & v1.1 Specifications**: Machine-readable schemas for system identity, capabilities, permissions, constraints, side effects, approvals, dependencies, lifecycle, recovery, replay, observability, and risk.
-- **Audit scan engine (`scyvera audit`)**: AUxxx rule registry, deterministic JSON report (`report_version: 1`), execution-context matching, skip list, size caps, binary sniffing, symlink refusal, and fixture quarantine.
-- **Blast Radius Report**: band-first terminal renderer, `--badge` shields.io snippet (band only), and the `--fail-under` CI gate with exit codes `0` / `1` / `2`.
-- **Contract draft generation (`--generate`)**: findings-derived v1.1 drafts with deterministic ordering, `--force` overwrite guard, and zero-warning `validate` / `lint` results enforced by a fixture sweep.
-- **Policy Packs (`--pack`)**: six golden packs (`dev-agent`, `github-safe`, `finance-ops`, `research-assistant`, `email-triage`, `devops-safe`) loaded locally from `packs/<name>.yaml`, applied to `--generate` drafts, and shipped as wheel package data. Every pack must pass schema validation and zero-warning lint in the `tests/test_packs.py` sweep.
-- **Static Validation Engine**: CLI and Python API (`validate_contract`) validating against bundled JSON Schemas.
-- **Semantic Linter**: Tier 2 consistency rules (`lint_contract`) detecting unbounded write permissions (AC101), high-risk systems without approval gates (AC201), vague idle behavior (AC301), and irreversible actions (AC302).
-- **Runtime Enforcer (`ContractEnforcer`)**: Default-deny execution gating (`@enforcer.gate`), post-load SHA-256 integrity checks, and audit trails.
-- **Dynamic Declarations**: Runtime contract synthesis (`ContractEnforcer.from_declaration()`) with cryptographic sealing and strict validation.
-- **Gated Gateways**: Isolated external API boundaries (`BaseGateway`, `GitHubGateway`, `QdrantGateway`) and CI lint checks enforcing credential privacy.
-- **Contract Registry**: Versioned, append-only, JSONL contract store (`ContractRegistry`) with point-in-time time-travel queries.
-- **Cross-Framework Implementations**: Proven parity between n8n and LangGraph reference implementations.
+- **Agent Contracts v1 & v1.1 Specifications**: schemas and field references for identity, capabilities, permissions, constraints, side effects, approvals, dependencies, lifecycle, recovery, replay, observability, and risk.
+- **Audit funnel (`scyvera audit`)**: deterministic AUxxx scan, band-first **Blast Radius** report, `--badge`, `--fail-under`, `--generate` drafts, and `--pack` Policy Packs.
+- **Conformance tiers (`scyvera check`)**: Tier 0 structural superset of `validate` + `lint`; Tier 1 static adapters for **n8n** and **LangGraph** with `T101`/`T102`/`T103` findings. Tier 2 (runtime trace) is reserved and fails loudly.
+- **Static validation and lint**: CLI and Python API (`validate_contract`, `lint_contract`) across both schema versions.
+- **Runtime enforcement**: default-deny `ContractEnforcer`, approval boundaries, immutable audit trails, dynamic declarations, and post-load integrity checks.
+- **Identity pinning**: canonical-path pinning, symlink-escape refusal, post-load path-swap detection, and optional registry cross-checks.
+- **Gated gateways**: `BaseGateway`, `GitHubGateway`, `QdrantGateway`, with CI enforcement that raw clients stay inside `gateway.py`.
+- **Hash-chained registry**: `prev_hash` on every entry, `verify_chain()`, explicit `upgrade_chain()` migration, and point-in-time / per-path history queries.
+- **Re-seal ritual**: `reseal()` is the only sanctioned regeneration path and returns a fresh sealed enforcer plus a frozen audit record.
+- **Distribution integrity**: `scyvera self-check [--json]`, a signed package manifest, CycloneDX 1.5 SBOMs, and Sigstore-attested release bundles.
+- **Production trust surface**: `SECURITY.md`, SHA-pinned GitHub Actions, least-privilege workflow permissions, a safe-YAML pin, and a **Windows / Linux / macOS × Python 3.10–3.14** test matrix.
 - **Permanent dogfood gate**: the test suite asserts that `scyvera audit .` keeps this repository in the `Shielded` band.
 
-### Roadmap (planned, not yet implemented)
+### Roadmap
 
-The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). The next phases as recorded there:
+The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). Current state:
 
-- **Phase 1 — Core Hardening**: hash-chained `ContractRegistry`, trace schema layer, contract identity pinning against symlink escape and substitution, the re-seal ritual, and completed distribution threat-model status.
-- **Phase 2 — Conformance & Evals**: tiered `scyvera check` (structural, static, runtime-trace) with n8n and LangGraph adapters, a trace-driven eval harness, report-format unification, and an additive v1.2 `guardrails` schema slice.
-- **Phase 3 — Distribution**: the `scyvera-harness` skill, multi-runtime packaging for OpenCode / Claude / Gemini / Codex, Sigstore and SBOM release attestations, `scyvera self-check`, and the documentation surface upgrade.
-- **Growth lane**: G2 launch film, G3 showcase gallery and pack curation, G4 contributor ladder. G1 is this README rewrite; the animated GIF of a blocked agent action is still outstanding.
+- **Phase 1 — Core Hardening**: shipped — hash-chained registry (M1.1), contract identity pinning (M1.3), and the re-seal ritual (M1.4). Remaining: trace schema layer (M1.2) and threat-model doc status refresh (M1.5).
+- **Phase 2 — Conformance & Evals**: Tier 0 CLI (M2.1), n8n adapter (M2.2), LangGraph adapter (M2.3), and Policy Packs (M2.7) shipped. Remaining: trace-driven eval harness (M2.4), unified report schema (M2.5), and the additive v1.2 guardrails slice (M2.6).
+- **Phase 3 — Distribution**: Sigstore + SBOM attestation (M3.3) and `scyvera self-check` (M3.4) shipped. Remaining: `scyvera-harness` skill (M3.1), multi-runtime packaging for OpenCode / Claude / Gemini / Codex (M3.2), and the documentation surface upgrade (M3.5).
+- **Production-Defensibility Program**: PD-1 through PD-4 shipped. Remaining: published benchmark (PD-5), `scyvera-audit-action` (PD-6), `scyvera mcp` server (PD-7), and the deferred Rust scanner (PD-8).
+- **Growth lane**: G1 (this README) shipped; G2 launch film rendered and publication pending; G3 showcase gallery and G4 contributor ladder planned.
 - **Phase 4 — Optional enforcer upgrades**: sliding-window invocation throttling, asynchronous approval channels, and multi-agent contract negotiation.
 
 ---
@@ -515,15 +692,22 @@ The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). The ne
 pytest tests/ -v
 ```
 
-The suite includes a permanent dogfood gate: it scans this repository and fails if `scyvera audit .` ever leaves the `Shielded` band. Generated contract drafts are likewise re-read from disk and re-validated in every test run.
+The suite currently collects **505 tests**: 499 pass, and 6 symlink tests skip on platforms that forbid link creation. CI runs the same suite across **Windows, Linux, and macOS** on **Python 3.10 through 3.14**.
+
+Two repo-level gates run inside the suite:
+
+- **Dogfood**: `scyvera audit .` must keep this repository in the `Shielded` band (currently 92/100).
+- **Draft accuracy**: every audit fixture corpus is drafted, written, re-read from disk, and re-validated with zero schema errors and zero lint warnings.
+
+The release workflows are checked by construction: every action is pinned by full commit SHA, and the attested wheel is downloaded from the publish run rather than rebuilt.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome — new domain profiles, framework reference implementations, specification RFCs, or Python API improvements. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+Contributions are welcome — new domain profiles, framework reference implementations, specification RFCs, audit rules, or Python API improvements. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow, and [SECURITY.md](./SECURITY.md) for vulnerability disclosure.
 
-Good first contributions: a Policy Pack — start from the template in [`docs/policy-packs.md`](./docs/policy-packs.md); a domain example; an audit rule with fixtures.
+Good first contributions: a Policy Pack — start from the template in [`docs/policy-packs.md`](./docs/policy-packs.md); a domain example; or an audit rule with fixtures.
 
 ---
 
