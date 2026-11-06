@@ -36,6 +36,7 @@ from .enforcer import (
     IDENTITY_UNREGISTERED,
 )
 from .generate import DraftContract, build_draft, write_draft
+from .guardrails import Budgets, Guardrails, RateLimit
 from .packs import PACKS_DIR, PolicyPack, available_packs, load_pack
 from .report import BAND_COLORS, render_badge, render_report
 from .exceptions import (
@@ -47,6 +48,7 @@ from .exceptions import (
     ContractViolationError,
     DeclarationValidationError,
     GatewayError,
+    GuardrailViolationError,
     PackError,
     RegistryError,
     ResealError,
@@ -71,6 +73,7 @@ from .validator import (
     LIFECYCLE_DEFAULTS,
     SCHEMA_V1_PATH,
     SCHEMA_V1_1_PATH,
+    SCHEMA_V1_2_PATH,
     ContractVersion,
     ValidationError,
     ValidationResult,
@@ -91,6 +94,7 @@ __all__ = [
     "AuditRule",
     "BAND_COLORS",
     "BaseGateway",
+    "Budgets",
     "CheckReport",
     "CheckTier",
     "ConformanceError",
@@ -112,6 +116,8 @@ __all__ = [
     "GENESIS_HASH",
     "GatewayError",
     "GitHubGateway",
+    "GuardrailViolationError",
+    "Guardrails",
     "IDENTITY_DIVERGENT_REGISTRY",
     "IDENTITY_MATCHES_REGISTRY",
     "IDENTITY_NOT_CHECKED",
@@ -124,6 +130,7 @@ __all__ = [
     "PackError",
     "PolicyPack",
     "QdrantGateway",
+    "RateLimit",
     "RESEAL_AUDIT_NOTE",
     "RULES",
     "RegistryEntry",
@@ -133,6 +140,7 @@ __all__ = [
     "ResealResult",
     "SCHEMA_V1_PATH",
     "SCHEMA_V1_1_PATH",
+    "SCHEMA_V1_2_PATH",
     "SELF_CHECK_REPORT_VERSION",
     "SELF_MANIFEST_FILENAME",
     "SELF_MANIFEST_NAME",

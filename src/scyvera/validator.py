@@ -30,6 +30,7 @@ def _resolve_package_schema(relative_path: str) -> Path:
 
 SCHEMA_V1_PATH = _resolve_package_schema("schemas/v1/contract.schema.json")
 SCHEMA_V1_1_PATH = _resolve_package_schema("schemas/v1.1/contract.schema.json")
+SCHEMA_V1_2_PATH = _resolve_package_schema("schemas/v1.2/contract.schema.json")
 DEFAULT_SCHEMA_PATH = SCHEMA_V1_PATH
 
 
@@ -37,13 +38,14 @@ class ContractVersion(Enum):
     """Supported Agent Contract specification versions."""
     V1 = "1"
     V1_1 = "1.1"
+    V1_2 = "1.2"
 
 
-# DESIGN DECISION: These defaults are applied by the loader when a v1.1
-# contract omits the lifecycle field. This matches the user-approved design:
-# lifecycle is optional at the schema level, defaults applied here with a
-# logging.warning() so contract authors know they're operating on inferred
-# values and can make it explicit.
+# DESIGN DECISION: These defaults are applied by the loader when a v1.1 or
+# v1.2 contract omits the lifecycle field. This matches the user-approved
+# design: lifecycle is optional at the schema level, defaults applied here
+# with a logging.warning() so contract authors know they're operating on
+# inferred values and can make it explicit.
 LIFECYCLE_DEFAULTS: dict[str, Any] = {
     "mode": "request-response",
     "initiation": "human-only",
@@ -78,6 +80,8 @@ def detect_contract_version(contract: dict[str, Any]) -> ContractVersion | None:
     cv = contract.get("contract_version")
     if cv is not None:
         cv_str = str(cv)
+        if cv_str == "1.2":
+            return ContractVersion.V1_2
         if cv_str == "1.1":
             return ContractVersion.V1_1
         if cv_str == "1":
@@ -86,6 +90,8 @@ def detect_contract_version(contract: dict[str, Any]) -> ContractVersion | None:
 
     if "version" in contract:
         version = contract.get("version")
+        if version == 1.2 or version == "1.2":
+            return ContractVersion.V1_2
         if version == 1.1 or version == "1.1":
             return ContractVersion.V1_1
         if version == 1 or version == "1":
@@ -98,16 +104,17 @@ def detect_contract_version(contract: dict[str, Any]) -> ContractVersion | None:
 
 
 def apply_lifecycle_defaults(contract: dict[str, Any]) -> dict[str, Any]:
-    """Apply lifecycle defaults for v1.1 contracts missing the lifecycle field.
+    """Apply lifecycle defaults for v1.1/v1.2 contracts missing lifecycle.
 
     Returns a shallow copy of the contract with lifecycle populated.
     Emits a logging.warning() when defaults are applied so contract
     authors know they are operating on inferred values.
 
-    Only applies to v1.1 contracts. v1 contracts are returned unchanged.
+    Applies to v1.1 and v1.2 contracts (v1.2 behaves like v1.1). v1
+    contracts are returned unchanged.
     """
     version = detect_contract_version(contract)
-    if version != ContractVersion.V1_1:
+    if version not in (ContractVersion.V1_1, ContractVersion.V1_2):
         return contract
 
     if "lifecycle" not in contract:
@@ -163,6 +170,8 @@ def resolve_schema_path(contract: Any, custom_schema_path: str | Path | None = N
         return SCHEMA_V1_PATH
     if version == ContractVersion.V1_1:
         return SCHEMA_V1_1_PATH
+    if version == ContractVersion.V1_2:
+        return SCHEMA_V1_2_PATH
 
     return None
 
@@ -175,7 +184,7 @@ def validate_contract(
     Validate one Agent Contract.
 
     By default, the Contract is validated against the schema matching its
-    declared version (v1 or v1.1) bundled with this package.
+    declared version (v1, v1.1, or v1.2) bundled with this package.
 
     A custom schema path may be supplied explicitly for development,
     testing, or experimental schema versions.
