@@ -13,6 +13,7 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 [![Tests](https://github.com/Skull-boy/agent-contracts/actions/workflows/validate-contracts.yml/badge.svg)](https://github.com/Skull-boy/agent-contracts/actions/workflows/validate-contracts.yml)
 [![PyPI](https://img.shields.io/pypi/v/scyvera)](https://pypi.org/project/scyvera/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
+[![Security Policy](https://img.shields.io/badge/security-policy-blue)](./SECURITY.md)
 [![Blast Radius](https://img.shields.io/badge/blast%20radius-shielded-green)](#-the-2-minute-demo)
 
 <!-- TODO(G1): drop assets/scyvera-audit.gif (terminal capture of a blocked agent action, <2 MB) — recorded by maintainer, see roadmap G2 -->
