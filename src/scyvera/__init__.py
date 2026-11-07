@@ -52,6 +52,7 @@ from .exceptions import (
     PackError,
     RegistryError,
     ResealError,
+    TraceError,
 )
 from .gateway import BaseGateway, GitHubGateway, QdrantGateway
 from .registry import ContractRegistry, RegistryEntry
@@ -67,6 +68,16 @@ from .selfcheck import (
     SelfCheckResult,
     generate_manifest,
     self_check,
+)
+from .trace import (
+    TRACE_RESULT_ALLOWED,
+    TRACE_RESULT_PENDING_APPROVAL,
+    TRACE_RESULT_VIOLATION,
+    TRACE_RESULTS,
+    TraceEntry,
+    TraceLog,
+    audit_from_trace,
+    trace_from_audit,
 )
 from .linter import LintResult, LintWarning, lint_contract
 from .validator import (
@@ -157,9 +168,17 @@ __all__ = [
     "Tier1Finding",
     "Tier1UnavailableError",
     "TierNotImplementedError",
+    "TRACE_RESULTS",
+    "TRACE_RESULT_ALLOWED",
+    "TRACE_RESULT_PENDING_APPROVAL",
+    "TRACE_RESULT_VIOLATION",
+    "TraceEntry",
+    "TraceError",
+    "TraceLog",
     "ValidationError",
     "ValidationResult",
     "apply_lifecycle_defaults",
+    "audit_from_trace",
     "available_packs",
     "build_draft",
     "canonical_entry_bytes",
@@ -179,6 +198,7 @@ __all__ = [
     "reseal",
     "scan_tree",
     "self_check",
+    "trace_from_audit",
     "validate_contract",
     "verify_chain_entries",
     "write_draft",

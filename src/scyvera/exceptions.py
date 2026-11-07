@@ -210,3 +210,19 @@ class PackError(Exception):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
+
+
+class TraceError(ValueError):
+    """Raised when a trace entry or trace log is structurally invalid.
+
+    RFC 0003 §C4 traces are a fail-closed interchange format: missing or
+    unknown fields, wrong types, unknown result values, non-ISO-8601
+    timestamps, and malformed JSONL lines are rejected rather than coerced.
+    ``ValueError`` is the house base for parse/validation failures (for
+    example :class:`GuardrailConfigError`), so callers can catch invalid input
+    without depending on the trace module.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
