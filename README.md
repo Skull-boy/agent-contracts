@@ -12,6 +12,7 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 [![License](https://img.shields.io/github/license/Skull-boy/agent-contracts)](./LICENSE)
 [![Tests](https://github.com/Skull-boy/agent-contracts/actions/workflows/validate-contracts.yml/badge.svg)](https://github.com/Skull-boy/agent-contracts/actions/workflows/validate-contracts.yml)
 [![PyPI](https://img.shields.io/pypi/v/scyvera)](https://pypi.org/project/scyvera/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/scyvera?period=total&units=INTERNATIONAL_SYSTEM&left_color=RED&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scyvera)
 [![Python](https://img.shields.io/badge/python-3.10%E2%80%933.14-blue)](pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#-install-and-platform-support)
 [![Security Policy](https://img.shields.io/badge/security-policy-blue)](./SECURITY.md)
@@ -22,7 +23,7 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 
 > **Try it, read nothing first:** `pip install scyvera && scyvera audit .`
 >
-> **Version status:** PyPI `1.3.0` ships the audit funnel, Blast Radius report, contract drafts, and Policy Packs. `main` adds the hash-chained registry, contract identity pinning, the re-seal ritual, and `scyvera check --tier 0/1`. The next release adds `scyvera self-check` and signed release attestations.
+> **Version status:** PyPI `1.3.0` ships the audit funnel, Blast Radius report, contract drafts, and Policy Packs. `main` — the next release — adds the hash-chained registry, contract identity pinning, the re-seal ritual, conformance tiers, v1.2 guardrails, `scyvera self-check` with signed release attestations, and the trace-driven eval harness.
 
 ---
 
@@ -552,6 +553,7 @@ See [`examples/v1.1/`](./examples/v1.1) for runnable, validated v1.1 contracts a
 | [`docs/architecture.md`](./docs/architecture.md) | Repository layers and module responsibilities. |
 | [`docs/roadmap.md`](./docs/roadmap.md) | Task-level implementation plan and shipped notes. |
 | [`docs/policy-packs.md`](./docs/policy-packs.md) | Policy Pack format, merge semantics, and how to add one. |
+| [`docs/evals.md`](./docs/evals.md) | Trace-driven eval case format, agent factory, and the four scoring axes. |
 | [`docs/terminology.md`](./docs/terminology.md) | Shared vocabulary. |
 | [`docs/vision.md`](./docs/vision.md) | Strategic direction. |
 | [`docs/workflow-engineering.md`](./docs/workflow-engineering.md) | Engineering philosophy. |
@@ -587,6 +589,7 @@ agent-contracts/
 │   ├── contract-model-v1.1.md          # Normative v1.1 specification model
 │   ├── contract-reference.md           # Contract field reference cheat sheet
 │   ├── design-principles.md            # Normative design principles
+│   ├── evals.md                        # Trace-driven eval format and scoring
 │   ├── policy-packs.md                 # Policy Pack format and merge rules
 │   ├── roadmap.md                      # Implementation roadmap and shipped notes
 │   ├── terminology.md                  # Specification terminology
@@ -603,7 +606,7 @@ agent-contracts/
 ├── patterns/                           # Reusable contract patterns
 ├── packs/                              # Six golden Policy Packs (RFC 0004 §6)
 ├── rfcs/                               # Numbered specification and architecture RFCs
-├── schemas/                            # JSON Schemas (v1 and v1.1)
+├── schemas/                            # JSON Schemas (v1, v1.1, and v1.2)
 ├── scripts/
 │   └── validate_contracts.py           # Repository-wide contract validation
 ├── src/scyvera/                        # Python governance package
@@ -626,8 +629,10 @@ agent-contracts/
 │   ├── report.py                       # Band-first Blast Radius renderer and badge
 │   ├── reseal.py                       # M1.4 re-seal ritual
 │   ├── selfcheck.py                    # Package self-integrity engine (RFC 0003 §C2)
+│   ├── trace.py                        # RFC 0003 §C4 execution trace and JSONL
 │   ├── validator.py                    # Multi-version schema validation engine
-│   └── schemas/                        # Bundled schemas (v1 and v1.1)
+│   ├── evals/                          # Trace-driven eval harness (M2.4)
+│   └── schemas/                        # Bundled schemas (v1, v1.1, and v1.2)
 ├── tools/                              # Release tooling (stdlib-only)
 │   ├── generate_self_manifest.py       # Writes the canonical self manifest
 │   ├── generate_sbom.py                # Deterministic CycloneDX 1.5 SBOM
@@ -643,6 +648,8 @@ agent-contracts/
 │   ├── test_contract_identity.py       # Identity pinning and symlink refusal (T12/T14)
 │   ├── test_reseal.py                  # Re-seal ritual fail-closed paths
 │   ├── test_self_check.py              # Tamper detection and CLI exit codes
+│   ├── test_trace.py                   # Trace round-trip and JSONL rejection
+│   ├── test_evals.py                   # Golden eval, axes, and case rejection
 │   ├── test_gateway.py                 # Gateway boundary tests
 │   ├── test_enforcer.py                # Runtime enforcer tests (T1–T10)
 │   ├── test_declaration.py             # Dynamic declaration and sealing
@@ -663,6 +670,7 @@ agent-contracts/
 - **Agent Contracts v1 & v1.1 Specifications**: schemas and field references for identity, capabilities, permissions, constraints, side effects, approvals, dependencies, lifecycle, recovery, replay, observability, and risk. A v1.2 slice adds an optional `guardrails` object (fail-closed, per-window side-effect budgets, and per-minute rate limits) as a strict superset of v1.1.
 - **Audit funnel (`scyvera audit`)**: deterministic AUxxx scan, band-first **Blast Radius** report, `--badge`, `--fail-under`, `--generate` drafts, and `--pack` Policy Packs.
 - **Conformance tiers (`scyvera check`)**: Tier 0 structural superset of `validate` + `lint`; Tier 1 static adapters for **n8n** and **LangGraph** with `T101`/`T102`/`T103` findings. Tier 2 (runtime trace) is reserved and fails loudly.
+- **Execution traces and evals (`scyvera.trace`, `scyvera.evals`)**: lossless `AuditEntry` ↔ RFC 0003 §C4 trace conversion with canonical JSONL, and a deterministic four-axis eval harness (constraints, approval, recovery, replay) driven by fail-closed YAML cases.
 - **Static validation and lint**: CLI and Python API (`validate_contract`, `lint_contract`) across both schema versions.
 - **Runtime enforcement**: default-deny `ContractEnforcer`, approval boundaries, immutable audit trails, dynamic declarations, and post-load integrity checks.
 - **Identity pinning**: canonical-path pinning, symlink-escape refusal, post-load path-swap detection, and optional registry cross-checks.
@@ -677,8 +685,8 @@ agent-contracts/
 
 The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). Current state:
 
-- **Phase 1 — Core Hardening**: shipped — hash-chained registry (M1.1), contract identity pinning (M1.3), and the re-seal ritual (M1.4). Remaining: trace schema layer (M1.2) and threat-model doc status refresh (M1.5).
-- **Phase 2 — Conformance & Evals**: Tier 0 CLI (M2.1), n8n adapter (M2.2), LangGraph adapter (M2.3), and Policy Packs (M2.7) shipped. Remaining: trace-driven eval harness (M2.4), unified report schema (M2.5), and the additive v1.2 guardrails slice (M2.6).
+- **Phase 1 — Core Hardening**: shipped — hash-chained registry (M1.1), trace schema (M1.2), contract identity pinning (M1.3), and the re-seal ritual (M1.4). Remaining: threat-model doc status refresh (M1.5).
+- **Phase 2 — Conformance & Evals**: Tier 0 CLI (M2.1), n8n adapter (M2.2), LangGraph adapter (M2.3), trace-driven eval harness (M2.4), the additive v1.2 guardrails slice (M2.6), and Policy Packs (M2.7) shipped. Remaining: unified report schema (M2.5).
 - **Phase 3 — Distribution**: Sigstore + SBOM attestation (M3.3) and `scyvera self-check` (M3.4) shipped. Remaining: `scyvera-harness` skill (M3.1), multi-runtime packaging for OpenCode / Claude / Gemini / Codex (M3.2), and the documentation surface upgrade (M3.5).
 - **Production-Defensibility Program**: PD-1 through PD-4 shipped. Remaining: published benchmark (PD-5), `scyvera-audit-action` (PD-6), `scyvera mcp` server (PD-7), and the deferred Rust scanner (PD-8).
 - **Growth lane**: G1 (this README) shipped; G2 launch film rendered and publication pending; G3 showcase gallery and G4 contributor ladder planned.
@@ -692,7 +700,7 @@ The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). Curren
 pytest tests/ -v
 ```
 
-The suite currently collects **505 tests**: 499 pass, and 6 symlink tests skip on platforms that forbid link creation. CI runs the same suite across **Windows, Linux, and macOS** on **Python 3.10 through 3.14**.
+The suite currently collects **643 tests**: 637 pass, and 6 symlink tests skip on platforms that forbid link creation. CI runs the same suite across **Windows, Linux, and macOS** on **Python 3.10 through 3.14**.
 
 Two repo-level gates run inside the suite:
 
