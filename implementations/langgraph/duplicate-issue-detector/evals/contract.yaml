@@ -1,0 +1,29 @@
+version: 1.1
+system:
+  name: refund-agent-eval
+  purpose: Evaluation fixture for the trace-driven harness (RFC 0003 C4, M2.4)
+domain: software
+lifecycle:
+  mode: request-response
+  initiation: human-only
+  resumability: stateless
+capabilities:
+  - name: read_issue
+    description: Read a GitHub issue that requests a refund
+permissions:
+  - github:issues:read
+side_effects:
+  - db:write
+approvals:
+  - action: db:write
+    required: true
+    approver: human
+state: stateless
+recovery:
+  strategy: stop
+replay:
+  mode: idempotent
+observability:
+  level: basic
+risk:
+  level: low
