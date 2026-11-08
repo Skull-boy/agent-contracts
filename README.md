@@ -693,7 +693,7 @@ agent-contracts/
 The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). Current state:
 
 - **Phase 1 — Core Hardening**: shipped — hash-chained registry (M1.1), trace schema (M1.2), contract identity pinning (M1.3), and the re-seal ritual (M1.4). Remaining: threat-model doc status refresh (M1.5).
-- **Phase 2 — Conformance & Evals**: Tier 0 CLI (M2.1), n8n adapter (M2.2), LangGraph adapter (M2.3), trace-driven eval harness (M2.4), the additive v1.2 guardrails slice (M2.6), and Policy Packs (M2.7) shipped. Remaining: unified report schema (M2.5).
+- **Phase 2 — Conformance & Evals**: Tier 0 CLI (M2.1), n8n adapter (M2.2), LangGraph adapter (M2.3), trace-driven eval harness (M2.4), the unified report format (M2.5), the additive v1.2 guardrails slice (M2.6), and Policy Packs (M2.7) shipped. **Phase 2 is complete.** Next lane: the official `scyvera-audit-action` (PD-6), `scyvera mcp` server mode (PD-7), the `scyvera-harness` skill (M3.1), and per-target packaging (M3.2).
 - **Phase 3 — Distribution**: Sigstore + SBOM attestation (M3.3) and `scyvera self-check` (M3.4) shipped. Remaining: `scyvera-harness` skill (M3.1), multi-runtime packaging for OpenCode / Claude / Gemini / Codex (M3.2), and the documentation surface upgrade (M3.5).
 - **Production-Defensibility Program**: PD-1 through PD-4 shipped. Remaining: published benchmark (PD-5), `scyvera-audit-action` (PD-6), `scyvera mcp` server (PD-7), and the deferred Rust scanner (PD-8).
 - **Growth lane**: G1 (this README) shipped; G2 launch film rendered and publication pending; G3 showcase gallery and G4 contributor ladder planned.
@@ -707,7 +707,7 @@ The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). Curren
 pytest tests/ -v
 ```
 
-The suite currently collects **643 tests**: 637 pass, and 6 symlink tests skip on platforms that forbid link creation. CI runs the same suite across **Windows, Linux, and macOS** on **Python 3.10 through 3.14**.
+The suite currently collects **688 tests**: 682 pass, and 6 symlink tests skip on platforms that forbid link creation. CI runs the same suite across **Windows, Linux, and macOS** on **Python 3.10 through 3.14**.
 
 Two repo-level gates run inside the suite:
 
