@@ -16,9 +16,12 @@ import math
 import os
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 from .audit_rules import RULES, SEVERITY_WEIGHTS, Finding
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, avoids import cycles
+    from .unified import UnifiedReport
 
 
 REPORT_VERSION = 1
@@ -449,4 +452,40 @@ def scan_tree(target: Path) -> AuditReport:
                 if kind in file_kind_counts
             }
         ),
+    )
+
+
+def unify_audit_report(
+    payload: Mapping[str, Any],
+    *,
+    subject: str | None = None,
+    status: str | None = None,
+    threshold: int | None = None,
+) -> "UnifiedReport":
+    """Project an audit payload into the RFC 0003 unified envelope (M2.5).
+
+    This is the module-level integration point for :mod:`scyvera.audit`; the
+    published ``AuditReport.to_dict()`` / ``to_json()`` bytes are untouched.
+    ``--unified`` in the CLI calls this function.
+
+    Args:
+        payload: A payload shaped like :meth:`AuditReport.to_dict`.
+        subject: Envelope subject; defaults to the payload's ``target``.
+        status: Explicit verdict; defaults to :func:`scyvera.unified.audit_status`.
+        threshold: ``--fail-under`` value used when ``status`` is omitted.
+
+    Returns:
+        A frozen :class:`scyvera.unified.UnifiedReport`.
+    """
+    from .unified import audit_status, from_audit_report
+
+    resolved_subject = subject
+    if resolved_subject is None:
+        target = payload.get("target")
+        resolved_subject = str(target) if target is not None else "."
+    resolved_status = status if status is not None else audit_status(payload, threshold)
+    return from_audit_report(
+        dict(payload),
+        subject=resolved_subject,
+        status=resolved_status,
     )
