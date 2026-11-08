@@ -23,7 +23,7 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 
 > **Try it, read nothing first:** `pip install scyvera && scyvera audit .`
 >
-> **Version status:** PyPI `1.3.0` ships the audit funnel, Blast Radius report, contract drafts, and Policy Packs. `main` — the next release — adds the hash-chained registry, contract identity pinning, the re-seal ritual, conformance tiers, v1.2 guardrails, `scyvera self-check` with signed release attestations, and the trace-driven eval harness.
+> **Version status:** PyPI `1.3.0` ships the audit funnel, Blast Radius report, contract drafts, and Policy Packs. `main` — the next release — adds the hash-chained registry, contract identity pinning, the re-seal ritual, conformance tiers, v1.2 guardrails, `scyvera self-check` with signed release attestations, the trace-driven eval harness, and the unified report format (`scyvera.unified`) with the `scyvera eval` command plus additive `--unified` output on `check` and `audit`.
 
 ---
 
@@ -233,7 +233,7 @@ Tier behaviour is explicit, never silent:
 
 - `--tier auto` (default) resolves to the highest implemented tier and prints a `note:` saying which one it chose.
 - `--tier 1` dispatches to the adapter that claims the target (n8n workflow JSON or LangGraph Python source). An unclaimed target exits `2` with one actionable line.
-- `--tier 2` (runtime trace) is reserved and fails loudly with exit `2` until the trace adapter ships.
+- `--tier 2` (runtime trace) is reserved and fails loudly with exit `2` until the trace adapter ships. That adapter is the `check --tier 2` surface only: the runtime trace and eval engine itself shipped in M2.4/M2.5, and `scyvera eval` already runs four-axis scoring over governed agents.
 
 Tier 1 finding taxonomy:
 
@@ -247,6 +247,26 @@ Exit codes: `0` pass (or warn-only), `1` a T101/error-severity T102, `2` usage/I
 
 The adapters never import or execute the target: n8n is parsed as JSON, LangGraph as Python `ast`. Unknown externally-reaching node types, unknown hosts, and unparseable source fail closed as findings rather than being skipped.
 
+### Eval scoring (`scyvera eval`)
+
+An eval case is a YAML file naming a contract, a scenario, and the expected trace. The harness runs the case's reference agent through a `ContractEnforcer`, records the RFC 0003 §C4 trace, and scores four axes.
+
+```bash
+scyvera eval implementations/langgraph/duplicate-issue-detector/evals/refund-agent.eval.yaml
+```
+
+```text
+WARN  refund-agent
+      total: 75.0/100
+      constraints: 0.0
+      approval: 1.0
+      recovery: 1.0
+      replay: 1.0
+      trace: 4 entries
+```
+
+The total is `100 × Σ(weight × axis)`; this fixture deliberately attempts one undeclared action, so `constraints` is `0.0` and the case reports `WARN`. A matching run is a measurement, not a certification. Warnings, when a run records any, print as `[EVAL]` lines below the axes. `--json` emits the unified report envelope; `check` and `audit` gain additive `--unified` flags with the same envelope, and their existing `--json` outputs stay byte-identical. Exit codes: `0` pass/warn, `1` fail, `2` usage/IO. Case format and scoring details: [`docs/evals.md`](./docs/evals.md).
+
 ---
 
 ## 🛡️ Governing for Real
@@ -259,6 +279,7 @@ Scyvera provides complementary governance layers:
 |---|---|---|---|
 | **Tier 0: Structural** | `validate_contract()`, `lint_contract()` | Validates that `contract.yaml` is structurally and semantically well-formed against JSON Schemas and the ACxxx rules. | Declaration conformance |
 | **Tier 1: Static** | `check_contract()`, `Tier1Adapter` | Compares exercised services and approval paths in n8n/LangGraph code against the contract. | Static conformance |
+| **Tier 2 groundwork** | `scyvera.evals` runner + `scyvera eval` CLI + the unified report envelope (`scyvera.unified`) | Runtime trace scoring: four-axis eval (constraints, approval, recovery, replay) over governed agent runs, projected into the same envelope as audit and check. | Measured conformance |
 | **Runtime Enforcement** | `ContractEnforcer` (`load()`, `from_declaration()`) | Gates Python calls against declared permissions and side effects with **Default-Deny**; interrupts at approval boundaries; seals contracts with SHA-256. | Execution boundary |
 | **Identity Pinning** | `ContractIdentity`, `verify_integrity()` | Pins the canonical path and load-time hash, refuses symlink escapes, and detects post-load path swaps. | Substitution defense (T5/T12/T14) |
 | **Gateway Isolation** | `BaseGateway`, `GitHubGateway`, `QdrantGateway` | Holds credentials privately and gates every external API call, structurally preventing gate bypass. | Credential & API isolation |
