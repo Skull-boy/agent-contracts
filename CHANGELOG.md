@@ -87,6 +87,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Golden fixture**: `implementations/langgraph/duplicate-issue-detector/evals/refund-agent.eval.yaml` plus a stdlib-only agent fixture and contract exercises a read, a pending approval, an approved write, and a deliberate undeclared action. It pins `constraints=0.0`, `approval=1.0`, `recovery=1.0`, `replay=1.0`, total `75.0` (the undeclared attempt is intentionally a constraint failure).
 - **Docs**: new [`docs/evals.md`](./docs/evals.md) covers the case format, factory convention, axis semantics, determinism, and the 75-point rationale. `tests/test_evals.py` pins the golden score, per-axis failures, malformed-case rejection, and JSONL round-trips.
 
+### Added — Unified report format (M2.5, RFC 0003 §C3/C4)
+- **New `src/scyvera/unified.py`**: one additive envelope (`report_version`, `tool`, `mode`, `status`, `subject`, `summary`, `findings`, `data`) shared by audit, conformance tiers, and eval. `UnifiedReport` is frozen, sorts findings by severity/id/path, and serializes with sorted keys and no timestamp, so identical input produces byte-identical output.
+- **Projections**: `from_audit_report()`, `from_check_report()`, and `from_eval_result()` (plus `CheckReport.unified()`, `EvalResult.unified()`, and `audit.unify_audit_report()`) carry the producer's full existing payload in `data`; `audit --json`, `render_check()`, and `EvalResult.to_json()` keep their published bytes unchanged.
+- **Status mapping**: audit PASS/WARN/FAIL (fail-under breach is the only FAIL; any finding without a breach is WARN; a finding-free report is PASS), tier 0 (schema/error ACxxx FAIL, soft warnings WARN), tier 1 (`T101`/error `T102` FAIL, T103-only WARN), eval (`expected_ok` false FAIL, otherwise WARN). Tier 2 is representable in the schema but the CLI keeps its loud exit-2 refusal.
+- **New `schemas/report/v1/unified-report.schema.json`** (packaged copy included): enums for mode/status/severity, the six-key finding record, and an open `summary`/`data` object.
+- **CLI**: new `scyvera eval <case.eval.yaml> [--json]` renders PASS/WARN/FAIL plus the four axes and emits the unified envelope with `--json`; `scyvera check --unified` and `scyvera audit --unified` emit the same envelope while keeping their exit-code semantics (`audit --json` and `--unified` are mutually exclusive).
+- **Evidence**: `tests/test_report_shape.py` validates every mode against the schema, pins the identical eight-key top-level shape, status and finding normalization, deterministic bytes, the pre-change serializer snapshots, and the CLI 0/1/2 matrix.
+
 ## [1.3.0] — 2026-11-04
 
 ### Added — Policy Packs (M2.7)
