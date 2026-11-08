@@ -637,12 +637,13 @@ agent-contracts/
 │   ├── audit_rules.py                  # AUxxx rule registry and suggestions
 │   ├── builder.py                      # Programmatic Contract Builder API
 │   ├── chain.py                        # Pure hash-chain mechanics (RFC 0003 §C1)
-│   ├── cli.py                          # CLI: validate, lint, check, self-check, audit, init
+│   ├── cli.py                          # CLI: validate, lint, check, self-check, audit, eval, init
 │   ├── conformance.py                  # Tier 0/1 conformance engine and T101–T103
 │   ├── enforcer.py                     # Runtime enforcer, identity pinning, dynamic declarations
 │   ├── exceptions.py                   # Exception hierarchy
 │   ├── gateway.py                      # Gated gateway layer (base, GitHub, Qdrant)
 │   ├── generate.py                     # Schema-valid contract draft generator
+│   ├── guardrails.py                   # v1.2 guardrails: budgets, rate windows, fail-closed
 │   ├── linter.py                       # Tier 2 semantic linter (ACxxx)
 │   ├── packs.py                        # Policy Pack loader and validation
 │   ├── packs/                          # Packaged Policy Packs (wheel data)
@@ -651,6 +652,7 @@ agent-contracts/
 │   ├── reseal.py                       # M1.4 re-seal ritual
 │   ├── selfcheck.py                    # Package self-integrity engine (RFC 0003 §C2)
 │   ├── trace.py                        # RFC 0003 §C4 execution trace and JSONL
+│   ├── unified.py                      # Unified report envelope; projections for audit/check/eval (M2.5)
 │   ├── validator.py                    # Multi-version schema validation engine
 │   ├── evals/                          # Trace-driven eval harness (M2.4)
 │   └── schemas/                        # Bundled schemas (v1, v1.1, and v1.2)
@@ -658,28 +660,12 @@ agent-contracts/
 │   ├── generate_self_manifest.py       # Writes the canonical self manifest
 │   ├── generate_sbom.py                # Deterministic CycloneDX 1.5 SBOM
 │   └── build_release_manifest.py       # RFC 0003 §C6 attestation bundle
-├── tests/
-│   ├── fixtures/                       # Validator fixtures and audit corpus
-│   ├── test_audit*.py                  # Rules, contexts, dogfood, drafts, report
-│   ├── test_conformance_cli.py         # Tier 0 CLI and exit codes
-│   ├── test_tier1_n8n.py               # n8n static adapter findings
-│   ├── test_tier1_langgraph.py         # LangGraph static adapter findings
-│   ├── test_registry.py                # Registry behavior
-│   ├── test_registry_chain.py          # Hash chain, tamper, migration (T13)
-│   ├── test_contract_identity.py       # Identity pinning and symlink refusal (T12/T14)
-│   ├── test_reseal.py                  # Re-seal ritual fail-closed paths
-│   ├── test_self_check.py              # Tamper detection and CLI exit codes
-│   ├── test_trace.py                   # Trace round-trip and JSONL rejection
-│   ├── test_evals.py                   # Golden eval, axes, and case rejection
-│   ├── test_gateway.py                 # Gateway boundary tests
-│   ├── test_enforcer.py                # Runtime enforcer tests (T1–T10)
-│   ├── test_declaration.py             # Dynamic declaration and sealing
-│   ├── test_yaml_pin.py                # Safe YAML deserialization pin (PD-4)
-│   └── ...                             # Builder, CLI, linter, lifecycle, schema sync, packs
+├── tests/                              # 33 test files: conformance, evals, trace, enforcer, audit, report-shape pins
+│   └── fixtures/                       # Validator fixtures and audit corpus
 └── implementations/                    # Multi-framework reference implementations
-    ├── n8n/                            # Reference n8n workflows
-    ├── langgraph/                      # LangGraph reference implementation
-    └── rfcs/                           # Implementation design records
+    ├── n8n/duplicate-issue-detector/        # Tier-1 reference (T101 sample pinned)
+    ├── langgraph/duplicate-issue-detector/  # Tier-1 reference (AST adapter; golden eval fixture)
+    └── rfcs/                                # Adapter-floor RFCs for implementations
 ```
 
 ---
