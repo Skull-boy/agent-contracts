@@ -79,6 +79,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 scyvera = [
     "schemas/*/*.json",
+    "schemas/report/*/*.json",
     "packs/*.yaml",
     "_self_manifest.json",
 ]

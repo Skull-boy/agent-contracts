@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Skull-boy/agent-contracts/main/schemas/report/v1/unified-report.schema.json",
+  "title": "Scyvera unified report envelope v1",
+  "description": "Additive envelope shared by scyvera audit, check tiers 0/1/2, and eval (RFC 0003 C3/C4, roadmap M2.5). Producer payloads remain unchanged inside data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_version",
+    "tool",
+    "mode",
+    "status",
+    "subject",
+    "summary",
+    "findings",
+    "data"
+  ],
+  "properties": {
+    "report_version": {
+      "const": 1
+    },
+    "tool": {
+      "const": "scyvera"
+    },
+    "mode": {
+      "enum": [
+        "audit",
+        "check-tier0",
+        "check-tier1",
+        "check-tier2",
+        "eval"
+      ]
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "WARN",
+        "FAIL"
+      ]
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "object"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "data": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "severity",
+        "title",
+        "message",
+        "path",
+        "node_id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "node_id": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

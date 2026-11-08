@@ -45,10 +45,13 @@ import abc
 import enum
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 from .linter import LintWarning, lint_contract
 from .validator import ValidationError, validate_contract
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, avoids import cycles
+    from .unified import UnifiedReport
 
 __all__ = [
     "CheckReport",
@@ -374,6 +377,51 @@ class CheckReport:
             or (finding.code == "T102" and finding.severity == "error")
             for finding in self.tier1_findings
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the report as a JSON-serializable mapping (M2.5, additive).
+
+        This is the payload carried inside the unified envelope's ``data``
+        key. It is new: no existing call site, renderer, or exit-code path
+        reads it, so the pinned ``render_check`` output is unchanged.
+        """
+        return {
+            "contract_path": self.contract_path,
+            "tier": int(self.tier),
+            "tier_note": self.tier_note,
+            "valid": self.valid,
+            "validation_errors": [
+                {"path": error.path, "message": error.message}
+                for error in self.validation_errors
+            ],
+            "warnings": [
+                {
+                    "rule_id": warning.rule_id,
+                    "title": warning.title,
+                    "message": warning.message,
+                    "severity": warning.severity,
+                }
+                for warning in self.warnings
+            ],
+            "tier1_findings": [
+                {
+                    "code": finding.code,
+                    "title": finding.title,
+                    "message": finding.message,
+                    "path": finding.path,
+                    "node_id": finding.node_id,
+                    "severity": finding.severity,
+                }
+                for finding in self.tier1_findings
+            ],
+            "tier1_failed": self.tier1_failed,
+        }
+
+    def unified(self) -> "UnifiedReport":
+        """Project this report into the RFC 0003 unified envelope (M2.5)."""
+        from .unified import from_check_report
+
+        return from_check_report(self)
 
 
 def resolve_tier(tier: str | CheckTier | None) -> tuple[CheckTier, str | None]:

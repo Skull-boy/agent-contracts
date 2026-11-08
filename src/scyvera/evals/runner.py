@@ -41,7 +41,10 @@ from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 import re
-from typing import Any, Callable, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, avoids import cycles
+    from ..unified import UnifiedReport
 
 from ..enforcer import AuditEntry, ContractEnforcer
 from ..exceptions import (
@@ -124,6 +127,16 @@ class EvalResult:
         return json.dumps(
             self.to_dict(), indent=2, sort_keys=True, ensure_ascii=False
         )
+
+    def unified(self) -> "UnifiedReport":
+        """Project this result into the RFC 0003 unified envelope (M2.5).
+
+        ``to_dict()`` is intentionally unchanged: existing consumers keep the
+        published eval JSON, and the unified shape is additive.
+        """
+        from ..unified import from_eval_result
+
+        return from_eval_result(self)
 
 
 @dataclass(frozen=True)
