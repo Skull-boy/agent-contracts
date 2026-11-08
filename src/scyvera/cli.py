@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from .audit import AuditError, scan_tree
+from .audit import AuditError, scan_tree, unify_audit_report
 from .conformance import (
     CheckTier,
     Tier1Adapter,
@@ -30,6 +30,7 @@ from .selfcheck import (
     SelfCheckResult,
     self_check,
 )
+from .unified import audit_status, from_check_report, from_eval_result
 from .validator import validate_contract
 
 # Loaded tier 1 adapters, keyed by absolute source path, so repeated checks in
@@ -233,6 +234,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to custom JSON Schema file (tier 0 only)",
     )
 
+    check_parser.add_argument(
+        "--unified",
+        action="store_true",
+        help=(
+            "Emit the RFC 0003 unified report envelope (report_version: 1) "
+            "instead of the terminal render; exit codes are unchanged"
+        ),
+    )
+
     # self-check subcommand (RFC 0003 §C2, roadmap M3.4)
     self_check_parser = subparsers.add_parser(
         "self-check",
@@ -296,6 +306,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     audit_parser.add_argument(
+        "--unified",
+        action="store_true",
+        help=(
+            "Emit the RFC 0003 unified report envelope (report_version: 1); "
+            "conflicts with --json, which keeps its published bytes"
+        ),
+    )
+
+    audit_parser.add_argument(
         "--badge",
         action="store_true",
         help=(
@@ -338,6 +357,36 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Apply a local Policy Pack from packs/<NAME>.yaml to the "
             "--generate draft (requires --generate)"
+        ),
+    )
+
+    # eval subcommand (RFC 0003 §C4, roadmap M2.4/M2.5)
+    eval_parser = subparsers.add_parser(
+        "eval",
+        help="Run a trace-driven eval case and score it on the four C4 axes.",
+        description=(
+            "Load a fail-closed *.eval.yaml case, run its reference agent "
+            "against the case's contract, collect an RFC 0003 C4 trace, and "
+            "score constraints, approval, recovery, and replay. The human "
+            "output is the house PASS/WARN/FAIL style; --json emits the "
+            "unified report envelope."
+        ),
+        epilog="exit codes: 0 pass/warn, 1 fail, 2 usage/IO error",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    eval_parser.add_argument(
+        "case",
+        type=Path,
+        help="Path to a *.eval.yaml eval case",
+    )
+
+    eval_parser.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            "Emit the unified report envelope (report_version: 1) and "
+            "nothing else"
         ),
     )
 
@@ -430,6 +479,7 @@ def run_check(
     contract_path: Path,
     tier: str = "auto",
     schema_path: Path | None = None,
+    unified: bool = False,
 ) -> int:
     """Run the RFC 0003 §C3 conformance check and return its exit code.
 
@@ -440,6 +490,9 @@ def run_check(
     finding), ``2`` usage/IO error, including an explicit tier 2 request or a
     tier 1 target no adapter claims — per the roadmap's "tier auto-degrades
     with explicit notice, never silently" acceptance rule.
+
+    ``unified`` swaps the terminal render for the RFC 0003 unified envelope;
+    the verdict and exit code are computed exactly as before.
     """
     target = contract_path if contract_path.is_dir() else contract_path.parent
     contract = (
@@ -492,9 +545,55 @@ def run_check(
         print(f"      invalid YAML: {error}")
         return 1
 
-    print(render_check(report), end="")
+    if unified:
+        print(from_check_report(report).to_json())
+    else:
+        print(render_check(report), end="")
 
     return 1 if (not report.valid or report.tier1_failed) else 0
+
+
+def run_eval_case(path: Path, as_json: bool = False) -> int:
+    """Run one trace-driven eval case and return its process exit code.
+
+    Exit codes: ``0`` PASS/WARN, ``1`` FAIL (``expected_ok`` false), ``2``
+    usage/IO error (a malformed case, a missing contract, or a bad agent
+    factory). ``--json`` emits the RFC 0003 unified envelope; the default is
+    the house PASS/WARN/FAIL render.
+    """
+    from .evals import EVAL_AXES, EvalCaseError, run_eval_file
+    from .unified import eval_status
+
+    try:
+        result = run_eval_file(path)
+    except EvalCaseError as error:
+        print(f"scyvera eval: error: {error}", file=sys.stderr)
+        return 2
+    except FileNotFoundError:
+        print(f"ERROR  {path}")
+        print("       file not found")
+        return 2
+    except PermissionError:
+        print(f"ERROR  {path}")
+        print("       permission denied")
+        return 2
+
+    if as_json:
+        print(from_eval_result(result).to_json())
+    else:
+        status = eval_status(result)
+        lines = [
+            f"{status}  {result.name}",
+            f"      total: {result.total}/100",
+        ]
+        for axis in EVAL_AXES:
+            lines.append(f"      {axis}: {getattr(result.axes, axis)}")
+        lines.append(f"      trace: {len(result.trace.entries)} entries")
+        for warning in result.warnings:
+            lines.append(f"      [EVAL] {warning}")
+        print("\n".join(lines))
+
+    return 0 if result.expected_ok else 1
 
 
 def run_init(
@@ -744,6 +843,7 @@ def run_audit(
     generate: Path | None = None,
     force: bool = False,
     pack: str | None = None,
+    unified: bool = False,
 ) -> int:
     """Run the audit command and return its process exit code.
 
@@ -751,7 +851,17 @@ def run_audit(
     ``--fail-under`` threshold breach, ``2`` usage or I/O error. With
     ``--generate`` the command additionally writes one contract draft
     (RFC 0004 §5); nothing else is ever written.
+
+    ``unified`` emits the RFC 0003 unified envelope and is mutually exclusive
+    with ``--json``, whose published bytes are never changed.
     """
+    if as_json and unified:
+        print(
+            "scyvera audit: error: --json and --unified are mutually exclusive",
+            file=sys.stderr,
+        )
+        return 2
+
     if pack is not None and generate is None:
         print(
             "scyvera audit: error: --pack requires --generate <contract>",
@@ -838,16 +948,22 @@ def run_audit(
 
     scored = [finding for finding in report.findings if finding.scored]
 
-    if as_json:
-        if badge or draft_path is not None:
-            payload = report.to_dict()
-            if badge:
-                payload["badge"] = render_badge(report)
-            if draft_path is not None:
-                payload["draft_path"] = draft_path
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-        else:
-            print(report.to_json())
+    payload = report.to_dict()
+    if badge:
+        payload["badge"] = render_badge(report)
+    if draft_path is not None:
+        payload["draft_path"] = draft_path
+
+    if unified:
+        print(
+            unify_audit_report(
+                payload,
+                subject=report.target,
+                threshold=threshold,
+            ).to_json()
+        )
+    elif as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         print(render_report(report))
         if draft_path is not None:
@@ -874,7 +990,15 @@ def main() -> int:
         return run_lint(args.contract)
 
     if args.command == "check":
-        return run_check(args.contract, tier=args.tier, schema_path=args.schema)
+        return run_check(
+            args.contract,
+            tier=args.tier,
+            schema_path=args.schema,
+            unified=args.unified,
+        )
+
+    if args.command == "eval":
+        return run_eval_case(args.case, as_json=args.json)
 
     if args.command == "self-check":
         return run_self_check(as_json=args.json)
@@ -888,6 +1012,7 @@ def main() -> int:
             generate=args.generate,
             force=args.force,
             pack=args.pack,
+            unified=args.unified,
         )
 
     if args.command == "init":
