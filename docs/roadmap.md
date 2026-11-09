@@ -187,3 +187,27 @@ Distribution reach = M3.1 + M3.2 + PD-6 + PD-7.
 | **P3** | Distribution (C6) | 0/5 | Skill/plugin installable + attested |
 | **P4** | Post-release enforcer upgrades (optional) | 0/3 | T1 mitigation, async approvals, A2A handshake |
 | **v1.4 gate** | Production-Defensibility Program (PD rows, cross-phase) | 0/8 | Signed install + self-check + CI Action + MCP mode + hash-chained receipts |
+
+---
+
+## Stranger-test hardening (R1)
+
+R1 closes the false-PASS shapes found by cold-running `scyvera audit` on
+realistic repositories. It is additive to the phases above.
+
+| Item | Shipped behavior | Evidence |
+|---|---|---|
+| Combined imports | AU-NET-002 parses `import a, b` as a comma-separated list, so `import os, requests` and `import requests, os` both match; the existing `fetch(` probe is unchanged. | `tests/test_audit_stranger.py::test_combined_import_matches_regardless_of_position` |
+| Agent/ML identity | AU-NET-002 recognizes `openai`, `anthropic`, `google.genai`, `cohere`, `botocore`, `boto3`, `huggingface_hub`, `wandb`, and `replicate`, names the detected library, and suggests the `permissions: network:egress:<host>` field. | `test_agent_library_is_named_in_the_finding`, `test_google_genai_is_detected_without_flagging_google_root` |
+| Source credentials | New AU-SECRET-001 (high) finds hardcoded credential-like literals in source files across assignment styles, redacts the value, and suggests moving it to an environment variable. The value floor is shared with AU-ENV-002 (>=16 chars, no whitespace, entropy >=3.0, placeholder allowlist); fixtures stay quarantined and unscored. | `test_hardcoded_credentials_are_found_in_four_languages`, `test_secret_allowlist_and_value_floor` |
+| Governance status | `governance_status(payload)` / `governance_report(payload)` perform a bounded (3 directory levels), read-only, name-based search for `contract.yaml`, honoring the scan's skip dirs and symlink refusal. The human render marks `[ungoverned]` and gives one next step on PASS; `--unified` adds `summary.governance` (`status`, `contract_path`). `audit --json` is unchanged. | `test_ungoverned_render_carries_banner_and_hint`, `test_unified_summary_carries_governance_additively`, `test_audit_json_bytes_exclude_governance` |
+
+**Dogfood:** `scyvera audit .` remains 92/100 Shielded. The only self-match
+introduced by the new rules was a documentation example in `audit_rules.py`;
+the wording was corrected in the repository instead of lowering rule
+severity. `tests/test_gateway.py` uses a placeholder token so the repository's
+own test material stays outside the source-credential rule.
+
+**Notes:** the task named `fac9a64` as the main tip; the branch was cut from
+the then-current `origin/main` at `ea4d27a` (merged PR #70), which contains
+that commit. No roadmap row existed for R1, so this section is additive.
