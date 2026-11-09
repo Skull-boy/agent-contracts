@@ -159,12 +159,101 @@ _IWR_PIPE_RE = re.compile(
     r"(?:iex|Invoke-Expression)\b",
     re.IGNORECASE,
 )
-_NET_LIB_RE = re.compile(
-    r"\b(?:import|from)\s+(requests|httpx|urllib|socket|aiohttp)\b"
-    r"|\bfetch\s*\(",
+# Network-capable import roots (AU-NET-002). Agent/ML SDKs are network clients
+# in practice: importing one is the prelude to an outbound call. The root is
+# the first dotted component (`urllib.parse` -> `urllib`), so a combined
+# `import os, requests` is detected regardless of position.
+#
+# `google.genai` is handled separately: its import root is `google`, which is
+# far too broad to treat as a network library on its own.
+_NETWORK_IMPORT_ROOTS = frozenset(
+    {
+        "requests",
+        "httpx",
+        "urllib",
+        "socket",
+        "aiohttp",
+        "openai",
+        "anthropic",
+        "cohere",
+        "boto3",
+        "botocore",
+        "huggingface_hub",
+        "wandb",
+        "replicate",
+    }
+)
+
+#: Import clause after the `import`/`from` keyword, minus a trailing comment.
+_IMPORT_CLAUSE_RE = re.compile(
+    r"^\s*(?:import|from)\s+(.+?)(?:\s*#.*)?$",
     re.IGNORECASE,
 )
+#: `from <module> import <names>` needs the module and names separately.
+_FROM_IMPORT_RE = re.compile(
+    r"^\s*from\s+([A-Za-z_][\w.]*)\s+import\s+(.+?)(?:\s*#.*)?$",
+    re.IGNORECASE,
+)
+#: Plain `fetch(` probe retained for JavaScript/TypeScript.
+_FETCH_CALL_RE = re.compile(r"\bfetch\s*\(", re.IGNORECASE)
+#: Special-cased module that is network-capable without a broad `google` root.
+_GOOGLE_GENAI_RE = re.compile(r"^google\.genai(?:\.|$)", re.IGNORECASE)
+
+#: Known API hosts for agent/ML SDKs. HTTP libraries keep the existing
+#: first-URL-in-file behavior (`_network_permission`).
+_LIBRARY_HOSTS: dict[str, str] = {
+    "openai": "api.openai.com",
+    "anthropic": "api.anthropic.com",
+    "cohere": "api.cohere.com",
+    "boto3": "amazonaws.com",
+    "botocore": "amazonaws.com",
+    "huggingface_hub": "huggingface.co",
+    "wandb": "api.wandb.ai",
+    "replicate": "api.replicate.com",
+    "google.genai": "generativelanguage.googleapis.com",
+}
+
 _URL_HOST_RE = re.compile(r"https?://([A-Za-z0-9.-]+)")
+
+# AU-SECRET-001: hardcoded credential-like literals in source files.
+#
+# The value floor is shared with AU-ENV-002 (`_looks_like_secret`): at least
+# 16 characters, no whitespace, not a placeholder vocabulary word, and Shannon
+# entropy >= 3.0. Short or low-entropy values cannot fire. Severity is `high`,
+# not `critical`: a literal in a snippet may be a documented public key, and
+# test material under `tests/fixtures/` is quarantined by the scan engine.
+#
+# Regex inventory (deliberately small and documented):
+#   _CREDENTIAL_NAME_PATTERN - identifier vocabulary shared by the next two
+#   _SECRET_ASSIGN_RE       - `name ... = "value"` / `name ... := "value"`
+#                             (covers Python/JS/Go/Rust assignment syntax)
+#   _SECRET_PROPERTY_RE     - `name: "value"` (JSON/JS object style)
+#   _QUOTED_LITERAL_RE      - any quoted literal, for provider-prefix tokens
+#   _TOKEN_PREFIX_RE        - sk-, ghp_, wb_, hf_, AKIA, pat_ token prefixes
+#   _JUPYTER_PLACEHOLDER_RE - `"x" * len(...)` notebook placeholders
+_CREDENTIAL_NAME_PATTERN = (
+    r"(?<![A-Za-z0-9])"
+    r"(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|"
+    r"private[_-]?key|token|secret|password|passwd|pwd)"
+    r"(?![A-Za-z0-9])"
+)
+_SECRET_ASSIGN_RE = re.compile(
+    rf"(?i)(?P<name>{_CREDENTIAL_NAME_PATTERN})"
+    r"[^\n\"'=]{0,60}?(?:=|:=)\s*[\"'](?P<value>[^\"'\n]{16,})[\"']"
+)
+_SECRET_PROPERTY_RE = re.compile(
+    rf"(?i)(?P<name>{_CREDENTIAL_NAME_PATTERN})"
+    r"\s*:\s*[\"'](?P<value>[^\"'\n]{16,})[\"']"
+)
+_QUOTED_LITERAL_RE = re.compile(r"[\"']([^\"'\n]{16,})[\"']")
+_TOKEN_PREFIX_RE = re.compile(
+    r"(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|"
+    r"wb_[A-Za-z0-9_-]{16,}|hf_[A-Za-z0-9]{16,}|"
+    r"AKIA[0-9A-Z]{12,}|pat_[A-Za-z0-9_-]{16,})"
+)
+_JUPYTER_PLACEHOLDER_RE = re.compile(
+    r"[\"']x[\"']\s*\*\s*len\s*\(", re.IGNORECASE
+)
 
 _WORKFLOW_SUFFIXES = frozenset({".yml", ".yaml"})
 _WRITE_ALL_RE = re.compile(
@@ -396,11 +485,67 @@ def _is_dockerfile(filename: str) -> bool:
     )
 
 
+def _permission_for_host(host: str) -> str:
+    safe_host = re.sub(r"[^A-Za-z0-9_-]", "_", host).strip("_") or "external"
+    return f"network:egress:{safe_host}"
+
+
 def _network_permission(text: str) -> str:
     host_match = _URL_HOST_RE.search(text)
     host = host_match.group(1) if host_match else "external"
-    safe_host = re.sub(r"[^A-Za-z0-9_-]", "_", host).strip("_") or "external"
-    return f"network:egress:{safe_host}"
+    return _permission_for_host(host)
+
+
+def _network_import_library(line: str) -> str | None:
+    """Return the network-capable library imported on ``line``, if any.
+
+    Handles the Python import styles that appear in real repositories:
+
+    * ``import requests``
+    * ``import os, requests`` / ``import requests as http, os``
+    * ``from requests import get``
+    * ``from google.genai import types``
+
+    plus the JavaScript/TypeScript ``fetch`` call. The dotted module is
+    reduced to its root (``urllib.parse`` -> ``urllib``) because the root is
+    what identifies the client; ``google.genai`` is special-cased because its
+    root, ``google``, is far too broad to treat as a network library.
+    """
+    from_match = _FROM_IMPORT_RE.match(line)
+    if from_match is not None:
+        module = from_match.group(1).lower()
+        if _GOOGLE_GENAI_RE.match(module):
+            return "google.genai"
+        root = module.split(".")[0]
+        if root in _NETWORK_IMPORT_ROOTS:
+            return root
+        if module == "google" and re.search(
+            r"\bgenai\b", from_match.group(2)
+        ):
+            return "google.genai"
+        return None
+
+    clause_match = _IMPORT_CLAUSE_RE.match(line)
+    if clause_match is not None:
+        # A bare `from` clause was handled above; anything else here is a
+        # comma-separated `import` list, so item position no longer matters.
+        if line.lstrip().lower().startswith("from "):
+            return None
+        for item in clause_match.group(1).split(","):
+            token = item.strip().split(" as ")[0].strip()
+            if not token:
+                continue
+            lowered = token.lower()
+            if _GOOGLE_GENAI_RE.match(lowered):
+                return "google.genai"
+            root = lowered.split(".")[0]
+            if root in _NETWORK_IMPORT_ROOTS:
+                return root
+        return None
+
+    if _FETCH_CALL_RE.search(line):
+        return "fetch"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -578,15 +723,21 @@ def _match_network_client(
     for number, raw in enumerate(text.splitlines(), start=1):
         if _is_comment_line(raw):
             continue
-        match = _NET_LIB_RE.search(raw)
-        if match is None:
+        library = _network_import_library(raw)
+        if library is None:
             continue
 
-        library = match.group(1) or "fetch"
+        known_host = _LIBRARY_HOSTS.get(library)
+        permission = (
+            _permission_for_host(known_host)
+            if known_host is not None
+            else _network_permission(text)
+        )
         return [
             (
                 number,
-                f"Outbound network client '{library}' is used in '{filename}'.",
+                f"Outbound network client '{library}' is used in '{filename}'; "
+                f"declare it in the contract as permissions: {permission}.",
                 {
                     "capabilities": [
                         {
@@ -594,7 +745,67 @@ def _match_network_client(
                             "description": f"Outbound network access via {library}",
                         }
                     ],
-                    "permissions": [_network_permission(text)],
+                    "permissions": [permission],
+                },
+            )
+        ]
+    return []
+
+
+def _match_source_secret(
+    path: str, text: str, filename: str
+) -> list[tuple[int | None, str, Mapping[str, Any]]]:
+    """Find hardcoded credential-like literals in source files (AU-SECRET-001).
+
+    Language-agnostic: the assignment regex accepts ``name = 'value'``,
+    ``name := "value"``, ``name: "value"`` and ``let name = "value"`` shapes,
+    so Python, JavaScript, Go, and Rust are covered without parsing. Values
+    must clear the shared ``_looks_like_secret`` floor (>=16 characters, no
+    whitespace, entropy >= 3.0, not a placeholder). Severity is ``high`` (not
+    ``critical``) because a literal in a snippet may be a documented public
+    key; fixtures under ``tests/fixtures`` are quarantined by the scan engine.
+    """
+    if Path(filename).suffix.lower() not in _SOURCE_SUFFIXES:
+        return []
+
+    for number, raw in enumerate(text.splitlines(), start=1):
+        if not raw.strip() or _is_comment_line(raw):
+            continue
+        if _JUPYTER_PLACEHOLDER_RE.search(raw):
+            continue
+
+        name: str | None = None
+        value: str | None = None
+        for pattern in (_SECRET_ASSIGN_RE, _SECRET_PROPERTY_RE):
+            match = pattern.search(raw)
+            if match is not None:
+                name = match.group("name")
+                value = match.group("value")
+                break
+
+        if value is None:
+            # Provider-prefixed tokens (sk-, ghp_, wb_, hf_, AKIA, pat_) are
+            # recognizable even when assigned to a non-credential name.
+            for literal in _QUOTED_LITERAL_RE.finditer(raw):
+                if _TOKEN_PREFIX_RE.search(literal.group(1)):
+                    name = "token"
+                    value = literal.group(1)
+                    break
+            if value is None:
+                continue
+
+        if not _looks_like_secret(value):
+            continue
+
+        return [
+            (
+                number,
+                f"Hardcoded credential-like value assigned to '{name}' in "
+                f"'{filename}' (value redacted). Move it to an environment "
+                "variable and rotate it if it was ever real.",
+                {
+                    "permissions": ["secrets:read"],
+                    "approvals": [{"action": "secrets:read", "required": True}],
                 },
             )
         ]
@@ -857,5 +1068,11 @@ RULES: list[AuditRule] = [
         "low",
         "unpinned dependency manifest",
         _match_unpinned_dependencies,
+    ),
+    _rule(
+        "AU-SECRET-001",
+        "high",
+        "hardcoded credential in source file",
+        _match_source_secret,
     ),
 ]
