@@ -1,4 +1,5 @@
 import argparse
+import importlib.metadata
 import importlib.util
 import json
 import sys
@@ -146,10 +147,31 @@ def _discover_tier1_adapter(target: Path) -> Tier1Adapter | None:
     return None
 
 
+def _installed_version() -> str:
+    """Return the installed scyvera release, or ``"unknown"``.
+
+    ``--version`` is a diagnostic, so a source checkout without distribution
+    metadata must still exit 0 with one line instead of raising a traceback.
+    """
+    try:
+        return importlib.metadata.version("scyvera")
+    except Exception:
+        # The flag must never crash the CLI, including on a broken install.
+        return "unknown"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scyvera",
         description="Validate and manage Agent Contract files.",
+        epilog="run 'scyvera --version' to report the installed release.",
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"scyvera {_installed_version()}",
+        help="Show the installed scyvera release and exit.",
     )
 
     subparsers = parser.add_subparsers(

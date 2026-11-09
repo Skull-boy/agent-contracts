@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `scyvera --version`
+- **`scyvera --version`**: prints exactly `scyvera <version>` (the installed distribution's metadata version) and exits `0`; when the distribution metadata is missing it prints `scyvera unknown` instead of tracebacking. The top-level `--help` epilog now points at the flag. The README gained a short "Troubleshooting installs" section covering stale-wheel reinstalls and duplicate launchers on `PATH`.
+
 ### Added — MCP server mode (PD-7)
 - **`scyvera serve-mcp`**: a stdlib-only, newline-delimited JSON-RPC 2.0 server over stdio exposes the existing engines as five MCP tools — `scyvera_audit`, `scyvera_validate`, `scyvera_check`, `scyvera_self_check`, and `scyvera_packages`. Tool results are the CLI's own payloads (`report_version: 1` audit plus the M2.5 `unified` envelope from the same scan, `CheckReport`, `self_check_version: 1`), never a reimplementation; internal failures are JSON-RPC errors, never empty successes. stdout carries protocol frames only, and the module contains no process, network, or dynamic-code surface.
 - **Roadmap conflict raised, not silently reworded**: PD-7 names the command `scyvera mcp`; the shipped command is `scyvera serve-mcp` (the task's canonical phrase). The roadmap row keeps its original wording, with a shipped note recording the difference.

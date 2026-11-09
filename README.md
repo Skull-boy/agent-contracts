@@ -206,6 +206,32 @@ gh attestation verify dist/scyvera-<version>-py3-none-any.whl \
 
 ---
 
+## Troubleshooting installs
+
+Start with the version the command actually resolves:
+
+```bash
+scyvera --version
+```
+
+**Symptom:** `pip install` (git or PyPI) completes, but old commands or old behavior remain.
+**Cause:** pip's satisfied-check or wheel cache reused a pre-existing wheel.
+**Fix:** remove the old distribution twice (metadata and launcher can live in different places), then force a fresh install:
+
+```bash
+pip uninstall -y scyvera
+pip uninstall -y scyvera
+pip install --force-reinstall --no-deps --no-cache-dir <url>
+```
+
+**Symptom:** multiple `scyvera.exe` launchers on `PATH`, and the wrong one answers.
+**Cause:** an earlier install (system Python, another venv, or a user-site shim) comes first.
+**Fix:** list the candidates, activate the intended environment, and reinstall there. The first hit wins.
+
+```powershell
+where.exe scyvera
+```
+
 ## 🔍 Conformance: Check What the Code Actually Does
 
 `scyvera check` implements the RFC 0003 §C3 tiers. Tier 0 is a strict superset of `validate` + `lint`; Tier 1 inspects implementation source against the declared contract.
