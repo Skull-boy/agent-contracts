@@ -13,7 +13,7 @@ attested environment rather than a wish list.
 
 Usage::
 
-    python tools/generate_sbom.py --wheel dist/scyvera-1.3.0-py3-none-any.whl \
+    python tools/generate_sbom.py --wheel dist/scyvera-1.4.0-py3-none-any.whl \
         --output dist/scyvera.cdx.json
 """
 

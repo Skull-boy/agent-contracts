@@ -142,8 +142,8 @@ is deliberately explicit so the marketing language can never outrun the merged c
 | **PD-3** | Cross-platform test matrix: 3.10–3.14 × linux/windows/macOS | All matrix combinations green on PRs to main |
 | **PD-4** | Deserialization pin: tests assert only `yaml.safe_load`/`yaml.safe_load_file` paths exist | no `yaml.load` without explicit unsafe refactor; enforced by test |
 | **PD-5** | Published perf benchmark (synthetic 10k-file repo) | benchmark script + recorded numbers in docs; pre-answers big-repo claims |
-| **PD-6** | Official `scyvera-audit-action` GitHub Action (installs scyvera, runs `audit --fail-under`, respects `--badge`) | Sample consuming repo; action pinned, tagged v1 |
-| **PD-7** | `scyvera mcp` server mode exposing validate/audit/check as MCP tools | stdio MCP server; deterministic outputs identical to CLI; usable by MCP-native harnesses <br>PD-7 shipped on `feat/pd7-mcp-server`: `scyvera serve-mcp` (the canonical name; the row's `scyvera mcp` wording is left as written) runs a stdlib-only, newline-delimited JSON-RPC 2.0 MCP server over stdio with `scyvera_audit`, `scyvera_validate`, `scyvera_check`, `scyvera_self_check`, and `scyvera_packages`; results are the existing engine payloads and diagnostics stay on stderr. |
+| **PD-6** | Official `scyvera-audit-action` GitHub Action (installs scyvera, runs `audit --fail-under`, respects `--badge`) | Sample consuming repo; action pinned, tagged v1 <br>PD-6 shipped in 1.4.0: `.github/actions/scyvera-gate/action.yml` installs `scyvera>=1.3,<2` (accepts 1.4.0), runs audit/conformance modes, honors `--fail-under` and `--badge`, and is dogfooded on push/pull request. |
+| **PD-7** | `scyvera mcp` server mode exposing validate/audit/check as MCP tools | stdio MCP server; deterministic outputs identical to CLI; usable by MCP-native harnesses <br>PD-7 shipped in 1.4.0 on `feat/pd7-mcp-server`: `scyvera serve-mcp` (the canonical name; the row's `scyvera mcp` wording is left as written) runs a stdlib-only, newline-delimited JSON-RPC 2.0 MCP server over stdio with `scyvera_audit`, `scyvera_validate`, `scyvera_check`, `scyvera_self_check`, and `scyvera_packages`; results are the existing engine payloads and diagnostics stay on stderr. |
 | **PD-8** | *(Optional, deferred)* Rust scanner binary emitting byte-identical RFC 0004 reports | differential test suite: Rust output ≡ Python output across corpora; shipped as separate wheel only when scale demands |
 
 ### Mapping to existing rows
@@ -186,7 +186,8 @@ Distribution reach = M3.1 + M3.2 + PD-6 + PD-7.
 | **P2** | Conformance & Evals (C3, C4) + Guardrails (C5) | 0/6 | `scyvera check` end-to-end |
 | **P3** | Distribution (C6) | 0/5 | Skill/plugin installable + attested |
 | **P4** | Post-release enforcer upgrades (optional) | 0/3 | T1 mitigation, async approvals, A2A handshake |
-| **v1.4 gate** | Production-Defensibility Program (PD rows, cross-phase) | 0/8 | Signed install + self-check + CI Action + MCP mode + hash-chained receipts |
+| **v1.4 gate** | Production-Defensibility Program (PD rows, cross-phase) | 6/8 PD rows shipped | Signed install + self-check + CI Action + MCP mode + hash-chained receipts; PD-5 benchmark open, PD-8 deferred |
+| **v1.4.0** | Release 1.4.0 (2026-11-09) | shipped | Full platform on PyPI; remaining distribution reach: `scyvera-harness` skill (M3.1) and per-target packaging (M3.2) |
 
 ---
 
