@@ -17,7 +17,7 @@ clock here would make otherwise-identical bundles byte-different.
 
 Usage::
 
-    python tools/build_release_manifest.py --wheel dist/scyvera-1.3.0-py3-none-any.whl \\
+    python tools/build_release_manifest.py --wheel dist/scyvera-1.4.0-py3-none-any.whl \\
         --self-manifest dist/installed/scyvera/_self_manifest.json \\
         --output dist/release-manifest.json
 """
