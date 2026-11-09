@@ -103,6 +103,7 @@ def test_registry_is_flat_and_complete():
         "AU-DOC-001",
         "AU-N8N-001",
         "AU-DEP-001",
+        "AU-SECRET-001",
     ]
 
 

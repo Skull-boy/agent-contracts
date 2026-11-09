@@ -43,7 +43,31 @@
       "minLength": 1
     },
     "summary": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "governance": {
+          "type": "object",
+          "description": "Additive audit-only governance surface (roadmap R1).",
+          "required": [
+            "status",
+            "contract_path"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "governed",
+                "ungoverned"
+              ]
+            },
+            "contract_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
     },
     "findings": {
       "type": "array",

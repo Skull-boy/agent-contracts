@@ -102,6 +102,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI**: new `scyvera eval <case.eval.yaml> [--json]` renders PASS/WARN/FAIL plus the four axes and emits the unified envelope with `--json`; `scyvera check --unified` and `scyvera audit --unified` emit the same envelope while keeping their exit-code semantics (`audit --json` and `--unified` are mutually exclusive).
 - **Evidence**: `tests/test_report_shape.py` validates every mode against the schema, pins the identical eight-key top-level shape, status and finding normalization, deterministic bytes, the pre-change serializer snapshots, and the CLI 0/1/2 matrix.
 
+### Fixed — combined-import network detection, source-credential rule, governance status (R1)
+- **AU-NET-002 (combined imports + agent/ML clients)**: imports are now parsed as a comma-separated identifier list, so both `import os, requests` and `import requests, os` match; `openai`, `anthropic`, `google.genai`, `cohere`, `botocore`, `boto3`, `huggingface_hub`, `wandb`, and `replicate` identify the client by name and suggest `permissions: network:egress:<host>`.
+- **AU-SECRET-001 (new, high)**: hardcoded credential-like literals in source files (`name = "..."`, `name := "..."`, `name: "..."`, plus `sk-`/`ghp_`/`wb_`/`hf_`/`AKIA`/`pat_` prefixes) are reported with the value redacted. The shared value floor is >=16 characters, no whitespace, entropy >=3.0, and a placeholder allowlist; `tests/fixtures/` quarantine keeps fixtures visible but unscored.
+- **Governance status**: `audit` now reports `governed`/`ungoverned` from a bounded, read-only, name-based search for `contract.yaml` (three directory levels, skipping the scan's normal skip dirs and symlinks). The human PASS/WARN/FAIL render marks `[ungoverned]` with one next-step hint on PASS; `--unified` adds `summary.governance` (`status`, `contract_path`) while `audit --json` stays byte-identical.
+- **Dogfood**: repository remains 92/100 Shielded. The only self-match introduced by the new rule set was the documentation string in `audit_rules.py`; the wording was fixed in the repository rather than lowering any rule severity.
+
 ## [1.3.0] — 2026-11-04
 
 ### Added — Policy Packs (M2.7)

@@ -123,7 +123,7 @@ def test_read_action_executes_without_approval():
 def test_token_not_accessible_outside_gateway():
     """GitHubGateway has no public attribute that returns the token."""
     enforcer = ContractEnforcer.load(FIXTURE)
-    gw = GitHubGateway(enforcer, token="super-secret-token")
+    gw = GitHubGateway(enforcer, token="test-super-secret-token")
 
     assert not hasattr(gw, "token")
     assert not hasattr(gw, "api_key")

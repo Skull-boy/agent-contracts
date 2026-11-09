@@ -29,6 +29,14 @@ MAX_FILE_BYTES = 1024 * 1024
 BINARY_SNIFF_BYTES = 8 * 1024
 RULE_LOAD_COEFFICIENTS: tuple[float, ...] = (1.00, 0.25, 0.10)
 
+#: Governance detection is a bounded, read-only, name-based walk: scan the
+#: target root and at most this many directory levels below it for a file
+#: named ``contract.yaml``. It is deliberately shallow so the first audit of a
+#: large monorepo stays fast, and it does not parse the contract: any
+#: framework's ``contract.yaml`` (v1, v1.1, or v1.2) counts as governance.
+GOVERNANCE_SEARCH_DEPTH = 3
+
+
 SKIP_DIRS: frozenset[str] = frozenset(
     {
         ".git",
@@ -190,6 +198,11 @@ class AuditReport:
     ``file_kinds`` is terminal-renderer metadata: the number of scanned files
     per :data:`FILE_KINDS` category. It is deliberately excluded from
     :meth:`to_dict`, so ``--json`` output stays byte-identical (M2.0b).
+
+    ``governance`` is likewise render-only (``"governed"`` or
+    ``"ungoverned"``) and excluded from :meth:`to_dict`; the unified envelope
+    carries it additively instead. It defaults to ``"governed"`` so synthetic
+    reports built before the field existed render unchanged.
     """
 
     report_version: int
@@ -203,6 +216,7 @@ class AuditReport:
     file_kinds: Mapping[str, int] = field(
         default_factory=lambda: MappingProxyType({})
     )
+    governance: str = "governed"
 
     def to_dict(self) -> dict[str, Any]:
         findings = [
@@ -271,6 +285,73 @@ def _is_fixture_target(target: Path) -> bool:
         parts[index] == "tests" and parts[index + 1] == "fixtures"
         for index in range(len(parts) - 1)
     )
+
+
+def _find_contract(target: Path) -> str | None:
+    """Return the scan-relative path of the first ``contract.yaml``, if any.
+
+    Bounded to :data:`GOVERNANCE_SEARCH_DEPTH` directory levels below the
+    target root. Detection is purely name-based (a file named
+    ``contract.yaml``) so it works for every framework and every contract
+    spec version without parsing; symlinked directories and files, plus the
+    normal :data:`SKIP_DIRS`, are ignored exactly like the scan itself.
+    """
+    root = Path(target)
+    if root.is_symlink() or not root.is_dir():
+        return None
+
+    for dirpath, dirnames, filenames in os.walk(
+        root, topdown=True, followlinks=False
+    ):
+        current = Path(dirpath)
+        relative = current.relative_to(root)
+        depth = len(relative.parts) if relative.parts else 0
+
+        kept_dirs: list[str] = []
+        for dirname in sorted(dirnames):
+            if dirname in SKIP_DIRS:
+                continue
+            child = current / dirname
+            if child.is_symlink():
+                continue
+            if depth < GOVERNANCE_SEARCH_DEPTH:
+                kept_dirs.append(dirname)
+        dirnames[:] = kept_dirs
+
+        if "contract.yaml" not in filenames:
+            continue
+        candidate = current / "contract.yaml"
+        if candidate.is_symlink() or not candidate.is_file():
+            continue
+        return candidate.relative_to(root).as_posix()
+
+    return None
+
+
+def governance_report(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Describe governance for an audit payload without changing its bytes.
+
+    ``payload`` is shaped like :meth:`AuditReport.to_dict`; only its
+    ``target`` string is read. The result is the additive summary block used
+    by the unified envelope::
+
+        {"status": "governed" | "ungoverned", "contract_path": str | None}
+
+    Detection is read-only and name-based (see :func:`_find_contract`).
+    """
+    target = payload.get("target") if isinstance(payload, Mapping) else None
+    contract_path = (
+        _find_contract(Path(str(target))) if target is not None else None
+    )
+    return {
+        "status": "governed" if contract_path is not None else "ungoverned",
+        "contract_path": contract_path,
+    }
+
+
+def governance_status(payload: Mapping[str, Any]) -> str:
+    """Return ``"governed"`` or ``"ungoverned"`` for an audit payload."""
+    return governance_report(payload)["status"]
 
 
 def _quarantine_findings(
@@ -452,6 +533,11 @@ def scan_tree(target: Path) -> AuditReport:
                 if kind in file_kind_counts
             }
         ),
+        governance=(
+            "governed"
+            if _find_contract(target_path) is not None
+            else "ungoverned"
+        ),
     )
 
 
@@ -488,4 +574,5 @@ def unify_audit_report(
         dict(payload),
         subject=resolved_subject,
         status=resolved_status,
+        governance=governance_report(payload),
     )
