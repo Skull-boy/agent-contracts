@@ -1,0 +1,69 @@
+name: Scyvera dogfood gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: both jobs only read the repository. The gate never writes
+# back to the repository; badge commit-back is deliberately out of scope.
+permissions:
+  contents: read
+
+jobs:
+  dogfood-check:
+    name: Dogfood - conformance check (tier 1)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0 (pinned 2026-11-06)
+
+      # The LangGraph reference is T103-only, which is warn-only and exits 0.
+      # A T101 regression in this directory must turn this job red.
+      - name: Run scyvera gate (check, tier 1)
+        uses: ./.github/actions/scyvera-gate
+        with:
+          mode: check
+          target: implementations/langgraph/duplicate-issue-detector
+          tier: "1"
+          source: local
+          report-format: text
+          exit-on-finding: "true"
+
+  dogfood-audit:
+    name: Dogfood - Blast Radius audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0 (pinned 2026-11-06)
+
+      # Deliberately non-blocking in the gate itself: exit-on-finding is false
+      # so a boundary regression does not block unrelated PRs during this
+      # gate's first week. The Shielded floor is asserted on the next step as
+      # a ::warning:: instead, which keeps the drift loud without turning every
+      # unrelated change red. Tighten to "true" once the baseline is stable.
+      - name: Run scyvera gate (audit)
+        id: gate
+        uses: ./.github/actions/scyvera-gate
+        with:
+          mode: audit
+          target: .
+          source: local
+          report-format: text
+          exit-on-finding: "false"
+
+      - name: Assert the Shielded floor (warning only)
+        if: always() && steps.gate.outputs.score != ''
+        shell: bash
+        env:
+          SCORE: ${{ steps.gate.outputs.score }}
+        run: |
+          if [ "$SCORE" -lt 92 ]; then
+            echo "::warning::Blast Radius score ${SCORE}/100 is below the 92 dogfood floor; the repository left its Shielded baseline."
+          else
+            echo "Blast Radius ${SCORE}/100 is at or above the 92 dogfood floor."
+          fi

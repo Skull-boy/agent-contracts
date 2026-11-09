@@ -1,0 +1,285 @@
+name: Scyvera gate
+description: >-
+  Run the scyvera Blast Radius audit or the RFC 0003 conformance check in CI.
+  Composite, cross-platform, and PyPI-first, so a gate never trusts
+  repository-run code unless it is asked to.
+
+# Composite actions cannot declare their own token scope: the calling job's
+# `permissions:` block is what applies. Callers should grant `contents: read`
+# and nothing else; badge commit-back is deliberately out of scope for PD-6.
+
+inputs:
+  mode:
+    description: "'audit' (Blast Radius scan) or 'check' (conformance tiers)."
+    required: false
+    default: audit
+  target:
+    description: "Path to scan in audit mode, or contract / implementation directory in check mode."
+    required: true
+  tier:
+    description: "Conformance tier for check mode: '0', '1', or 'auto'."
+    required: false
+    default: auto
+  report-format:
+    description: "'text' (human-readable report) or 'unified' (M2.5 report envelope as JSON)."
+    required: false
+    default: text
+  badge:
+    description: "File path to write the shields.io Blast Radius badge into. Empty disables it."
+    required: false
+    default: ""
+  exit-on-finding:
+    description: "'true' fails the job when scyvera exits 1 (findings); 'false' only warns."
+    required: false
+    default: "true"
+  source:
+    description: "'pypi' installs scyvera>=1.3,<2 from PyPI; 'local' installs the checked-out workspace."
+    required: false
+    default: pypi
+  python-version:
+    description: "Python version used by the gate (the project floor is 3.10)."
+    required: false
+    default: "3.12"
+
+outputs:
+  score:
+    description: "Blast Radius score from 0 to 100 (audit mode; empty in check mode)."
+    value: ${{ steps.run.outputs.score }}
+  status:
+    description: "Unified verdict: PASS, WARN, FAIL, or ERROR."
+    value: ${{ steps.run.outputs.status }}
+  findings:
+    description: "Number of normalized findings in the unified report envelope."
+    value: ${{ steps.run.outputs.findings }}
+  exit-code:
+    description: "Mapped scyvera exit code: 0 clean, 1 findings, 2 usage/IO error."
+    value: ${{ steps.run.outputs.exit_code }}
+  unified-json:
+    description: "The M2.5 unified report envelope as compact single-line JSON."
+    value: ${{ steps.run.outputs.unified_json }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (pinned 2026-11-06)
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install scyvera (${{ inputs.source }})
+      shell: bash
+      env:
+        SOURCE: ${{ inputs.source }}
+        WORKSPACE: ${{ github.workspace }}
+      run: |
+        set -euo pipefail
+        if [ "$SOURCE" = "pypi" ]; then
+          echo "Installing scyvera>=1.3,<2 from PyPI"
+          python -m pip install --disable-pip-version-check --no-input "scyvera>=1.3,<2"
+        elif [ "$SOURCE" = "local" ]; then
+          echo "Installing scyvera from the checked-out workspace: $WORKSPACE"
+          python -m pip install --disable-pip-version-check --no-input "$WORKSPACE"
+        else
+          echo "::error::scyvera-gate: source must be 'pypi' or 'local', got '$SOURCE'"
+          exit 2
+        fi
+        # Fail loudly if the resolved version is outside the supported range:
+        # the gate must never silently upgrade to 2.x or downgrade below 1.3.
+        python - <<'PY'
+        from importlib.metadata import version
+
+        installed = version("scyvera")
+        major, minor = (int(part) for part in installed.split(".")[:2])
+        if (major, minor) < (1, 3):
+            raise SystemExit(f"scyvera {installed} is older than the required >=1.3")
+        if major >= 2:
+            raise SystemExit(f"scyvera {installed} is outside the supported <2 range")
+        print(f"scyvera {installed} installed")
+        PY
+
+    - name: Run scyvera gate
+      id: run
+      if: always()
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        TARGET: ${{ inputs.target }}
+        TIER: ${{ inputs.tier }}
+        FORMAT: ${{ inputs.report-format }}
+        BADGE_PATH: ${{ inputs.badge }}
+      run: |
+        # GitHub runs `shell: bash` as `bash --noprofile --norc -e -o pipefail`,
+        # so errexit is already active in this script. Clear it: this step must
+        # capture scyvera's 0/1/2 exit codes, not die on the first non-zero one.
+        set +e -uo pipefail
+
+        emit_error_outputs() {
+          {
+            echo "score="
+            echo "status=ERROR"
+            echo "findings="
+            echo "unified_json="
+          } >> "$GITHUB_OUTPUT"
+        }
+
+        if [ "$MODE" != "audit" ] && [ "$MODE" != "check" ]; then
+          echo "::error::scyvera-gate: mode must be 'audit' or 'check', got '$MODE'"
+          emit_error_outputs
+          echo "exit_code=2" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [ "$FORMAT" != "text" ] && [ "$FORMAT" != "unified" ]; then
+          echo "::error::scyvera-gate: report-format must be 'text' or 'unified', got '$FORMAT'"
+          emit_error_outputs
+          echo "exit_code=2" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [ "$MODE" = "audit" ]; then
+          base=(audit "$TARGET")
+        else
+          base=(check "$TARGET" --tier "$TIER")
+        fi
+
+        # A broken install is an action error (2), never a finding (1).
+        if ! python -c 'import scyvera' >/dev/null 2>&1; then
+          echo "::error::scyvera-gate: scyvera is not importable after install"
+          emit_error_outputs
+          echo "exit_code=2" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        outdir="$(mktemp -d)"
+        # The only files we create are known, so cleanup stays non-recursive:
+        # removing exactly those three names and then the now-empty directory
+        # is enough, and a recursive force delete has no place in a read-only
+        # gate that is supposed to leave the runner untouched.
+        cleanup() {
+          rm -f "$outdir/unified.json" "$outdir/unified.err" "$outdir/human.txt"
+          rmdir "$outdir" 2>/dev/null || true
+        }
+        trap cleanup EXIT
+        unified_file="$outdir/unified.json"
+
+        unified_args=("${base[@]}" --unified)
+        if [ "$MODE" = "audit" ] && [ -n "$BADGE_PATH" ]; then
+          unified_args+=(--badge)
+        fi
+
+        # Structured outputs always come from the unified envelope. When the
+        # text format is selected, the human run is what the log shows and its
+        # exit code is the verdict, matching the README's CLI contract.
+        python -m scyvera.cli "${unified_args[@]}" > "$unified_file" 2> "$outdir/unified.err"
+        unified_code=$?
+
+        if [ "$FORMAT" = "text" ]; then
+          python -m scyvera.cli "${base[@]}" > "$outdir/human.txt" 2>&1
+          code=$?
+          cat "$outdir/human.txt"
+          if [ "$code" -ne "$unified_code" ]; then
+            echo "::warning::scyvera-gate: text run exited $code but the unified run exited $unified_code"
+          fi
+        else
+          code=$unified_code
+          cat "$unified_file"
+          if [ -s "$outdir/unified.err" ]; then
+            cat "$outdir/unified.err" >&2
+          fi
+        fi
+
+        python - "$unified_file" <<'PY' >> "$GITHUB_OUTPUT"
+        import json
+        import sys
+        from pathlib import Path
+
+        try:
+            envelope = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+        except Exception as error:
+            print(f"unified envelope unreadable: {error}", file=sys.stderr)
+            raise SystemExit(3)
+
+        if not isinstance(envelope, dict) or "status" not in envelope:
+            print("unified envelope is missing required keys", file=sys.stderr)
+            raise SystemExit(3)
+
+        data = envelope.get("data") or {}
+        score = data.get("score")
+        findings = envelope.get("findings") or []
+        print(f"score={'' if score is None else score}")
+        print(f"status={envelope.get('status', '')}")
+        print(f"findings={len(findings)}")
+        print(
+            "unified_json="
+            + json.dumps(envelope, separators=(",", ":"), sort_keys=True)
+        )
+        PY
+        parse_code=$?
+
+        if [ "$parse_code" -ne 0 ]; then
+          echo "::error::scyvera-gate: could not read the unified report; treating it as an action error"
+          emit_error_outputs
+          code=2
+        fi
+
+        # Documented mapping: 0 clean, 1 findings, 2 usage/IO error.
+        case "$code" in
+          0) echo "::notice::scyvera-gate: clean (exit 0)" ;;
+          1) echo "::warning::scyvera-gate: findings (exit 1)" ;;
+          2) echo "::error::scyvera-gate: usage or I/O error (exit 2)" ;;
+          *) echo "::error::scyvera-gate: unexpected exit $code; treating it as an action error"; code=2 ;;
+        esac
+
+        echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Write Blast Radius badge
+      if: always() && inputs.mode == 'audit' && inputs.badge != '' && steps.run.outputs.unified_json != ''
+      shell: bash
+      env:
+        BADGE_FILE: ${{ inputs.badge }}
+        ENVELOPE: ${{ steps.run.outputs.unified_json }}
+      run: |
+        set -euo pipefail
+        python - <<'PY'
+        import json
+        import os
+        from pathlib import Path
+
+        envelope = json.loads(os.environ["ENVELOPE"])
+        badge = (envelope.get("data") or {}).get("badge")
+        if not badge:
+            print("audit report carried no badge snippet; nothing written")
+            raise SystemExit(0)
+        target = Path(os.environ["BADGE_FILE"])
+        if str(target.parent) not in ("", "."):
+            target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(str(badge).rstrip() + "\n", encoding="utf-8")
+        print(f"badge written to {target}")
+        PY
+
+    - name: Fail on scyvera usage or I/O error
+      if: always() && steps.run.outputs.exit_code == '2'
+      shell: bash
+      run: |
+        echo "::error::scyvera exited 2 (usage or I/O error); see the gate log above."
+        exit 1
+
+    - name: Fail on findings
+      if: always() && steps.run.outputs.exit_code == '1' && inputs.exit-on-finding == 'true'
+      shell: bash
+      run: |
+        echo "::error::scyvera reported findings and exit-on-finding is 'true'."
+        exit 1
+
+    - name: Warn on findings
+      if: always() && steps.run.outputs.exit_code == '1' && inputs.exit-on-finding != 'true'
+      shell: bash
+      run: echo "::warning::scyvera reported findings; exit-on-finding is disabled, so the job stays green."
+
+    - name: Fail on missing result
+      if: always() && steps.run.outputs.exit_code == ''
+      shell: bash
+      run: |
+        echo "::error::the gate produced no exit code; a previous step failed."
+        exit 1
