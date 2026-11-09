@@ -129,6 +129,11 @@ _SOURCE_SUFFIXES = frozenset(
         ".kts",
         ".cs",
         ".rs",
+        ".c",
+        ".h",
+        ".cc",
+        ".cpp",
+        ".hpp",
         ".swift",
         ".lua",
         ".r",
@@ -213,6 +218,177 @@ _LIBRARY_HOSTS: dict[str, str] = {
     "google.genai": "generativelanguage.googleapis.com",
 }
 
+# ---------------------------------------------------------------------------
+# R1b language pattern pack (pattern-level, review-grade coverage).
+#
+# One named table per language family, keyed by the label reported in the
+# finding. These are source-text patterns only: no AST, no type resolution,
+# no data-flow or framework graph. False negatives are expected for aliased,
+# generated, or reflection-driven clients; Tier 1 adapters own that depth.
+# ---------------------------------------------------------------------------
+_PatternTable = tuple[tuple[str, re.Pattern[str]], ...]
+
+# Go: standard net/http clients and os/exec process launches.
+_GO_NETWORK_PATTERNS: _PatternTable = (
+    # net/http import (single or grouped import block)
+    ("net/http", re.compile(r'(?<![\w.])"net/http"')),
+    # net/http package calls (Get/Post/Head/NewRequest/NewClient/DefaultClient)
+    (
+        "net/http",
+        re.compile(
+            r"\bhttp\.(?:Get|Post|Head|NewRequest|NewClient|DefaultClient)\b"
+        ),
+    ),
+    # os/exec import or exec.Command process launch
+    ("os/exec", re.compile(r'(?<![\w.])"os/exec"|\bexec\.Command\b')),
+)
+
+# Java/Kotlin: java.net, java.net.http, HttpClient and process launches.
+_JVM_NETWORK_PATTERNS: _PatternTable = (
+    # legacy java.net URL/HttpURLConnection client
+    (
+        "java.net",
+        re.compile(
+            r"\bjava\.net\.URL\b|\bnew\s+URL\s*\(|\bHttpURLConnection\b"
+        ),
+    ),
+    # modern java.net.http client package
+    ("java.net.http", re.compile(r"\bjava\.net\.http\b")),
+    # HttpClient factory (Java 11+)
+    ("HttpClient", re.compile(r"\bHttpClient\.new\w*\s*\(")),
+    # Runtime.exec process launch
+    (
+        "Runtime.exec",
+        re.compile(r"\bRuntime\.getRuntime\(\)\.exec\s*\("),
+    ),
+    # ProcessBuilder process launch
+    ("ProcessBuilder", re.compile(r"\bnew\s+ProcessBuilder\b")),
+)
+
+# Rust: std process commands and the common async/sync HTTP crates.
+_RUST_NETWORK_PATTERNS: _PatternTable = (
+    # std::process::Command or Command::new process launch
+    (
+        "std::process::Command",
+        re.compile(r"\bstd::process::Command\b|\bCommand::new\s*\("),
+    ),
+    # reqwest HTTP client path or import
+    ("reqwest", re.compile(r"\breqwest::|\buse\s+reqwest\b")),
+    # ureq HTTP client path or import
+    ("ureq", re.compile(r"\bureq::|\buse\s+ureq\b")),
+    # isahc HTTP client path or import
+    ("isahc", re.compile(r"\bisahc::|\buse\s+isahc\b")),
+)
+
+# C/C++: process-launch wrappers and Windows network/exec APIs.
+_C_NETWORK_PATTERNS: _PatternTable = (
+    # system() process launch
+    ("system", re.compile(r"(?<![\w.])system\s*\(")),
+    # popen() process launch
+    ("popen", re.compile(r"(?<![\w.])popen\s*\(")),
+    # exec* family process launch (execvp/execve/execl/...)
+    ("exec", re.compile(r"\bexec(?:vp|ve|v|le|lp)\s*\(")),
+    # WinHttp* network client API
+    ("WinHttp", re.compile(r"\bWinHttp\w*\s*\(")),
+    # WinExec process launch
+    ("WinExec", re.compile(r"\bWinExec\s*\(")),
+)
+
+# C#: HttpClient/WebClient clients and Process.Start process launch.
+_CSHARP_NETWORK_PATTERNS: _PatternTable = (
+    # HttpClient instance or constructor
+    ("HttpClient", re.compile(r"\bHttpClient\b")),
+    # Process.Start process launch
+    ("Process.Start", re.compile(r"\bProcess\.Start\s*\(")),
+    # WebClient legacy HTTP client
+    ("WebClient", re.compile(r"\bWebClient\b")),
+)
+
+# PHP: cURL, URL reads, and the exec process wrapper.
+_PHP_NETWORK_PATTERNS: _PatternTable = (
+    # cURL client handle initialization
+    ("curl_init", re.compile(r"\bcurl_init\s*\(")),
+    # URL read through file_get_contents
+    (
+        "file_get_contents",
+        re.compile(r"\bfile_get_contents\s*\(\s*[\"']https?://"),
+    ),
+    # exec() process launch
+    ("exec", re.compile(r"(?<![\w.])exec\s*\(")),
+)
+
+# JavaScript/TypeScript: axios, got, node:https, FetchEvent/ActiveX clients.
+_JS_NETWORK_PATTERNS: _PatternTable = (
+    # axios HTTP client reference
+    ("axios", re.compile(r"\baxios\b")),
+    # got HTTP client call
+    ("got", re.compile(r"(?<![\w.])got\s*\(")),
+    # node:https ESM import or CommonJS require('https')
+    (
+        "node:https",
+        re.compile(
+            r"[\"']node:https[\"']|\brequire\s*\(\s*[\"']https[\"']\s*\)"
+        ),
+    ),
+    # FetchEvent service-worker API or ActiveX createObject(...)
+    (
+        "FetchEvent",
+        re.compile(r"\bFetchEvent\b|\bcreateObject\s*\("),
+    ),
+)
+
+#: Suffix -> language-family table. A file is matched only by its own table.
+_NETWORK_LANGUAGE_PATTERNS: dict[str, _PatternTable] = {
+    ".go": _GO_NETWORK_PATTERNS,
+    ".java": _JVM_NETWORK_PATTERNS,
+    ".kt": _JVM_NETWORK_PATTERNS,
+    ".kts": _JVM_NETWORK_PATTERNS,
+    ".rs": _RUST_NETWORK_PATTERNS,
+    ".c": _C_NETWORK_PATTERNS,
+    ".h": _C_NETWORK_PATTERNS,
+    ".cc": _C_NETWORK_PATTERNS,
+    ".cpp": _C_NETWORK_PATTERNS,
+    ".hpp": _C_NETWORK_PATTERNS,
+    ".cs": _CSHARP_NETWORK_PATTERNS,
+    ".php": _PHP_NETWORK_PATTERNS,
+    ".js": _JS_NETWORK_PATTERNS,
+    ".jsx": _JS_NETWORK_PATTERNS,
+    ".ts": _JS_NETWORK_PATTERNS,
+    ".tsx": _JS_NETWORK_PATTERNS,
+    ".mjs": _JS_NETWORK_PATTERNS,
+    ".cjs": _JS_NETWORK_PATTERNS,
+}
+
+# ---------------------------------------------------------------------------
+# R1b wrapper-aware command extraction.
+#
+# Process-launching wrappers hide a shell command inside a quoted literal. One
+# table of extractors (group 1 = the command string) feeds the existing
+# shell/git/piped-install checks; no per-language duplicate rule regexes.
+# ---------------------------------------------------------------------------
+_SHELL_WRAPPER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    # C/C++ system("...") or popen("...", "r")
+    re.compile(r"\b(?:system|popen)\s*\(\s*\"([^\"]*)\""),
+    # Python os.system("...")
+    re.compile(r"\bos\.system\s*\(\s*[\"']([^\"']*)[\"']"),
+    # Python subprocess.call/run/Popen("...")
+    re.compile(
+        r"\bsubprocess\.(?:call|run|Popen)\s*\(\s*[\"']([^\"']*)[\"']"
+    ),
+    # Java Runtime.getRuntime().exec("...")
+    re.compile(r"\bRuntime\.getRuntime\(\)\.exec\s*\(\s*\"([^\"]*)\""),
+    # Java new ProcessBuilder("...")
+    re.compile(r"\bnew\s+ProcessBuilder\s*\(\s*\"([^\"]*)\""),
+    # Go exec.Command("...")
+    re.compile(r"\bexec\.Command\s*\(\s*\"([^\"]*)\""),
+    # Node child_process.exec/execSync("...")
+    re.compile(
+        r"\bchild_process\.exec(?:Sync)?\s*\(\s*[\"'`]([^\"'`]*)[\"'`]"
+    ),
+    # C# Process.Start("...")
+    re.compile(r"\bProcess\.Start\s*\(\s*[\"']([^\"']*)[\"']"),
+)
+
 _URL_HOST_RE = re.compile(r"https?://([A-Za-z0-9.-]+)")
 
 # AU-SECRET-001: hardcoded credential-like literals in source files.
@@ -226,8 +402,9 @@ _URL_HOST_RE = re.compile(r"https?://([A-Za-z0-9.-]+)")
 # Regex inventory (deliberately small and documented):
 #   _CREDENTIAL_NAME_PATTERN - identifier vocabulary shared by the next two
 #   _SECRET_ASSIGN_RE       - `name ... = "value"` / `name ... := "value"`
-#                             (covers Python/JS/Go/Rust assignment syntax)
+#                             (covers Python/JS/Go/Rust/C#/C assignment syntax)
 #   _SECRET_PROPERTY_RE     - `name: "value"` (JSON/JS object style)
+#   _SECRET_CALL_RE         - bare literal passing to a credential-like callee
 #   _QUOTED_LITERAL_RE      - any quoted literal, for provider-prefix tokens
 #   _TOKEN_PREFIX_RE        - sk-, ghp_, wb_, hf_, AKIA, pat_ token prefixes
 #   _JUPYTER_PLACEHOLDER_RE - `"x" * len(...)` notebook placeholders
@@ -244,6 +421,18 @@ _SECRET_ASSIGN_RE = re.compile(
 _SECRET_PROPERTY_RE = re.compile(
     rf"(?i)(?P<name>{_CREDENTIAL_NAME_PATTERN})"
     r"\s*:\s*[\"'](?P<value>[^\"'\n]{16,})[\"']"
+)
+#: Credential-like callee names, including camelCase wrappers (`setApiKey`).
+_SECRET_CALL_NAME_PATTERN = (
+    r"(?<![A-Za-z0-9])"
+    r"[A-Za-z0-9_]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|"
+    r"client[_-]?secret|private[_-]?key|token|secret|password|passwd|pwd)"
+    r"(?![A-Za-z0-9])"
+)
+#: Bare string-literal passing: `setApiKey("...")`, `token("...")`.
+_SECRET_CALL_RE = re.compile(
+    rf"(?i)(?P<name>{_SECRET_CALL_NAME_PATTERN})"
+    r"\s*\(\s*[\"'](?P<value>[^\"'\n]{16,})[\"']"
 )
 _QUOTED_LITERAL_RE = re.compile(r"[\"']([^\"'\n]{16,})[\"']")
 _TOKEN_PREFIX_RE = re.compile(
@@ -426,6 +615,46 @@ def _executable_lines(
     )
 
 
+def _shell_wrapper_payloads(line: str) -> list[str]:
+    """Return quoted command strings passed to process-launching wrappers.
+
+    The table above recognizes the wrapper by name and treats its first quoted
+    argument as the command a shell would run. This is pattern-level
+    extraction, not parsing: it deliberately does not resolve variables,
+    concatenation, or aliases.
+    """
+    payloads: list[str] = []
+    for pattern in _SHELL_WRAPPER_PATTERNS:
+        payloads.extend(match.group(1) for match in pattern.finditer(line))
+    return payloads
+
+
+def _shell_command_lines(
+    text: str,
+    filename: str,
+) -> tuple[_ExecutableLine, ...] | None:
+    """Return command lines for shell files and wrapper calls in source.
+
+    Shell scripts, Dockerfiles, Makefiles, and workflow ``run:`` blocks keep
+    the existing executable-line behavior. Source files contribute only the
+    quoted payload of a recognized process wrapper, so a plain source line is
+    never mistaken for a shell command. One helper feeds AU-NET-001,
+    AU-SH-001, and AU-GIT-001 instead of duplicating wrapper regexes per rule.
+    """
+    executable = _executable_lines(text, filename)
+    if executable is not None:
+        return executable
+
+    if Path(filename).suffix.lower() not in _SOURCE_SUFFIXES:
+        return None
+
+    wrapped: list[_ExecutableLine] = []
+    for number, raw in _source_lines(text):
+        for payload in _shell_wrapper_payloads(raw):
+            wrapped.append(_ExecutableLine(number, payload))
+    return tuple(wrapped)
+
+
 def _is_comment_line(line: str) -> bool:
     stripped = line.strip()
     return stripped.startswith(("#", "//", "<!--"))
@@ -509,6 +738,19 @@ def _network_permission(text: str) -> str:
     host_match = _URL_HOST_RE.search(text)
     host = host_match.group(1) if host_match else "external"
     return _permission_for_host(host)
+
+
+def _network_language_library(line: str, suffix: str) -> str | None:
+    """Return the language-pack client label matching ``line``, if any.
+
+    Only the table for the file's own suffix runs, so a Go snippet embedded in
+    a Python docstring cannot trigger the Go patterns. Patterns are ordered
+    most-specific first; the first match wins.
+    """
+    for library, pattern in _NETWORK_LANGUAGE_PATTERNS.get(suffix, ()):
+        if pattern.search(line):
+            return library
+    return None
 
 
 def _network_import_library(line: str) -> str | None:
@@ -632,11 +874,15 @@ def _match_env_secret(
 def _match_shell_delete(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    executable = _executable_lines(text, filename)
+    executable = _shell_command_lines(text, filename)
     if executable is None:
         return []
 
     kind = _shell_kind(filename)
+    if kind is None and Path(filename).suffix.lower() in _SOURCE_SUFFIXES:
+        # A source wrapper (system/os.system/Process.Start/...) may carry any
+        # shell dialect, so its extracted payload is treated as generic.
+        kind = "generic"
     for item in executable:
         line = item.text.strip()
         if not line or _is_comment_line(line):
@@ -674,7 +920,7 @@ def _match_shell_delete(
 def _match_git_destructive(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    executable = _executable_lines(text, filename)
+    executable = _shell_command_lines(text, filename)
     if executable is None:
         return []
 
@@ -702,7 +948,7 @@ def _match_git_destructive(
 def _match_piped_install(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    executable = _executable_lines(text, filename)
+    executable = _shell_command_lines(text, filename)
     if executable is None:
         return []
 
@@ -732,13 +978,16 @@ def _match_piped_install(
 def _match_network_client(
     path: str, text: str, filename: str
 ) -> list[tuple[int | None, str, Mapping[str, Any]]]:
-    if Path(filename).suffix.lower() not in _SOURCE_SUFFIXES:
+    suffix = Path(filename).suffix.lower()
+    if suffix not in _SOURCE_SUFFIXES:
         return []
 
     for number, raw in _source_lines(text):
         if _is_comment_line(raw):
             continue
-        library = _network_import_library(raw)
+        library = _network_import_library(raw) or _network_language_library(
+            raw, suffix
+        )
         if library is None:
             continue
 
@@ -773,12 +1022,16 @@ def _match_source_secret(
     """Find hardcoded credential-like literals in source files (AU-SECRET-001).
 
     Language-agnostic: the assignment regex accepts ``name = 'value'``,
-    ``name := "value"``, ``name: "value"`` and ``let name = "value"`` shapes,
-    so Python, JavaScript, Go, and Rust are covered without parsing. Values
-    must clear the shared ``_looks_like_secret`` floor (>=16 characters, no
-    whitespace, entropy >= 3.0, not a placeholder). Severity is ``high`` (not
-    ``critical``) because a literal in a snippet may be a documented public
-    key; fixtures under ``tests/fixtures`` are quarantined by the scan engine.
+    ``name := "value"``, ``name: "value"``, ``String TOKEN = "value"``,
+    ``let key = "value"``, and ``var apiKey = "value"`` shapes, so Python,
+    JavaScript, Go, Java, Rust, C#, and C are covered without parsing. A
+    credential-like callee receiving a bare literal (``setApiKey("...")``) is
+    matched by ``_SECRET_CALL_RE``; provider-prefixed literals are matched
+    wherever they appear. Values must clear the shared ``_looks_like_secret``
+    floor (>=16 characters, no whitespace, entropy >= 3.0, not a placeholder).
+    Severity is ``high`` (not ``critical``) because a literal in a snippet may
+    be a documented public key; fixtures under ``tests/fixtures`` are
+    quarantined by the scan engine.
     """
     if Path(filename).suffix.lower() not in _SOURCE_SUFFIXES:
         return []
@@ -791,7 +1044,11 @@ def _match_source_secret(
 
         name: str | None = None
         value: str | None = None
-        for pattern in (_SECRET_ASSIGN_RE, _SECRET_PROPERTY_RE):
+        for pattern in (
+            _SECRET_ASSIGN_RE,
+            _SECRET_PROPERTY_RE,
+            _SECRET_CALL_RE,
+        ):
             match = pattern.search(raw)
             if match is not None:
                 name = match.group("name")
