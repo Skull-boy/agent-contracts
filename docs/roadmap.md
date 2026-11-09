@@ -143,7 +143,7 @@ is deliberately explicit so the marketing language can never outrun the merged c
 | **PD-4** | Deserialization pin: tests assert only `yaml.safe_load`/`yaml.safe_load_file` paths exist | no `yaml.load` without explicit unsafe refactor; enforced by test |
 | **PD-5** | Published perf benchmark (synthetic 10k-file repo) | benchmark script + recorded numbers in docs; pre-answers big-repo claims |
 | **PD-6** | Official `scyvera-audit-action` GitHub Action (installs scyvera, runs `audit --fail-under`, respects `--badge`) | Sample consuming repo; action pinned, tagged v1 |
-| **PD-7** | `scyvera mcp` server mode exposing validate/audit/check as MCP tools | stdio MCP server; deterministic outputs identical to CLI; usable by MCP-native harnesses |
+| **PD-7** | `scyvera mcp` server mode exposing validate/audit/check as MCP tools | stdio MCP server; deterministic outputs identical to CLI; usable by MCP-native harnesses <br>PD-7 shipped on `feat/pd7-mcp-server`: `scyvera serve-mcp` (the canonical name; the row's `scyvera mcp` wording is left as written) runs a stdlib-only, newline-delimited JSON-RPC 2.0 MCP server over stdio with `scyvera_audit`, `scyvera_validate`, `scyvera_check`, `scyvera_self_check`, and `scyvera_packages`; results are the existing engine payloads and diagnostics stay on stderr. |
 | **PD-8** | *(Optional, deferred)* Rust scanner binary emitting byte-identical RFC 0004 reports | differential test suite: Rust output ≡ Python output across corpora; shipped as separate wheel only when scale demands |
 
 ### Mapping to existing rows

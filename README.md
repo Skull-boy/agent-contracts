@@ -296,6 +296,7 @@ scyvera init contract.yaml --name "Research Assistant" --domain "research"
 scyvera validate contract.yaml
 scyvera lint contract.yaml
 scyvera check contract.yaml
+scyvera serve-mcp  # MCP server over stdio for agent hosts (see docs/mcp.md)
 ```
 
 ```text
@@ -575,6 +576,7 @@ See [`examples/v1.1/`](./examples/v1.1) for runnable, validated v1.1 contracts a
 | [`docs/roadmap.md`](./docs/roadmap.md) | Task-level implementation plan and shipped notes. |
 | [`docs/policy-packs.md`](./docs/policy-packs.md) | Policy Pack format, merge semantics, and how to add one. |
 | [`docs/evals.md`](./docs/evals.md) | Trace-driven eval case format, agent factory, and the four scoring axes. |
+| [`docs/mcp.md`](./docs/mcp.md) | MCP server mode: host configuration, the five tools, and the scope note. |
 | [`docs/terminology.md`](./docs/terminology.md) | Shared vocabulary. |
 | [`docs/vision.md`](./docs/vision.md) | Strategic direction. |
 | [`docs/workflow-engineering.md`](./docs/workflow-engineering.md) | Engineering philosophy. |
