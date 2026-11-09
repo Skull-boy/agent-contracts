@@ -464,7 +464,13 @@ def test_audit_json_bytes_are_pinned() -> None:
     }
 
 
-def test_check_render_bytes_are_pinned() -> None:
+def test_check_render_bytes_are_pinned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The published render carries the caller's relative path; run from the
+    # repository root so the pinned bytes are cwd-independent (the release
+    # workflow runs pytest from a clean wheel-install directory).
+    monkeypatch.chdir(ROOT)
     assert render_check(check_contract(VALID_REL, tier="0")) == CHECK_RENDER
 
 
@@ -487,6 +493,7 @@ def test_eval_result_json_bytes_are_pinned() -> None:
 def test_audit_cli_json_is_unchanged(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.chdir(ROOT)
     report = scan_tree(AUDIT_CLEAN_REL)
     code, out, err = _run_cli(
         monkeypatch, capsys, "audit", AUDIT_CLEAN_REL, "--json"
@@ -590,6 +597,7 @@ def test_cli_check_unified_is_schema_valid(
 def test_cli_audit_unified_is_schema_valid(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.chdir(ROOT)
     code, out, err = _run_cli(
         monkeypatch, capsys, "audit", AUDIT_CLEAN_REL, "--unified"
     )
