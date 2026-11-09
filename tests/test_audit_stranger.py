@@ -399,3 +399,85 @@ def test_governed_clean_still_exits_zero(
     assert err == ""
     assert "PASS" in out
     assert "[ungoverned]" not in out
+
+
+# ---------------------------------------------------------------------------
+# R1b: BOM handling
+# ---------------------------------------------------------------------------
+
+LANGPACK = STRANGER / "langpack"
+LANGPACK_WRAPPERS = STRANGER / "langpack_wrappers"
+
+
+def test_bom_prefixed_combined_import_matches_au_net_002() -> None:
+    plain = "import wandb, requests\n"
+    rule = _rule("AU-NET-002")
+
+    for text in (plain, "\ufeff" + plain):
+        findings = rule.scan("a.py", text, "a.py")
+        assert len(findings) == 1
+        assert findings[0].line == 1
+        assert "'wandb'" in findings[0].detail
+
+
+def test_trailing_bom_is_stripped_per_line() -> None:
+    findings = _rule("AU-NET-002").scan(
+        "a.py", "import wandb\ufeff\n", "a.py"
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
+def test_bom_prefixed_credential_literal_matches_au_secret_001() -> None:
+    text = "\ufeff" + _assignment("token", GITHUB_TOKEN) + "\n"
+
+    findings = _rule("AU-SECRET-001").scan("a.py", text, "a.py")
+
+    assert len(findings) == 1
+    assert findings[0].line == 1
+    assert GITHUB_TOKEN not in findings[0].detail
+
+
+def test_scan_path_strips_utf8_signature(tmp_path: Path) -> None:
+    (tmp_path / "bom.py").write_text(
+        "import wandb, requests\n", encoding="utf-8-sig"
+    )
+
+    report = scan_tree(tmp_path)
+
+    assert report.stats["files_scanned"] == 1
+    assert [finding.rule_id for finding in report.findings] == ["AU-NET-002"]
+    assert report.findings[0].scored is True
+
+
+def test_bom_and_non_bom_findings_are_equivalent() -> None:
+    plain = (
+        'token = "' + GITHUB_TOKEN + '"\n'
+        "import wandb, requests\n"
+    )
+    rule_ids = ("AU-SECRET-001", "AU-NET-002")
+    plain_findings = [
+        (finding.rule_id, finding.line, finding.detail)
+        for rule_id in rule_ids
+        for finding in _rule(rule_id).scan("a.py", plain, "a.py")
+    ]
+    bom_findings = [
+        (finding.rule_id, finding.line, finding.detail)
+        for rule_id in rule_ids
+        for finding in _rule(rule_id).scan("a.py", "\ufeff" + plain, "a.py")
+    ]
+
+    assert bom_findings == plain_findings
+
+
+def test_utf16_file_is_still_skipped_as_binary(tmp_path: Path) -> None:
+    (tmp_path / "utf16.py").write_bytes(
+        "import wandb, requests\n".encode("utf-16")
+    )
+
+    report = scan_tree(tmp_path)
+
+    assert report.findings == ()
+    assert report.stats["files_scanned"] == 0
+    assert report.stats["files_skipped"] == 1

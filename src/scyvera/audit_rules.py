@@ -341,6 +341,21 @@ def _shell_kind(filename: str) -> _ShellKind | None:
     return None
 
 
+def _source_lines(text: str) -> list[tuple[int, str]]:
+    """Return numbered lines with a defensive leading/trailing U+FEFF strip.
+
+    The scan engine decodes with ``utf-8-sig``, so a leading BOM is normally
+    gone before rules see the text. This second guard covers direct matcher
+    calls and a BOM that survives at a line boundary (for example a file
+    concatenated on Windows). One helper keeps every rule free of per-rule
+    BOM handling; line numbers still match ``str.splitlines()``.
+    """
+    return [
+        (number, line.strip("\ufeff"))
+        for number, line in enumerate(text.splitlines(), start=1)
+    ]
+
+
 def _workflow_run_lines(text: str) -> tuple[_ExecutableLine, ...]:
     """Extract the physical lines that make up workflow ``run:`` values.
 
@@ -353,7 +368,7 @@ def _workflow_run_lines(text: str) -> tuple[_ExecutableLine, ...]:
     lines: list[_ExecutableLine] = []
     run_indent: int | None = None
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in _source_lines(text):
         run_match = _RUN_KEY_RE.match(raw)
         if run_match is not None:
             run_indent = len(run_match.group(1))
@@ -407,7 +422,7 @@ def _executable_lines(
 
     return tuple(
         _ExecutableLine(number, line)
-        for number, line in enumerate(text.splitlines(), start=1)
+        for number, line in _source_lines(text)
     )
 
 
@@ -583,7 +598,7 @@ def _match_env_secret(
     if not _is_env_file(filename):
         return []
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in _source_lines(text):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -720,7 +735,7 @@ def _match_network_client(
     if Path(filename).suffix.lower() not in _SOURCE_SUFFIXES:
         return []
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in _source_lines(text):
         if _is_comment_line(raw):
             continue
         library = _network_import_library(raw)
@@ -768,7 +783,7 @@ def _match_source_secret(
     if Path(filename).suffix.lower() not in _SOURCE_SUFFIXES:
         return []
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in _source_lines(text):
         if not raw.strip() or _is_comment_line(raw):
             continue
         if _JUPYTER_PLACEHOLDER_RE.search(raw):
@@ -832,7 +847,7 @@ def _match_ci_write(
             secret_line = item.number
             break
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in _source_lines(text):
         if number in run_line_numbers:
             continue
 
@@ -874,7 +889,7 @@ def _match_ci_publish(
     if Path(filename).suffix.lower() not in _WORKFLOW_SUFFIXES:
         return []
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in _source_lines(text):
         if _is_comment_line(raw):
             continue
         match = _CI_PUBLISH_RE.search(raw)
@@ -901,7 +916,7 @@ def _match_docker_risk(
     if not _is_dockerfile(filename):
         return []
 
-    for number, raw in enumerate(text.splitlines(), start=1):
+    for number, raw in _source_lines(text):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -966,7 +981,7 @@ def _match_unpinned_dependencies(
         return []
 
     unpinned = 0
-    for raw in text.splitlines():
+    for _, raw in _source_lines(text):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
