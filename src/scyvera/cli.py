@@ -390,6 +390,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # serve-mcp subcommand (roadmap PD-7)
+    subparsers.add_parser(
+        "serve-mcp",
+        help="Run scyvera as an out-of-process MCP server over stdio.",
+        description=(
+            "scyvera serve-mcp          Run scyvera as an out-of-process MCP "
+            "server over stdio."
+        ),
+        epilog="exit codes: 0 clean shutdown, 2 startup failure",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
     # init subcommand
     init_parser = subparsers.add_parser(
         "init",
@@ -1014,6 +1026,11 @@ def main() -> int:
             pack=args.pack,
             unified=args.unified,
         )
+
+    if args.command == "serve-mcp":
+        from .mcp_server import serve
+
+        return serve()
 
     if args.command == "init":
         return run_init(
