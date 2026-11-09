@@ -468,6 +468,7 @@ def from_audit_report(
     *,
     subject: str,
     status: str,
+    governance: Mapping[str, Any] | None = None,
 ) -> UnifiedReport:
     """Project an RFC 0004 audit payload into the unified envelope.
 
@@ -477,6 +478,10 @@ def from_audit_report(
             published ``badge`` / ``draft_path`` keys.
         subject: Scanned path to carry as the envelope subject.
         status: Verdict from :func:`audit_status`.
+        governance: Optional ``{"status", "contract_path"}`` block from
+            :func:`scyvera.audit.governance_report`. When present it is added
+            to ``summary`` as an additive key; the audit payload in ``data``
+            and the published ``--json`` bytes are untouched.
 
     Returns:
         A frozen :class:`UnifiedReport` whose ``data`` is the payload
@@ -504,6 +509,11 @@ def from_audit_report(
         "scored_findings": scored,
         "quarantined_findings": len(findings) - scored,
     }
+    if governance is not None:
+        summary["governance"] = {
+            "status": str(governance.get("status", "ungoverned")),
+            "contract_path": governance.get("contract_path"),
+        }
     return UnifiedReport(
         mode="audit",
         status=status,
