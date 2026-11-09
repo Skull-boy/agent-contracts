@@ -399,3 +399,227 @@ def test_governed_clean_still_exits_zero(
     assert err == ""
     assert "PASS" in out
     assert "[ungoverned]" not in out
+
+
+# ---------------------------------------------------------------------------
+# R1b: BOM handling
+# ---------------------------------------------------------------------------
+
+LANGPACK = STRANGER / "langpack"
+LANGPACK_WRAPPERS = STRANGER / "langpack_wrappers"
+
+
+def test_bom_prefixed_combined_import_matches_au_net_002() -> None:
+    plain = "import wandb, requests\n"
+    rule = _rule("AU-NET-002")
+
+    for text in (plain, "\ufeff" + plain):
+        findings = rule.scan("a.py", text, "a.py")
+        assert len(findings) == 1
+        assert findings[0].line == 1
+        assert "'wandb'" in findings[0].detail
+
+
+def test_trailing_bom_is_stripped_per_line() -> None:
+    findings = _rule("AU-NET-002").scan(
+        "a.py", "import wandb\ufeff\n", "a.py"
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
+def test_bom_prefixed_credential_literal_matches_au_secret_001() -> None:
+    text = "\ufeff" + _assignment("token", GITHUB_TOKEN) + "\n"
+
+    findings = _rule("AU-SECRET-001").scan("a.py", text, "a.py")
+
+    assert len(findings) == 1
+    assert findings[0].line == 1
+    assert GITHUB_TOKEN not in findings[0].detail
+
+
+def test_scan_path_strips_utf8_signature(tmp_path: Path) -> None:
+    (tmp_path / "bom.py").write_text(
+        "import wandb, requests\n", encoding="utf-8-sig"
+    )
+
+    report = scan_tree(tmp_path)
+
+    assert report.stats["files_scanned"] == 1
+    assert [finding.rule_id for finding in report.findings] == ["AU-NET-002"]
+    assert report.findings[0].scored is True
+
+
+def test_bom_and_non_bom_findings_are_equivalent() -> None:
+    plain = (
+        'token = "' + GITHUB_TOKEN + '"\n'
+        "import wandb, requests\n"
+    )
+    rule_ids = ("AU-SECRET-001", "AU-NET-002")
+    plain_findings = [
+        (finding.rule_id, finding.line, finding.detail)
+        for rule_id in rule_ids
+        for finding in _rule(rule_id).scan("a.py", plain, "a.py")
+    ]
+    bom_findings = [
+        (finding.rule_id, finding.line, finding.detail)
+        for rule_id in rule_ids
+        for finding in _rule(rule_id).scan("a.py", "\ufeff" + plain, "a.py")
+    ]
+
+    assert bom_findings == plain_findings
+
+
+def test_utf16_file_is_still_skipped_as_binary(tmp_path: Path) -> None:
+    (tmp_path / "utf16.py").write_bytes(
+        "import wandb, requests\n".encode("utf-16")
+    )
+
+    report = scan_tree(tmp_path)
+
+    assert report.findings == ()
+    assert report.stats["files_scanned"] == 0
+    assert report.stats["files_skipped"] == 1
+
+
+# ---------------------------------------------------------------------------
+# R1b: multi-language pattern pack
+# ---------------------------------------------------------------------------
+
+LANGPACK_EXPECTED = {
+    ("Client.cs", 5),
+    ("client.c", 5),
+    ("client.go", 5),
+    ("client.java", 1),
+    ("client.js", 1),
+    ("client.rs", 2),
+}
+
+
+def test_language_pack_produces_exactly_six_network_findings() -> None:
+    report = scan_tree(LANGPACK)
+
+    assert len(report.findings) == 6
+    assert {
+        (finding.path, finding.line) for finding in report.findings
+    } == LANGPACK_EXPECTED
+    assert all(
+        finding.rule_id == "AU-NET-002"
+        and finding.severity == "medium"
+        and finding.scored is False
+        for finding in report.findings
+    )
+
+
+@pytest.mark.parametrize(
+    ("filename", "library"),
+    [
+        ("client.go", "net/http"),
+        ("client.java", "java.net.http"),
+        ("client.rs", "reqwest"),
+        ("client.c", "popen"),
+        ("Client.cs", "HttpClient"),
+        ("client.js", "axios"),
+    ],
+)
+def test_language_pack_names_the_client(
+    filename: str, library: str
+) -> None:
+    report = scan_tree(LANGPACK / filename)
+    (finding,) = [
+        item
+        for item in report.findings
+        if item.rule_id == "AU-NET-002"
+    ]
+
+    assert f"'{library}'" in finding.detail
+    assert finding.suggestion["permissions"][0].startswith(
+        "network:egress:"
+    )
+    assert finding.suggestion["capabilities"][0]["name"] == "outbound_network"
+
+
+def test_wrapper_aware_shell_rules_reach_source_files() -> None:
+    findings = scan_tree(LANGPACK_WRAPPERS).findings
+
+    assert {
+        (finding.rule_id, finding.path, finding.line)
+        for finding in findings
+        if finding.rule_id in ("AU-NET-001", "AU-SH-001", "AU-GIT-001")
+    } == {
+        ("AU-NET-001", "install.c", 4),
+        ("AU-SH-001", "delete.py", 3),
+        ("AU-GIT-001", "force.js", 3),
+    }
+    assert all(finding.scored is False for finding in findings)
+
+
+@pytest.mark.parametrize(
+    ("filename", "statement"),
+    [
+        (
+            "app.go",
+            _assignment("key", GITHUB_TOKEN).replace(" = ", " := ", 1),
+        ),
+        (
+            "App.java",
+            _assignment("String TOKEN", GITHUB_TOKEN) + ";",
+        ),
+        (
+            "app.rs",
+            "let " + _assignment("api_key", GITHUB_TOKEN) + ";",
+        ),
+        (
+            "App.cs",
+            "var " + _assignment("apiKey", GITHUB_TOKEN) + ";",
+        ),
+        (
+            "app.js",
+            "const " + _assignment("TOKEN", GITHUB_TOKEN) + ";",
+        ),
+        (
+            "app.c",
+            "char *" + _assignment("token", GITHUB_TOKEN) + ";",
+        ),
+    ],
+)
+def test_source_secret_assignments_generalize_across_languages(
+    filename: str, statement: str
+) -> None:
+    findings = _rule("AU-SECRET-001").scan(
+        filename, statement + "\n", filename
+    )
+
+    assert len(findings) == 1
+    assert findings[0].severity == "high"
+
+
+def test_source_secret_flags_bare_literal_passing() -> None:
+    statement = 'setApiKey("' + GITHUB_TOKEN + '")'
+
+    findings = _rule("AU-SECRET-001").scan(
+        "app.py", statement + "\n", "app.py"
+    )
+
+    assert len(findings) == 1
+    assert "'setApiKey'" in findings[0].detail
+
+
+def test_language_pack_is_deterministic() -> None:
+    first = scan_tree(LANGPACK)
+    second = scan_tree(LANGPACK)
+
+    assert first.to_dict() == second.to_dict()
+    assert first.to_json() == second.to_json()
+
+
+def test_language_coverage_doc_states_the_honest_limit() -> None:
+    text = (ROOT / "docs" / "language-coverage.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        "pattern-level, review-grade coverage — not AST or conformance-grade"
+        in text
+    )

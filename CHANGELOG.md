@@ -108,6 +108,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Governance status**: `audit` now reports `governed`/`ungoverned` from a bounded, read-only, name-based search for `contract.yaml` (three directory levels, skipping the scan's normal skip dirs and symlinks). The human PASS/WARN/FAIL render marks `[ungoverned]` with one next-step hint on PASS; `--unified` adds `summary.governance` (`status`, `contract_path`) while `audit --json` stays byte-identical.
 - **Dogfood**: repository remains 92/100 Shielded. The only self-match introduced by the new rule set was the documentation string in `audit_rules.py`; the wording was fixed in the repository rather than lowering any rule severity.
 
+### Added — multi-language audit pattern pack + BOM handling fix (R1b)
+- **BOM handling**: the scan decodes with `utf-8-sig`, and `_source_lines()` strips a defensive leading/trailing U+FEFF per line. BOM-prefixed imports and credential literals now match identically to non-BOM files; UTF-16 files remain binary-skipped. `audit --json` bytes and governance output are unchanged.
+- **Language pack**: documented, data-driven AU-NET-002 tables for Go, Java/Kotlin, Rust, C/C++, C#, PHP, and JS/TS; wrapper-aware payload extraction for AU-NET-001/AU-SH-001/AU-GIT-001; AU-SECRET-001 generalized across Go/Java/Rust/C#/JS/C assignment styles and credential-like callees. Coverage is explicitly pattern-level, review-grade — not AST or conformance-grade; see `docs/language-coverage.md`.
+- **Evidence**: six representative language fixtures produce exactly six AU-NET-002 findings, BOM regressions are pinned, and two scans are byte-identical.
+
 ## [1.3.0] — 2026-11-04
 
 ### Added — Policy Packs (M2.7)

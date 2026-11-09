@@ -415,7 +415,7 @@ def _scan_file(
     if b"\x00" in data[:BINARY_SNIFF_BYTES]:
         return False, []
 
-    text = data.decode("utf-8", errors="replace")
+    text = data.decode("utf-8-sig", errors="replace")
 
     findings: list[Finding] = []
     for rule in RULES:
