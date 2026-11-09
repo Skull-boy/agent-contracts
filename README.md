@@ -23,7 +23,7 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 
 > **Try it, read nothing first:** `pip install scyvera && scyvera audit .`
 >
-> **Version status:** PyPI `1.3.0` ships the audit funnel, Blast Radius report, contract drafts, and Policy Packs. `main` — the next release — adds the hash-chained registry, contract identity pinning, the re-seal ritual, conformance tiers, v1.2 guardrails, `scyvera self-check` with signed release attestations, the trace-driven eval harness, and the unified report format (`scyvera.unified`) with the `scyvera eval` command plus additive `--unified` output on `check` and `audit`.
+> **Version status:** PyPI `1.4.0` ships the full platform: the audit funnel, Blast Radius report, contract drafts, and Policy Packs, plus Tier 0/1 conformance, the hash-chained registry with identity pinning and the re-seal ritual, v1.2 guardrails, the trace/eval harness, unified reports, `scyvera self-check` with signed release attestation, the `scyvera-gate` Action, and `scyvera serve-mcp`. The v1.4 production gate is satisfied on four of its five conditions; the remaining distribution-reach condition — the `scyvera-harness` skill (M3.1) and per-target packaging (M3.2) — is not shipped, so the project stays **beta-serious**, not production-certified.
 
 ---
 
@@ -159,7 +159,7 @@ scyvera self-check
 ```
 
 ```text
-PASS  self-check  scyvera 1.3.0
+PASS  self-check  scyvera 1.4.0
       manifest: 1
       verified: 26 files
 ```
@@ -690,7 +690,7 @@ agent-contracts/
 │   ├── generate_self_manifest.py       # Writes the canonical self manifest
 │   ├── generate_sbom.py                # Deterministic CycloneDX 1.5 SBOM
 │   └── build_release_manifest.py       # RFC 0003 §C6 attestation bundle
-├── tests/                              # 33 test files: conformance, evals, trace, enforcer, audit, report-shape pins
+├── tests/                              # 36 test files: conformance, evals, trace, enforcer, audit, report-shape pins
 │   └── fixtures/                       # Validator fixtures and audit corpus
 └── implementations/                    # Multi-framework reference implementations
     ├── n8n/duplicate-issue-detector/        # Tier-1 reference (T101 sample pinned)
@@ -723,9 +723,9 @@ agent-contracts/
 The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). Current state:
 
 - **Phase 1 — Core Hardening**: shipped — hash-chained registry (M1.1), trace schema (M1.2), contract identity pinning (M1.3), and the re-seal ritual (M1.4). Remaining: threat-model doc status refresh (M1.5).
-- **Phase 2 — Conformance & Evals**: Tier 0 CLI (M2.1), n8n adapter (M2.2), LangGraph adapter (M2.3), trace-driven eval harness (M2.4), the unified report format (M2.5), the additive v1.2 guardrails slice (M2.6), and Policy Packs (M2.7) shipped. **Phase 2 is complete.** Next lane: the official `scyvera-audit-action` (PD-6), `scyvera mcp` server mode (PD-7), the `scyvera-harness` skill (M3.1), and per-target packaging (M3.2).
+- **Phase 2 — Conformance & Evals**: Tier 0 CLI (M2.1), n8n adapter (M2.2), LangGraph adapter (M2.3), trace-driven eval harness (M2.4), the unified report format (M2.5), the additive v1.2 guardrails slice (M2.6), and Policy Packs (M2.7) shipped. **Phase 2 is complete.** PD-6 (`scyvera-gate` Action) and PD-7 (`scyvera serve-mcp`) also shipped in 1.4.0. Remaining distribution reach: the `scyvera-harness` skill (M3.1) and per-target packaging (M3.2).
 - **Phase 3 — Distribution**: Sigstore + SBOM attestation (M3.3) and `scyvera self-check` (M3.4) shipped. Remaining: `scyvera-harness` skill (M3.1), multi-runtime packaging for OpenCode / Claude / Gemini / Codex (M3.2), and the documentation surface upgrade (M3.5).
-- **Production-Defensibility Program**: PD-1 through PD-4 shipped. Remaining: published benchmark (PD-5), `scyvera-audit-action` (PD-6), `scyvera mcp` server (PD-7), and the deferred Rust scanner (PD-8).
+- **Production-Defensibility Program**: PD-1 through PD-4, PD-6, and PD-7 shipped. Remaining: published benchmark (PD-5) and the deferred Rust scanner (PD-8).
 - **Growth lane**: G1 (this README) shipped; G2 launch film rendered and publication pending; G3 showcase gallery and G4 contributor ladder planned.
 - **Phase 4 — Optional enforcer upgrades**: sliding-window invocation throttling, asynchronous approval channels, and multi-agent contract negotiation.
 
@@ -737,7 +737,7 @@ The full task-level plan lives in [`docs/roadmap.md`](./docs/roadmap.md). Curren
 pytest tests/ -v
 ```
 
-The suite currently collects **688 tests**: 682 pass, and 6 symlink tests skip on platforms that forbid link creation. CI runs the same suite across **Windows, Linux, and macOS** on **Python 3.10 through 3.14**.
+The suite currently collects **782 tests**: 776 pass, and 6 symlink tests skip on platforms that forbid link creation. CI runs the same suite across **Windows, Linux, and macOS** on **Python 3.10 through 3.14**.
 
 Two repo-level gates run inside the suite:
 
