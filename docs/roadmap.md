@@ -211,3 +211,24 @@ own test material stays outside the source-credential rule.
 **Notes:** the task named `fac9a64` as the main tip; the branch was cut from
 the then-current `origin/main` at `ea4d27a` (merged PR #70), which contains
 that commit. No roadmap row existed for R1, so this section is additive.
+
+---
+
+## Multi-language pattern pack + BOM handling (R1b)
+
+R1b extends the audit's line-pattern coverage to the source languages that
+were being scanned but matched by almost nothing, and fixes a Windows BOM
+correctness hole. It stays pattern-level and review-grade; Tier 1 adapters
+remain the AST-aware layer.
+
+| Item | Shipped behavior | Evidence |
+|---|---|---|
+| BOM handling | The scan decodes with `utf-8-sig`, and the shared `_source_lines()` helper strips a defensive leading/trailing U+FEFF per line. A BOM-prefixed combined import or credential literal now matches exactly like the non-BOM file; UTF-16 files still skip as binary. | `tests/test_audit_stranger.py::test_bom_prefixed_combined_import_matches_au_net_002`, `test_utf16_file_is_still_skipped_as_binary` |
+| Language pack | AU-NET-002 gains documented per-family tables for Go, Java/Kotlin, Rust, C/C++, C#, PHP, and JS/TS. Every finding names the detected client and maps to `permissions: network:egress:<host>`; the six-language fixture set produces exactly six findings. | `test_language_pack_produces_exactly_six_network_findings`, `test_language_pack_names_the_client` |
+| Wrapper-aware shell rules | One `_shell_wrapper_payloads()` helper extracts quoted commands from `system`/`os.system`/`subprocess`/`Runtime.exec`/`ProcessBuilder`/`exec.Command`/`child_process.exec`/`Process.Start` and feeds the existing AU-NET-001, AU-SH-001, and AU-GIT-001 checks. | `test_wrapper_aware_shell_rules_reach_source_files` |
+| Source credentials | AU-SECRET-001 documents and tests Go `:=`, Java `String TOKEN =`, Rust `let`, C# `var`, JS `const`, C declarations, and credential-like callee calls such as `setApiKey("...")`; the R1 length/entropy floor is unchanged. | `test_source_secret_assignments_generalize_across_languages`, `test_source_secret_flags_bare_literal_passing` |
+| Honest limits | New `docs/language-coverage.md` states the exact phrase “pattern-level, review-grade coverage — not AST or conformance-grade”, lists what each family catches, and records what is not caught. README points at it. | `test_language_coverage_doc_states_the_honest_limit` |
+
+**Dogfood:** `scyvera audit .` remains 92/100 Shielded. The new fixtures live
+under `tests/fixtures/stranger/`, so they are visible but quarantined and
+unscored.

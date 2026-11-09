@@ -69,6 +69,8 @@ Bands from RFC 0004 §4:
 
 A band summarizes a scan. It is not a security certification.
 
+Language pattern coverage, including what is deliberately not caught, is listed in [`docs/language-coverage.md`](./docs/language-coverage.md); audit is pattern-level, review-grade, and Tier 1 adapters handle AST-aware checks.
+
 ### b. Put a badge in your README
 
 ```bash
