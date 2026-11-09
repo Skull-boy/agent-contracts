@@ -108,7 +108,10 @@ runs:
         FORMAT: ${{ inputs.report-format }}
         BADGE_PATH: ${{ inputs.badge }}
       run: |
-        set -uo pipefail
+        # GitHub runs `shell: bash` as `bash --noprofile --norc -e -o pipefail`,
+        # so errexit is already active in this script. Clear it: this step must
+        # capture scyvera's 0/1/2 exit codes, not die on the first non-zero one.
+        set +e -uo pipefail
 
         emit_error_outputs() {
           {

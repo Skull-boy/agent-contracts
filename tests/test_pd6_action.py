@@ -199,6 +199,15 @@ def test_run_step_emits_every_declared_output() -> None:
         assert token in script
 
 
+def test_gate_step_clears_github_errexit() -> None:
+    # GitHub runs `shell: bash` as `bash --noprofile --norc -e -o pipefail`.
+    # With errexit left on, `audit` exiting 1 (findings) kills the gate before
+    # it can capture `$?`, which is exactly how PR #68's audit job went red.
+    (run_step,) = [step for step in _run_steps(_load(ACTION)) if step.get("id") == "run"]
+    script_lines = [line.strip() for line in run_step["run"].splitlines()]
+    assert "set +e -uo pipefail" in script_lines
+
+
 def test_run_steps_use_a_portable_shell() -> None:
     action = _load(ACTION)
     for step in _run_steps(action):
