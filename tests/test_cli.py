@@ -1,9 +1,52 @@
+import importlib.metadata
+import re
 from pathlib import Path
+
+import pytest
 
 from scyvera.cli import main
 
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def test_cli_version_reports_the_installed_release(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["scyvera", "--version"])
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    assert raised.value.code == 0
+    output = capsys.readouterr().out
+    assert re.fullmatch(r"scyvera \S+\n", output)
+    assert output == f"scyvera {importlib.metadata.version('scyvera')}\n"
+
+
+def test_cli_version_falls_back_to_unknown_without_metadata(
+    monkeypatch, capsys
+):
+    def missing(name):
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr("importlib.metadata.version", missing)
+    monkeypatch.setattr("sys.argv", ["scyvera", "--version"])
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    assert raised.value.code == 0
+    assert capsys.readouterr().out == "scyvera unknown\n"
+
+
+def test_cli_help_points_at_the_version_flag(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["scyvera", "--help"])
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    assert raised.value.code == 0
+    output = " ".join(capsys.readouterr().out.split())
+    assert "run 'scyvera --version' to report the installed release." in output
 
 
 def test_cli_valid_contract_returns_zero(monkeypatch, capsys):
