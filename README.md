@@ -23,7 +23,15 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 
 > **Try it, read nothing first:** `pip install scyvera && scyvera audit .`
 >
-> **Version status:** PyPI `1.4.0` ships the full platform: the audit funnel, Blast Radius report, contract drafts, and Policy Packs, plus Tier 0/1 conformance, the hash-chained registry with identity pinning and the re-seal ritual, v1.2 guardrails, the trace/eval harness, unified reports, `scyvera self-check` with signed release attestation, the `scyvera-gate` Action, and `scyvera serve-mcp`. The v1.4 production gate is satisfied on four of its five conditions; the remaining distribution-reach condition — the `scyvera-harness` skill (M3.1) and per-target packaging (M3.2) — is not shipped, so the project stays **beta-serious**, not production-certified.
+> **Version status:** PyPI `1.4.0` ships the full platform: the audit funnel, Blast Radius
+> report, contract drafts, and Policy Packs, plus Tier 0/1 conformance, the hash-chained registry
+> with identity pinning and the re-seal ritual, v1.2 guardrails, the trace/eval harness, unified
+> reports, `scyvera self-check` with signed release attestation, the `scyvera-gate` Action,
+> `scyvera serve-mcp`, the `scyvera-governance` harness skill, and per-target adoption kits.
+> **The v1.4 production gate is satisfied on all five conditions** (2026-11-13: install
+> verification, provable history, CI gating, bounded behavior, runtime reach — see
+> `docs/roadmap.md`, Production-Defensibility Program). The positioning is **production-gated**:
+> every word of that claim is machine-checkable, and the honest-limits section below stays.
 
 ---
 

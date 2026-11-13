@@ -119,6 +119,8 @@ A team can:
 
 Until all five hold, the README's positioning stays "beta-serious", not "production". This gate
 is deliberately explicit so the marketing language can never outrun the merged code.
+**All five now hold** (M3.1 in PR #75, M3.2 in PR #77; verified 2026-11-13 — the README carries
+the flip). The GEP below is the next program and changes none of these conditions' guarantees.
 
 ### Sequencing (explicit, ordered — overrides nothing, records the order)
 
