@@ -233,3 +233,76 @@ remain the AST-aware layer.
 **Dogfood:** `scyvera audit .` remains 92/100 Shielded. The new fixtures live
 under `tests/fixtures/stranger/`, so they are visible but quarantined and
 unscored.
+
+---
+
+## Governance Expansion Program (GEP, post-M3.2, cross-lane)
+
+**Goal:** extend the contract standard from a Python reference implementation to
+a multi-runtime, contractless-capable standard — without weakening any trust
+property. Everything here is additive to the phases and programs above; task
+IDs below are new (GE-prefix) and never collide with `M`/`PD`/`R`/`G` tasks.
+
+### Non-negotiables (apply to every GEP task)
+
+1. **RFC-authoritative spec.** New semantics (provisional contracts, draft
+   mode, conformance vectors) get an RFC before the implementation session
+   runs. Spec conflicts are raised, never silently reworded.
+2. **Deterministic engines; no LLM in the governance path** — unchanged.
+3. **One shared acceptance corpus.** Every runtime passes the *same* conformance
+   vectors at the same pinned vector-suite version. That is what makes
+   `scyvera-ts` and `scyvera-rs` implementations of one standard, not
+   lookalike libraries.
+4. **Native-only distribution.** npm packages only ever package the native
+   TypeScript runtime; crates.io only the native Rust runtime. No JS/Rust
+   wrapper around the Python tool, ever. (A wrapper would duplicate the trust
+   base and add a supply-chain surface without removing a dependency.)
+5. **Inference-derived authority is a trap.** Contractless adoption goes
+   through a *provisional contract lifecycle* with human promotion — never
+   through code that silently derives its own authority.
+6. **One lane at a time.** The next lane opens only when the previous phase's
+   exit acceptance is green. Entry/exit conditions below are binding, and the
+   lane owner is the curated-session loop.
+
+### Sequencing (explicit, ordered — begins after M3.2)
+
+```
+1. M3.1/M3.2  distribution reach completion   (in flight; closes the v1.4 gate)
+2. GE-1       RFC 0005 draft                  (provisional contracts + vectors)
+3. GE-2       Phase C: draft governance       (in-repo, Python)
+4. GE-3       Phase V: vector suite runner    (in-repo; parallel-ok with GE-2)
+5. GE-4       Phase TS: scyvera-ts runtime    (separate package, npm)
+6. GE-5       Phase RS: scyvera-rs runtime    (separate package, crates.io)
+7. GE-6       Rust audit binary sub-lane      (only behind differential-output tests; re-evaluate on evidence)
+```
+
+### Task rows
+
+| Task | Deliverable | Acceptance |
+|---|---|---|
+| **GE-1** | RFC 0005 draft: provisional-contract lifecycle (`provisional: true` flag, draft-mode denial semantics, human promotion ritual) + the conformance-vector suite format | RFC draft merged with normative MUST/SHOULD statements and an open-questions section; no implementation may start before it lands |
+| **GE-2** | Draft governance in the Python enforcer: `scyvera init --infer <target>` (or the audit hint upgraded) generates a provisional contract; enforcer DRAFT MODE — declared actions allowed, **irreversible actions default-deny + approval even in draft**, every call audited; PROMOTION RITUAL reuses the re-seal machinery (human review → re-seal → full contract) | Enforcer refuses full-mode load of a `provisional: true` contract (pinned test); draft mode denies irreversible actions without approval (pinned test); promotion via re-seal flips the flag and unlocks full mode; audit reports governance status `provisional` (additive to `governed`/`ungoverned`); suite grows; dogfood stays 92/100 |
+| **GE-3** | `vectors/` conformance suite: contract-model validation vectors, gate-decision vectors (allow/deny/approve/tamper/undeclared), trace round-trip vectors — JSON, byte-specified, versioned, with per-version changelog; Python runner ships first | Runner passes all vectors in in-repo CI; determinism pinned (two runs byte-identical); suite version recorded; TS/RS lanes pin the same version in their CI configs |
+| **GE-4** | `scyvera-ts` — native TypeScript runtime: contract model + validation, default-deny enforcer with approval boundaries, trace JSONL emitting the same C4 schema, vector-suite runner; published to npm with provenance attestation; repo location (monorepo subdir vs separate repo) decided and recorded with rationale | Passes ALL vectors at the pinned suite version in its own CI; npm package published with provenance; package README cross-links the RFC; no wrapper around Python |
+| **GE-5** | `scyvera-rs` — native Rust runtime, cargo-first, same scope as GE-4 via the vectors; published to crates.io under the same attestation discipline | Passes ALL vectors at the pinned suite version in its own CI; crate published; Python implementation remains the reference semantics |
+| **GE-6** | *(Conditional, deferred)* Rust audit binary — single static binary CI gate (Trivy/gitleaks pattern); the GitHub Action may adopt it only after this row's acceptance passes | Byte-identical audit output vs the Python engine across a pinned corpus; if unachievable, the sub-lane is REJECTED and this row records it honestly |
+
+### Explicit non-goals (locked for the whole GEP)
+
+- No inference-time enforcement without a provisional contract on disk.
+- No silent or automatic promotion of provisional contracts.
+- No agent-side authority: skills teach tool use; engines hold power.
+- No TS reimplementation of the audit rule registry — audit stays a
+  Python-tool capability unless an evidence-driven lane reopens it.
+- No new package-manager channel for the Python tool itself.
+
+### Progress tracking (GEP)
+
+| Lane | Scope | Status |
+|---|---|---|
+| GE-1 | RFC 0005 draft | not started |
+| GE-2 | Draft governance (Python) | not started |
+| GE-3 | Vector suite | not started |
+| GE-4 | scyvera-ts | not started |
+| GE-5 | scyvera-rs | not started |
+| GE-6 | Rust audit binary | conditional, deferred |
