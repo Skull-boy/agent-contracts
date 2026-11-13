@@ -42,6 +42,6 @@ suite until this reference is updated.
 | `T102` | error | Tier 1 found an externally-reaching write reachable without a declared gate. |
 | `T103` | warning | Tier 1 found a declared permission the implementation never exercises. |
 
-`AUDIT` findings carry a path and usually a line. `T101`/`T102`/`T103` carry
+Audit findings carry a path and usually a line. `T101`/`T102`/`T103` carry
 the implementing file; `ACxxx` findings carry the contract. Report the rule ID,
 severity, and location exactly as printed.
