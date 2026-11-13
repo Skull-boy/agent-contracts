@@ -1,0 +1,48 @@
+# Reflexive contract for the scyvera-governance skill (RFC 0003 §C6).
+# The skill reads the repository and contracts; its only write is a contract
+# draft produced by `scyvera init` or `scyvera audit --generate`.
+version: 1.1
+agent:
+  name: Scyvera Governance Skill
+  purpose: >-
+    Teach an agent to run Scyvera's deterministic governance commands and to
+    report their findings and exit codes unchanged.
+  version: 1.0.0
+
+capabilities:
+  - name: run_governance_commands
+    description: Invoke read-only Scyvera commands and preserve their verdicts.
+  - name: scaffold_contract_draft
+    description: Write one starter contract through `scyvera init`.
+
+permissions:
+  - resource: repository_files
+    actions: [read]
+  - resource: contract_files
+    actions: [read]
+  - resource: contract_drafts
+    actions: [write]
+
+side_effects:
+  - type: file_write
+    resource: contract_drafts
+    description: A single starter contract, only when the user asks for one.
+    irreversible: false
+
+approvals: []
+dependencies: []
+
+state:
+  persistence: none
+
+recovery:
+  strategy: retry
+
+replay:
+  mode: idempotent
+
+observability:
+  level: basic
+
+risk:
+  level: low

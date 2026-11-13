@@ -1,0 +1,21 @@
+{
+  "skills": {
+    "scyvera-governance": {
+      "computedHash": "3cbf326921ba737b1edf074263bf82b3bd8e4d83c064cd1f23a116fe4bb4804e",
+      "files": {
+        "skills/scyvera-governance/SKILL.md": "3cbf326921ba737b1edf074263bf82b3bd8e4d83c064cd1f23a116fe4bb4804e",
+        "skills/scyvera-governance/contract.yaml": "192c4b3029a20a4385ded9708270dd3e87473bc79e8127f13a768bf3dbf7a154",
+        "skills/scyvera-governance/reference/exit-codes.md": "a61d7179995f6bae15fe61e8103177692c87eeea3e1cc1184f587c8f018add4c",
+        "skills/scyvera-governance/reference/finding-codes.md": "d7248a1c7b909bfd09946e59c36d97962f09f43fc51149465e8b48e013802983",
+        "skills/scyvera-governance/scripts/audit.ps1": "a846751403137377ba99e087bb170efeb5c6761e98d10f5aa0a3fb2985b1e6ea",
+        "skills/scyvera-governance/scripts/audit.sh": "ef7f4da12245488cfa5c058f925435db774163d043079aaa7f99c4d03bb22207"
+      },
+      "locked_at_version": "1.4.0",
+      "skillPath": "skills/scyvera-governance/SKILL.md",
+      "source": "Skull-boy/agent-contracts",
+      "sourceType": "github",
+      "version": "1.4.0"
+    }
+  },
+  "version": 1
+}
