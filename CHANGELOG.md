@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — harness skill package (M3.1)
+- **`skills/scyvera-governance/`** packages the governance workflow as an installable harness skill: `SKILL.md` teaches the seven CLI commands and the five MCP tools, pins the three NEVERs, and states the knowledge-not-powers principle; `reference/` documents every finding code and exit code; `scripts/` wraps `scyvera audit` with explicit exit capture. The skill ships its own `contract.yaml` (Tier 0 PASS) and is hash-locked by `tools/lock_skill.py` into `skills-registry.json` with deterministic per-file SHA-256 hashes. No engine files changed.
+
 ## [1.4.0] — 2026-11-09
 
 ### Added — Conformance CLI and Tier 1 adapters (M2.1–M2.3)
