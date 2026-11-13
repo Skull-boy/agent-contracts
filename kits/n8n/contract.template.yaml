@@ -1,0 +1,76 @@
+# contract.yaml — n8n adoption template (M3.2)
+# Copy this file to contract.yaml in your repository, then replace every field
+# marked "# EDIT". Keep the file next to the workflow JSON so
+# `scyvera check . --tier 1` can pair them.
+version: 1
+workflow: competitor-feature-parity-watcher   # EDIT: your workflow name (keep it stable)
+
+inputs:
+  # EDIT: list only the real inputs this workflow consumes.
+  - Product name and current product feature list configured in the workflow
+  - Competitor watchlist containing competitor name, changelog URL, and source type (rss or webpage)
+  - Public competitor RSS/Atom feeds or changelog webpages
+
+outputs:
+  # EDIT: state every externally visible output, including where it lands.
+  - Relevant competitor updates with title, relevance score, reason, link, and scan date persisted to Google Sheets
+  - A weekly competitor-update digest sent to the configured Telegram chat
+
+permissions:
+  # EDIT: narrow each line to the exact host, account, and scope you use.
+  # Tier 1 checks n8n nodes against these declarations (T101/T103).
+  - network: read configured public RSS feeds and changelog webpages
+  - openai: GPT-4o-mini inference for webpage extraction and relevance scoring
+  - google-sheets: read+write CompetitorState and FlaggedUpdates sheets
+  - telegram: send digest messages to the configured chat
+
+side_effects:
+  # EDIT: every write or external message belongs here, including dry-run paths.
+  - Sends webpage changelog content to the configured OpenAI model when the webpage fallback path is used
+  - Sends new competitor updates and product feature context to the configured OpenAI model for relevance scoring
+  - Writes relevance-scored competitor updates to the FlaggedUpdates Google Sheet
+  - Updates each successfully processed competitor's last-checked state in the CompetitorState Google Sheet
+  - Sends a competitor digest to Telegram after the scan completes
+
+# EDIT: add a gate before every irreversible or high-blast-radius side effect.
+# An empty list is a claim Tier 1 may test with T102.
+approval_points: []
+
+# EDIT: describe what happens on each external failure and what is retried.
+recovery_strategy: >
+  RSS and webpage sources are processed independently for each configured competitor.
+  A failed webpage fetch is converted to a fetch_failed result, and malformed LLM
+  extraction output is converted to parse_failed. These failure states produce no
+  new items and do not intentionally advance that competitor's saved state.
+  The workflow defines no explicit retry strategy for OpenAI, Google Sheets,
+  Telegram, or other external-service failures, so those failures rely on n8n's
+  execution behavior.
+
+# EDIT: say whether a re-run is idempotent, and name the key that makes it so.
+replay_semantics: >
+  Partially repeatable but not strictly idempotent. The CompetitorState sheet stores
+  each competitor's last checked date and is used to filter previously observed
+  updates on later scans. Flagged updates are appended to a separate sheet rather
+  than upserted by a stable update identifier, so repeated or manually replayed
+  executions can still produce duplicate flagged rows or digest entries under
+  some state and failure conditions.
+
+dependencies:
+  # EDIT: pin the runtime services and versions this workflow depends on.
+  - n8n runtime
+  - Public competitor RSS/Atom feeds or changelog webpages
+  - OpenAI Chat Completions API (GPT-4o-mini in the current implementation)
+  - Google Sheets
+  - Telegram Bot API
+
+# EDIT: name the store, its key, and its retention window.
+state: >
+  Persistent cross-run state is stored in Google Sheets. CompetitorState records
+  each competitor and its lastCheckedDate, while FlaggedUpdates stores surfaced
+  updates including competitor, title, score, reason, link, and scanDate.
+
+observability:
+  # EDIT: where can an operator see a failed run? Keep at least one durable signal.
+  - Google Sheets provides persistent visibility into competitor state and flagged updates
+  - Telegram provides the final weekly digest of surfaced competitor updates
+  - n8n execution history provides workflow execution and failure visibility

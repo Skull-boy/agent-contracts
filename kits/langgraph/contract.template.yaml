@@ -1,0 +1,75 @@
+# contract.yaml — LangGraph adoption template (M3.2)
+# Copy this file to contract.yaml in your repository, then replace every field
+# marked "# EDIT". Keep the file at the root of the implementation directory so
+# `scyvera check . --tier 1` can parse every .py file under it.
+version: 1
+workflow: duplicate-issue-detector   # EDIT: your graph/workflow name (keep it stable)
+framework: langgraph                 # EDIT: keep langgraph for this adapter
+
+inputs:
+  # EDIT: list only the real invocation inputs and runtime fetches.
+  - GitHub issue number (passed at invocation time)
+  - Issue title + body fetched from GitHub API at runtime
+
+outputs:
+  # EDIT: state every externally visible output, including where it lands.
+  - One comment on the triggering issue, only if similarity >= threshold
+
+permissions:
+  # EDIT: narrow each line to the exact service, verb, and scope you use.
+  # Tier 1 reports an undeclared capability as T101 and an unused declaration
+  # as T103. Keep this list equal to what the Python source actually exercises.
+  - github: issues:read+write   # comment only — never close, label, or edit
+  - openai: embeddings:read
+  - qdrant: read+write on one collection
+  - github.read: read
+  - qdrant.search: search
+
+side_effects:
+  # EDIT: every write or external message belongs here. Dotted verbs such as
+  # github.close are also read as declared capabilities, so delete the ones you
+  # do not implement or Tier 1 will warn (T103) about each of them.
+  - Posts one comment on the triggering issue, if similarity >= threshold
+  - Writes one vector to the Qdrant collection (always, regardless of duplicate result)
+  - github.comment
+  - github.read
+  - github.close
+  - github.label
+  - github.merge
+  - qdrant.write
+  - qdrant.delete
+  - qdrant.search
+
+# EDIT: add a gate before every irreversible or high-blast-radius side effect.
+# An empty list is a claim Tier 1 may test with T102.
+approval_points: []   # intentionally empty — this workflow only ever comments,
+                      # never closes or merges, so no approval gate is required
+
+# EDIT: describe what happens on each external failure and what is retried.
+recovery_strategy: >
+  Any failure (GitHub unreachable, OpenAI error, Qdrant error) raises an
+  exception that propagates to the caller. Nothing is silently skipped.
+  The run fails loudly and visibly.
+
+# EDIT: say whether a re-run is idempotent, and name the key that makes it so.
+replay_semantics: >
+  Idempotent on Qdrant — re-running on the same issue number overwrites
+  the existing vector (issue number is the Qdrant point ID).
+  The GitHub comment is NOT idempotent — running twice on the same issue
+  will post two comments if a duplicate is found both times.
+
+dependencies:
+  # EDIT: pin the runtime services and model/API versions you depend on.
+  - GitHub API
+  - OpenAI Embeddings API (text-embedding-3-small)
+  - Qdrant instance (local or cloud)
+
+# EDIT: name the store, its key, and its retention window.
+state: >
+  Persisted in a Qdrant collection — one 1536-dimensional vector per
+  previously-seen issue, with issue number, title, and URL as payload.
+
+observability:
+  # EDIT: where can an operator see a failed run? Keep at least one durable signal.
+  - Structured INFO/ERROR logs to stderr during execution
+  - JSON summary to stdout on completion (issue number, scores, flags, run_log)

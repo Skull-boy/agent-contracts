@@ -111,6 +111,8 @@ The scan writes one schema-valid v1.1 contract. `scyvera validate contract.yaml`
 
 That draft is the input to the enforcement layer below: `ContractEnforcer.load("contract.yaml")` turns the scanned boundary into a runtime gate.
 
+For a ready-made boundary for a shipped runtime, start from a per-target [adoption kit](./kits/) (`n8n`, `langgraph`) instead of a blank template.
+
 ### e. Start from a policy, not a blank page
 
 ```bash
