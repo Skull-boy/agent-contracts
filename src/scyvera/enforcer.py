@@ -385,6 +385,16 @@ class ContractEnforcer:
         return self._contract_source
 
     @property
+    def is_provisional(self) -> bool:
+        """Whether the loaded contract declares ``provisional: true`` exactly.
+
+        RFC 0005 §3.1 requires strict identity with ``True``; the frozen
+        contract is never normalized or mutated. Declaration contracts have no
+        provisional field and are therefore never provisional.
+        """
+        return self._frozen_contract.get("provisional") is True
+
+    @property
     def guardrails(self) -> Optional[Guardrails]:
         """Frozen RFC 0003 §C5 guardrail record, or ``None`` when omitted.
 

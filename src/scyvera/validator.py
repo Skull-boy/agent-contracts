@@ -205,6 +205,27 @@ def validate_contract(
             ),
         )
 
+    # RFC 0005 §3.2: `provisional` is an additive v1.1/v1.2 property. The v1
+    # schema is unchanged and the field is rejected there, even when false, so
+    # a v1 contract can never acquire draft semantics through schema drift.
+    if (
+        isinstance(contract, dict)
+        and "provisional" in contract
+        and detect_contract_version(contract) is ContractVersion.V1
+    ):
+        return ValidationResult(
+            valid=False,
+            errors=(
+                ValidationError(
+                    path="provisional",
+                    message=(
+                        "`provisional` is not supported on contract_version 1; "
+                        "provisional contracts require contract_version 1.1 or later."
+                    ),
+                ),
+            ),
+        )
+
     resolved_path = resolve_schema_path(contract, schema_path)
 
     if resolved_path is None:

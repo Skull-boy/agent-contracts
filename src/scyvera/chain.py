@@ -49,8 +49,18 @@ def canonical_entry_bytes(entry: RegistryEntry) -> bytes:
     same bytes, so the on-disk record and the hashed record are identical by
     construction. Field order comes from the dataclass, keeping the encoding
     deterministic across processes and Python versions.
+
+    RFC 0005 §3.3 conditional serialization: the additive ``draft`` field is
+    written only when ``True`` and ``promotion`` only when not ``None``.
+    Entries without either field therefore hash exactly as they did before
+    RFC 0005, so every historical chain still verifies unchanged.
     """
-    return json.dumps(asdict(entry), separators=(",", ":")).encode("utf-8")
+    data = asdict(entry)
+    if not data.get("draft"):
+        data.pop("draft", None)
+    if data.get("promotion") is None:
+        data.pop("promotion", None)
+    return json.dumps(data, separators=(",", ":")).encode("utf-8")
 
 
 def next_prev_hash(previous: RegistryEntry) -> str:
