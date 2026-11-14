@@ -19,7 +19,12 @@ from .conformance import (
     resolve_tier,
 )
 from .exceptions import ContractFileNameError
-from .generate import build_draft, write_draft
+from .generate import (
+    build_draft,
+    build_provisional_contract,
+    write_draft,
+    write_provisional_contract,
+)
 from .linter import lint_contract
 from .packs import PackError, load_pack
 from .report import render_badge, render_report
@@ -472,6 +477,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prompt interactively for contract details",
     )
 
+    init_parser.add_argument(
+        "--infer",
+        metavar="TARGET",
+        type=Path,
+        default=None,
+        help=(
+            "Generate a provisional contract from static inference over "
+            "TARGET (no target code is executed); requires human promotion "
+            "before full-mode enforcement"
+        ),
+    )
+
+    init_parser.add_argument(
+        "--pack",
+        metavar="NAME",
+        default=None,
+        help=(
+            "Apply a local Policy Pack from packs/<NAME>.yaml when generating "
+            "with --infer"
+        ),
+    )
+
     return parser
 
 
@@ -637,10 +664,91 @@ def run_init(
     spec_version: str = "1.1",
     force: bool = False,
     interactive: bool = False,
+    infer: Path | None = None,
+    pack: str | None = None,
 ) -> int:
+    if pack is not None and infer is None:
+        print(
+            "scyvera init: error: --pack requires --infer <target>",
+            file=sys.stderr,
+        )
+        return 2
+    if infer is not None and spec_version != "1.1":
+        print(
+            "scyvera init: error: --infer always generates a v1.1 provisional "
+            "contract; remove --spec-version 1",
+            file=sys.stderr,
+        )
+        return 2
+    if infer is not None and interactive:
+        print(
+            "scyvera init: error: --infer and --interactive are mutually "
+            "exclusive",
+            file=sys.stderr,
+        )
+        return 2
+
     if output_path.exists() and not force:
         print(f"ERROR  {output_path} already exists. Use --force to overwrite.")
         return 1
+
+    if infer is not None:
+        if output_path.suffix == ".yml":
+            print(
+                f"scyvera init: error: {output_path} must use the .yaml "
+                "extension so `scyvera validate` can load it",
+                file=sys.stderr,
+            )
+            return 2
+        policy_pack = None
+        if pack is not None:
+            try:
+                policy_pack = load_pack(pack)
+            except PackError as error:
+                print(f"scyvera init: error: {error}", file=sys.stderr)
+                return 2
+        try:
+            report = scan_tree(infer)
+        except FileNotFoundError:
+            print(f"ERROR  {infer}")
+            print("       file not found")
+            return 2
+        except PermissionError:
+            print(f"ERROR  {infer}")
+            print("       permission denied")
+            return 2
+        except AuditError as error:
+            print(f"ERROR  {infer}")
+            print(f"       {error}")
+            return 2
+
+        draft = build_provisional_contract(
+            report,
+            domain=domain or "software",
+            pack=policy_pack,
+        )
+        try:
+            write_provisional_contract(draft, output_path)
+        except PermissionError:
+            print(
+                f"scyvera init: error: cannot write {output_path}: "
+                "permission denied",
+                file=sys.stderr,
+            )
+            return 2
+        except (OSError, ValueError) as error:
+            print(
+                f"scyvera init: error: cannot write {output_path}: {error}",
+                file=sys.stderr,
+            )
+            return 2
+
+        print(f"CREATED {output_path} (provisional draft)")
+        print(
+            "PROVISIONAL  this contract is not full-mode authority; a human "
+            "must review it and run `scyvera promote` before enforcement."
+        )
+        return 0
 
     purpose = "Operational contract for intelligent/automated system"
     risk_level = "low"
@@ -1062,6 +1170,8 @@ def main() -> int:
             spec_version=args.spec_version,
             force=args.force,
             interactive=args.interactive,
+            infer=args.infer,
+            pack=args.pack,
         )
 
     parser.error(f"unknown command: {args.command}")

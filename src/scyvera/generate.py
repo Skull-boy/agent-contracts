@@ -18,6 +18,7 @@ from collections.abc import Iterable, Mapping, Sequence
 import json
 from pathlib import Path
 import re
+import tempfile
 from types import MappingProxyType
 from typing import Any
 
@@ -25,10 +26,18 @@ import yaml
 
 from .audit import AuditReport
 from .audit_rules import Finding
+from .linter import lint_contract
 from .packs import PolicyPack
+from .validator import validate_contract
 
 
-__all__ = ["DraftContract", "build_draft", "write_draft"]
+__all__ = [
+    "DraftContract",
+    "build_draft",
+    "build_provisional_contract",
+    "write_draft",
+    "write_provisional_contract",
+]
 
 
 _RISK_BY_SEVERITY: Mapping[str, str] = MappingProxyType(
@@ -96,11 +105,13 @@ class DraftContract(dict[str, Any]):
         body: Mapping[str, Any] | None = None,
         *,
         omitted_suggestion_keys: Iterable[str] = (),
+        header_notes: Iterable[str] = (),
     ) -> None:
         super().__init__(body or {})
         self.omitted_suggestion_keys = tuple(
             sorted(set(omitted_suggestion_keys))
         )
+        self.header_notes = tuple(header_notes)
 
 
 def _canonical(value: Any) -> str:
@@ -544,6 +555,107 @@ def build_draft(
     return DraftContract(body, omitted_suggestion_keys=omitted)
 
 
+def build_provisional_contract(
+    report: AuditReport,
+    *,
+    repo_name: str | None = None,
+    domain: str = "software",
+    pack: PolicyPack | None = None,
+) -> DraftContract:
+    """Build a ``provisional: true`` draft from static audit findings.
+
+    Implements RFC 0005 §3.4: the output always marks itself provisional, uses
+    the conservative lifecycle default when invocation is unknown, and reuses
+    :func:`build_draft`'s finding-derived sections (which already enforce the
+    §3.4 contribution rules and RFC 0004 §10.1 irreversibility floor).
+
+    Tier 1 ``T101``/``T102`` findings are not read here: the adapters compare an
+    existing contract against an implementation, and ``init --infer`` is the
+    path used when no contract exists. ``T103`` never contributes authority.
+    The generation path never imports or executes the target.
+    """
+    base = build_draft(report, repo_name=repo_name, domain=domain, pack=pack)
+    scored = tuple(finding for finding in report.findings if finding.scored)
+    contributing = tuple(sorted({finding.rule_id for finding in scored}))
+
+    body: dict[str, Any] = {"version": base["version"], "provisional": True}
+    for key, value in base.items():
+        if key == "version":
+            continue
+        body[key] = value
+        if key == "domain":
+            body["lifecycle"] = {
+                "mode": "request-response",
+                "initiation": "human-only",
+            }
+    if "lifecycle" not in body:
+        body["lifecycle"] = {
+            "mode": "request-response",
+            "initiation": "human-only",
+        }
+
+    notes = [
+        "# PROVISIONAL: requires human review and promotion before full-mode enforcement.",
+        "# Promote with `scyvera promote`; see RFC 0005 for the review ritual.",
+    ]
+    if contributing:
+        notes.insert(
+            1,
+            "# Contributing findings: " + ", ".join(contributing) + ".",
+        )
+
+    return DraftContract(
+        body,
+        omitted_suggestion_keys=base.omitted_suggestion_keys,
+        header_notes=notes,
+    )
+
+
+def write_provisional_contract(
+    draft: Mapping[str, Any],
+    path: str | Path,
+) -> None:
+    """Write a provisional draft only after validation and lint succeed.
+
+    RFC 0005 §3.4 requires zero validation errors and zero lint errors before
+    a generated contract is written. The candidate is rendered into the OS
+    temporary directory, checked, and only then written to ``path``; the target
+    tree still receives exactly one file.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        candidate = Path(tmp_dir) / "contract.yaml"
+        write_draft(draft, candidate)
+
+        validation = validate_contract(candidate)
+        if not validation.valid:
+            details = "; ".join(
+                f"{error.path}: {error.message}" if error.path else error.message
+                for error in validation.errors
+            )
+            raise ValueError(
+                "generated provisional contract failed validation and was "
+                f"not written: {details}"
+            )
+
+        lint_result = lint_contract(candidate)
+        lint_errors = [
+            warning
+            for warning in lint_result.warnings
+            if warning.severity == "error"
+        ]
+        if not lint_result.valid_structure or lint_errors:
+            details = "; ".join(
+                f"{warning.rule_id}: {warning.message}"
+                for warning in lint_errors
+            ) or "structural lint failure"
+            raise ValueError(
+                "generated provisional contract failed lint and was not "
+                f"written: {details}"
+            )
+
+    write_draft(draft, path)
+
+
 def write_draft(draft: Mapping[str, Any], path: str | Path) -> None:
     """Write ``draft`` to ``path`` as deterministic, ASCII-only YAML.
 
@@ -566,6 +678,9 @@ def write_draft(draft: Mapping[str, Any], path: str | Path) -> None:
     )
 
     header = list(_HEADER_LINES)
+    notes = getattr(draft, "header_notes", ())
+    if notes:
+        header.extend(notes)
     omitted = getattr(draft, "omitted_suggestion_keys", ())
     if omitted:
         header.append(
