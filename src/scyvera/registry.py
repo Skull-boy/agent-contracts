@@ -58,6 +58,48 @@ def _path_key(path: Optional[str]) -> Optional[str]:
     return os.path.normcase(os.path.abspath(path))
 
 
+def _content_is_provisional(content: Any) -> bool:
+    """Return whether a registry ``content`` mapping says ``provisional: true``."""
+    return isinstance(content, dict) and content.get("provisional") is True
+
+
+def _check_draft_consistency(
+    *,
+    operation: str,
+    content: Any,
+    draft: Any,
+    promotion: Any,
+) -> None:
+    """Enforce the RFC 0005 §3.3 registry consistency invariant.
+
+    ``draft`` must exactly mirror ``content["provisional"] is True``, and a
+    promotion block can only describe a non-provisional contract. Any
+    disagreement is corruption or evidence laundering, so it fails closed.
+    """
+    if type(draft) is not bool:
+        raise RegistryError(
+            operation,
+            "draft flag must be a boolean",
+        )
+    if promotion is not None and not isinstance(promotion, dict):
+        raise RegistryError(
+            operation,
+            "promotion block must be an object or null",
+        )
+    content_provisional = _content_is_provisional(content)
+    if draft != content_provisional:
+        raise RegistryError(
+            operation,
+            "draft flag disagrees with content['provisional']; "
+            f"draft={draft!r}, content provisional={content_provisional!r}",
+        )
+    if promotion is not None and content_provisional:
+        raise RegistryError(
+            operation,
+            "a promotion block cannot accompany a provisional contract",
+        )
+
+
 @dataclass
 class RegistryEntry:
     """Immutable data container representing a single registry record.
@@ -79,6 +121,11 @@ class RegistryEntry:
     # registry file is either fully chained or fully legacy; mixed files are
     # rejected at load time because they indicate splices or manual edits.
     prev_hash: Optional[str] = None
+    # RFC 0005 §3.3 draft entry marker. Serialized only when True, so every
+    # pre-RFC-0005 entry keeps byte-identical canonical bytes.
+    draft: bool = False
+    # RFC 0005 §5.4 compact promotion block. Serialized only when not None.
+    promotion: Optional[dict] = None
 
 
 class ContractRegistry:
@@ -114,15 +161,28 @@ class ContractRegistry:
     # Public Methods
     # -------------------------------------------------------------------------
 
-    def register(self, enforcer: Any) -> RegistryEntry:
+    def register(
+        self,
+        enforcer: Any,
+        *,
+        promotion: Optional[dict] = None,
+    ) -> RegistryEntry:
         """Register an enforcer's contract into this registry.
 
         Creates a RegistryEntry from the enforcer's sealed state.
         If an entry with the same contract_hash already exists,
         returns the existing entry (idempotent).
 
+        RFC 0005 §3.3: ``draft`` is derived from the loaded contract
+        (``enforcer.is_provisional``) and is never accepted from the caller.
+        ``promotion`` is the compact block supplied only by the promotion
+        path in :func:`scyvera.reseal.reseal`; it is persisted only when
+        present.
+
         Args:
             enforcer: A ContractEnforcer instance.
+            promotion: Optional RFC 0005 §5.4 promotion block. Supplying it
+                for a provisional contract fails closed.
 
         Returns:
             The created (or existing) RegistryEntry.
@@ -136,9 +196,18 @@ class ContractRegistry:
                 "upgrade_chain() to seal its history before appending",
             )
 
-        # Idempotent: return existing entry if hash already registered
+        # Idempotent: return existing entry if hash already registered. A
+        # promotion block is evidence, so a repeated hash must carry the same
+        # block rather than silently reusing an unrelated entry.
         if contract_hash in self._hash_index:
-            return self._hash_index[contract_hash]
+            existing = self._hash_index[contract_hash]
+            if promotion is not None and existing.promotion != promotion:
+                raise RegistryError(
+                    "register",
+                    "contract hash is already registered without this "
+                    "promotion block; refusing to launder promotion evidence",
+                )
+            return existing
 
         # Never extend a chain that no longer matches the file on disk.
         if self._chained and self._entries:
@@ -163,6 +232,16 @@ class ContractRegistry:
                     f"Failed to read contract file '{enforcer._contract_path}': {exc}",
                 ) from exc
 
+        # RFC 0005 §3.3: the draft flag is derived, never caller-supplied.
+        # The content invariant fails closed before any append.
+        draft = bool(enforcer.is_provisional)
+        _check_draft_consistency(
+            operation="register",
+            content=content,
+            draft=draft,
+            promotion=promotion,
+        )
+
         # Build path field
         file_path: Optional[str] = None
         if source == "file" and enforcer._contract_path is not None:
@@ -178,6 +257,58 @@ class ContractRegistry:
         else:
             existing = []
         version = len(existing) + 1
+
+        # RFC 0005 §5.4: a promotion block is evidence of a draft -> full
+        # transition. The registry refuses to attach one unless the latest
+        # entry for this path is the draft the block names, so a caller cannot
+        # launder promotion evidence by calling register() directly.
+        if promotion is not None:
+            required = (
+                "reviewer",
+                "intent",
+                "reference",
+                "from_entry_id",
+                "from_version",
+                "from_contract_hash",
+                "diff_sha256",
+            )
+            missing = [field for field in required if field not in promotion]
+            if missing:
+                raise RegistryError(
+                    "register",
+                    "promotion block is missing field(s): "
+                    + ", ".join(missing),
+                )
+            if file_path is None:
+                raise RegistryError(
+                    "register",
+                    "a promotion block requires a file contract path",
+                )
+            previous = existing[-1] if existing else None
+            if previous is None or not previous.draft:
+                raise RegistryError(
+                    "register",
+                    "a promotion block requires the latest entry to be a "
+                    "draft",
+                )
+            if promotion["from_entry_id"] != previous.entry_id:
+                raise RegistryError(
+                    "register",
+                    "promotion block from_entry_id does not match the latest "
+                    "draft entry",
+                )
+            if promotion["from_version"] != previous.version:
+                raise RegistryError(
+                    "register",
+                    "promotion block from_version does not match the latest "
+                    "draft entry",
+                )
+            if promotion["from_contract_hash"] != previous.contract_hash:
+                raise RegistryError(
+                    "register",
+                    "promotion block from_contract_hash does not match the "
+                    "latest draft entry",
+                )
 
         # RFC 0003 §C1: chain every new entry. A fresh (empty) registry starts
         # from the fixed genesis value; otherwise hash the last entry's
@@ -198,6 +329,8 @@ class ContractRegistry:
             content=content,
             path=file_path,
             prev_hash=prev_hash,
+            draft=draft,
+            promotion=promotion,
         )
 
         # Append to in-memory stores
@@ -502,6 +635,21 @@ class ContractRegistry:
                     f"'{self._path}': expected string or null",
                 )
 
+            draft = data.get("draft", False)
+            promotion = data.get("promotion")
+            try:
+                _check_draft_consistency(
+                    operation=operation,
+                    content=data["content"],
+                    draft=draft,
+                    promotion=promotion,
+                )
+            except RegistryError as exc:
+                raise RegistryError(
+                    operation,
+                    f"line {line_num} of '{self._path}': {exc.reason}",
+                ) from exc
+
             entries.append(
                 RegistryEntry(
                     entry_id=data["entry_id"],
@@ -513,6 +661,8 @@ class ContractRegistry:
                     content=data["content"],
                     path=data["path"],
                     prev_hash=prev_hash,
+                    draft=draft,
+                    promotion=promotion,
                 )
             )
         return entries

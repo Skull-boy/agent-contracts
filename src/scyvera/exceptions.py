@@ -56,6 +56,40 @@ class ContractViolationError(Exception):
         )
 
 
+class ProvisionalContractError(ContractViolationError):
+    """Raised when a ``provisional: true`` contract is loaded in full mode.
+
+    RFC 0005 §4.1 pins this typed refusal: it subclasses
+    :class:`ContractViolationError` so existing ``except
+    ContractViolationError`` blocks keep catching it. The default message is
+    the RFC's normative template and names the promotion ritual and the
+    existing re-seal machinery. ``action_name`` is always ``"load"``.
+    """
+
+    def __init__(
+        self,
+        contract_path: str,
+        *,
+        reason: str | None = None,
+    ) -> None:
+        message = reason or (
+            f"Contract '{contract_path}' is provisional (`provisional: true`) "
+            "and cannot be loaded in full mode. Promote it first through the "
+            "human promotion ritual (`scyvera.reseal.reseal()` with a "
+            "PromotionIntent); the promoted contract MUST omit `provisional`."
+        )
+        super().__init__(
+            action_name="load",
+            contract_path=str(contract_path),
+            suggestion=(
+                "Run the human promotion ritual (`scyvera promote ...` or "
+                "`scyvera.reseal.reseal()` with a PromotionIntent), or load "
+                "the draft with mode=\"draft\"."
+            ),
+            reason=message,
+        )
+
+
 class ContractTamperError(Exception):
     """Raised when an attempt to mutate the loaded contract or its source file is detected.
 
@@ -198,6 +232,20 @@ class ResealError(Exception):
         super().__init__(
             f"Re-seal ritual failed at '{step}': {reason}"
         )
+
+
+class PromotionIntentError(ValueError):
+    """Raised when a :class:`PromotionIntent` is missing or empty.
+
+    RFC 0005 §5.1 requires an explicit human reviewer and intent. This is a
+    ``ValueError`` subclass so callers can catch either the typed error or the
+    standard invalid-input base. The message never includes a default name.
+    """
+
+    def __init__(self, field: str, reason: str) -> None:
+        self.field = field
+        self.reason = reason
+        super().__init__(f"Invalid promotion intent — field '{field}': {reason}")
 
 
 class PackError(Exception):

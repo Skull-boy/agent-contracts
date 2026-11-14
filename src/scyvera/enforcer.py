@@ -69,6 +69,7 @@ from .exceptions import (
     ContractViolationError,
     DeclarationValidationError,
     GuardrailViolationError,
+    ProvisionalContractError,
 )
 from .guardrails import (
     BUDGETS_FIELD_REFERENCE,
@@ -91,6 +92,55 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only import, avoids any runtime c
     from .registry import ContractRegistry
 
 logger = logging.getLogger("scyvera.enforcer")
+
+# RFC 0005 §4.3 closed verb set. Each member is matched as a contiguous token
+# phrase after normalization; this is a floor, not a claim of completeness.
+IRREVERSIBLE_PHRASES: tuple[str, ...] = (
+    "delete",
+    "destroy",
+    "drop",
+    "truncate",
+    "purge",
+    "erase",
+    "wipe",
+    "force push",
+    "remote execution",
+    "publish",
+    "deploy",
+    "merge",
+    "close",
+    "transfer",
+    "payment",
+    "overwrite",
+    "revoke",
+)
+
+_IRREVERSIBLE_PHRASE_TOKENS: tuple[tuple[str, ...], ...] = tuple(
+    tuple(phrase.split()) for phrase in IRREVERSIBLE_PHRASES
+)
+
+
+def _irreversible_tokens(text: str) -> tuple[str, ...]:
+    """Normalize one action/declaration string exactly as RFC 0005 §4.3 says."""
+    lowered = text.lower().replace("_", " ").replace("-", " ")
+    return tuple(re.sub(r"[^a-z0-9]+", " ", lowered).split())
+
+
+def _contains_irreversible_phrase(text: str) -> bool:
+    """Whether ``text`` contains a closed-set member as a whole token phrase."""
+    tokens = _irreversible_tokens(text)
+    if not tokens:
+        return False
+    for phrase in _IRREVERSIBLE_PHRASE_TOKENS:
+        width = len(phrase)
+        if width > len(tokens):
+            continue
+        if any(
+            tokens[index:index + width] == phrase
+            for index in range(len(tokens) - width + 1)
+        ):
+            return True
+    return False
 
 
 # =============================================================================
@@ -186,6 +236,9 @@ class AuditEntry:
     decision: str     # "ALLOWED", "DENIED", "PENDING"
     reason: str
     contract_field_reference: str
+    # RFC 0005 §4.4: additive draft-mode marker. Appended with a default so
+    # every existing six-argument construction keeps working.
+    provisional: bool = False
 
 
 # =============================================================================
@@ -314,7 +367,12 @@ class ContractEnforcer:
         identity: Optional[ContractIdentity] = None,
         guardrails: Optional[Guardrails] = None,
         clock: Optional[Callable[[], datetime]] = None,
+        mode: Literal["full", "draft"] = "full",
     ) -> None:
+        if mode not in ("full", "draft"):
+            raise ValueError(
+                f"Invalid enforcer mode {mode!r}; expected 'full' or 'draft'."
+            )
         self._contract_path = contract_path
         self._integrity_hash = integrity_hash
         self._raw_contract = raw_contract
@@ -322,6 +380,7 @@ class ContractEnforcer:
         self._audit_log: list[AuditEntry] = []
         self._granted_approvals: set[str] = set()
         self._contract_source: str = contract_source
+        self._mode: Literal["full", "draft"] = mode
         self._sealed_declaration: Optional[dict[str, Any]] = sealed_declaration
         self._registry_entry_id: Optional[str] = None
         if identity is None:
@@ -385,6 +444,21 @@ class ContractEnforcer:
         return self._contract_source
 
     @property
+    def mode(self) -> Literal["full", "draft"]:
+        """The enforcer load mode (RFC 0005 §4.1): ``'full'`` or ``'draft'``."""
+        return self._mode
+
+    @property
+    def is_provisional(self) -> bool:
+        """Whether the loaded contract declares ``provisional: true`` exactly.
+
+        RFC 0005 §3.1 requires strict identity with ``True``; the frozen
+        contract is never normalized or mutated. Declaration contracts have no
+        provisional field and are therefore never provisional.
+        """
+        return self._frozen_contract.get("provisional") is True
+
+    @property
     def guardrails(self) -> Optional[Guardrails]:
         """Frozen RFC 0003 §C5 guardrail record, or ``None`` when omitted.
 
@@ -420,6 +494,7 @@ class ContractEnforcer:
         cls,
         path: str | Path,
         *,
+        mode: Literal["full", "draft"] = "full",
         registry: Optional[ContractRegistry | str | Path] = None,
         allow_unsealed_reseal: bool = False,
         clock: Optional[Callable[[], datetime]] = None,
@@ -440,6 +515,11 @@ class ContractEnforcer:
 
         Args:
             path: Contract file path (relative or absolute).
+            mode: RFC 0005 §4.1 load mode. ``"full"`` (default) accepts only
+                non-provisional contracts; ``"draft"`` accepts only
+                ``provisional: true`` contracts and additionally default-denies
+                irreversible actions behind an approval gate. Draft mode
+                relaxes nothing else.
             registry: Optional :class:`~scyvera.registry.ContractRegistry` (or
                 a registry path). When supplied, the load-time hash is
                 cross-checked against the latest entry for this canonical path
@@ -471,6 +551,11 @@ class ContractEnforcer:
         lexical_path = _absolute_lexical_path(path)
         if not lexical_path.exists():
             raise FileNotFoundError(f"Contract file not found at: {lexical_path}")
+
+        if mode not in ("full", "draft"):
+            raise ValueError(
+                f"Invalid enforcer mode {mode!r}; expected 'full' or 'draft'."
+            )
 
         canonical_path = lexical_path.resolve()
         addressed_dir = lexical_path.parent
@@ -532,6 +617,20 @@ class ContractEnforcer:
                 f"invalid guardrails block: {exc}"
             ) from exc
 
+        # Step 4c: RFC 0005 §4.1 load-mode gate. Draft mode exists only for
+        # provisional contracts; full mode never accepts one. This happens
+        # after schema/version/guardrail validation, so draft mode cannot
+        # bypass any structural check.
+        file_is_provisional = raw_data.get("provisional") is True
+        if mode == "draft" and not file_is_provisional:
+            raise ContractValidationError(
+                f"Contract '{canonical_path}' is not provisional; draft mode "
+                "(mode=\"draft\") is only for contracts with "
+                "`provisional: true`."
+            )
+        if mode == "full" and file_is_provisional:
+            raise ProvisionalContractError(canonical_path)
+
         # Step 5: Optional registry identity cross-check (M1.3/M1.4, T12).
         registry_obj = _coerce_registry(registry)
         crosscheck = IDENTITY_NOT_CHECKED
@@ -551,6 +650,24 @@ class ContractEnforcer:
                 logger.warning(message)
             else:
                 latest = history[-1]
+                # RFC 0005 §4.1: the registry is the record of intent. A
+                # full-mode load whose latest registered version is a draft
+                # must fail closed even if the file's `provisional` line was
+                # removed by hand (that is a T12 substitution, not a
+                # promotion).
+                if mode == "full" and latest.draft:
+                    raise ProvisionalContractError(
+                        canonical_path,
+                        reason=(
+                            f"Contract '{canonical_path}' is provisional: the "
+                            f"latest registry entry (version {latest.version}, "
+                            f"entry {latest.entry_id}) is a draft entry. Promote "
+                            "it first through the human promotion ritual "
+                            "(`scyvera.reseal.reseal()` with a PromotionIntent); "
+                            "removing `provisional` from the file is not a "
+                            "promotion."
+                        ),
+                    )
                 registry_entry_id = latest.entry_id
                 registry_version = latest.version
                 if latest.contract_hash == integrity_hash:
@@ -617,6 +734,7 @@ class ContractEnforcer:
             identity=identity,
             guardrails=guardrails,
             clock=clock,
+            mode=mode,
         )
 
     @classmethod
@@ -1110,6 +1228,7 @@ class ContractEnforcer:
                 decision="DENIED",
                 reason="Contract was tampered with; gate denied.",
                 contract_field_reference="integrity_hash",
+                provisional=self._mode == "draft",
             )
             self._audit_log.append(entry)
             raise
@@ -1133,6 +1252,7 @@ class ContractEnforcer:
                 decision="DENIED",
                 reason=f"Action '{action_name}' is not declared in '{action_type}s'.",
                 contract_field_reference=field_ref,
+                provisional=self._mode == "draft",
             )
             self._audit_log.append(entry)
             raise ContractViolationError(
@@ -1144,13 +1264,23 @@ class ContractEnforcer:
         # Step 2: Check approval boundary
         requires_approval, approval_config = self._check_approval_required(action_name)
         if requires_approval and action_name not in self._granted_approvals:
+            implied_irreversible = (
+                approval_config.get("source") == "implicit-irreversible"
+            )
+            pending_reason = (
+                "Action requires human confirmation prior to execution "
+                "(irreversible in draft mode)."
+                if implied_irreversible
+                else "Action requires human confirmation prior to execution."
+            )
             entry = AuditEntry(
                 timestamp=now,
                 action_name=action_name,
                 action_type=action_type,
                 decision="PENDING",
-                reason="Action requires human confirmation prior to execution.",
+                reason=pending_reason,
                 contract_field_reference="approval_points / approvals",
+                provisional=self._mode == "draft",
             )
             self._audit_log.append(entry)
             raise ApprovalPendingError(action_name=action_name, approval_config=approval_config)
@@ -1169,6 +1299,7 @@ class ContractEnforcer:
             decision="ALLOWED",
             reason=f"Action '{action_name}' matched declared contract specification.",
             contract_field_reference=field_ref,
+            provisional=self._mode == "draft",
         )
         self._audit_log.append(entry)
 
@@ -1201,6 +1332,7 @@ class ContractEnforcer:
                 decision="DENIED",
                 reason=reason,
                 contract_field_reference=field_reference,
+                provisional=self._mode == "draft",
             )
         )
 
@@ -1403,27 +1535,89 @@ class ContractEnforcer:
 
         elif action_type == "side_effect":
             field_name = "side_effects"
-            declared_effects = self._frozen_contract.get("side_effects", [])
-            for se in declared_effects:
-                if isinstance(se, str):
-                    if clean_action.lower() in se.lower() or clean_action == se or se.lower() in clean_action.lower():
-                        return True, field_name
-                elif isinstance(se, dict):
-                    se_type = se.get("type", "").lower()
-                    se_res = se.get("resource", "").lower()
-                    se_desc = se.get("description", "").lower()
-                    clean_lower = clean_action.lower()
-                    if clean_lower in (se_type, se_res, f"{se_res}:{se_type}"):
-                        return True, field_name
-                    if se_res and clean_lower.startswith(se_res):
-                        remainder = clean_lower[len(se_res):].lstrip(":-_ ")
-                        if remainder and (remainder in se_type or se_type in remainder or remainder in se_desc):
-                            return True, field_name
-                    if clean_lower in se_desc or (se_type and clean_lower in se_type):
-                        return True, field_name
-            return False, field_name
+            # Single source of truth. RFC 0005 §4.3 requires the irreversible
+            # check to use exactly this matching algorithm, so both the gate
+            # and the draft-mode floor call it rather than duplicating the
+            # string rules.
+            matches = self._matching_side_effect_declarations(clean_action)
+            return bool(matches), field_name
 
         return False, "unknown"
+
+    def _matching_side_effect_declarations(
+        self,
+        action_name: str,
+    ) -> list[Any]:
+        """Return side-effect declarations matching ``action_name``.
+
+        The matching algorithm is copied verbatim from the side-effect branch
+        of :meth:`_is_action_declared`; RFC 0005 §4.3 explicitly does not
+        narrow or widen it.
+        """
+        clean_action = action_name.strip()
+        clean_lower = clean_action.lower()
+        matches: list[Any] = []
+
+        for se in self._frozen_contract.get("side_effects", []):
+            if isinstance(se, str):
+                if (
+                    clean_lower in se.lower()
+                    or clean_action == se
+                    or se.lower() in clean_lower
+                ):
+                    matches.append(se)
+            elif isinstance(se, dict):
+                se_type = se.get("type", "").lower()
+                se_res = se.get("resource", "").lower()
+                se_desc = se.get("description", "").lower()
+                if clean_lower in (se_type, se_res, f"{se_res}:{se_type}"):
+                    matches.append(se)
+                    continue
+                if se_res and clean_lower.startswith(se_res):
+                    remainder = clean_lower[len(se_res):].lstrip(":-_ ")
+                    if remainder and (
+                        remainder in se_type
+                        or se_type in remainder
+                        or remainder in se_desc
+                    ):
+                        matches.append(se)
+                        continue
+                if clean_lower in se_desc or (
+                    se_type and clean_lower in se_type
+                ):
+                    matches.append(se)
+
+        return matches
+
+    def _is_action_irreversible(self, action_name: str) -> bool:
+        """Resolve irreversibility per RFC 0005 §4.3.
+
+        Either the matching side-effect declaration carries
+        ``irreversible: true``, or the action name (or a matching declaration's
+        ``type``/``resource``/``description``) contains a closed-set phrase.
+        """
+        matches = self._matching_side_effect_declarations(action_name)
+
+        for declaration in matches:
+            if (
+                isinstance(declaration, dict)
+                and declaration.get("irreversible") is True
+            ):
+                return True
+
+        if _contains_irreversible_phrase(action_name):
+            return True
+
+        for declaration in matches:
+            if not isinstance(declaration, dict):
+                continue
+            for field in ("type", "resource", "description"):
+                value = declaration.get(field)
+                if isinstance(value, str) and _contains_irreversible_phrase(
+                    value
+                ):
+                    return True
+        return False
 
     def _check_approval_required(self, action_name: str) -> tuple[bool, dict[str, Any]]:
         """Determine if an action hits an approval requirement."""
@@ -1444,6 +1638,18 @@ class ContractEnforcer:
                 act = ap.get("action", "")
                 if ap.get("required", True) and (clean_action == act or act in clean_action or clean_action in act):
                     return True, dict(ap)
+
+        # RFC 0005 §4.2: in draft mode an irreversible action defaults to a
+        # human approval gate even when the draft declares no approval points
+        # or approvals at all. An explicit matching approval above wins; this
+        # implicit configuration is the deterministic fallback.
+        if self._mode == "draft" and self._is_action_irreversible(action_name):
+            return True, {
+                "action": action_name,
+                "required": True,
+                "approver": "human",
+                "source": "implicit-irreversible",
+            }
 
         return False, {}
 
@@ -1480,6 +1686,7 @@ class ContractEnforcer:
             decision="ALLOWED",
             reason=f"Human approval granted manually with token='{token}'.",
             contract_field_reference="approval_points / approvals",
+            provisional=self._mode == "draft",
         )
         self._audit_log.append(entry)
         logger.info("Human approval recorded for action '%s'", clean_action)
