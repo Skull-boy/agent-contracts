@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added — per-target adoption kits (M3.2)
 - **`kits/n8n/` and `kits/langgraph/`** package each shipped conformance target as a declarative adoption kit: `KIT.md` documents the three-step path and the honest Tier 1 scope, `contract.template.yaml` is the target's reference contract with `# EDIT` markers, `verify.sh`/`verify.ps1` check the pinned reference target with explicit exit capture, and `reference/` carries the M3.1 finding/exit-code tables byte-locked to `skills/scyvera-governance/reference/`. `kits/README.md` specifies the format and lockstep rule; `tests/test_m32_kits.py` pins format, reference lockstep, POSIX execution, PowerShell parse, the LangGraph golden eval score, and deterministic output. No engine files changed.
 
+### Added — RFC 0005 draft: provisional contracts + vector suite format (GE-1)
+- **`rfcs/0005-provisional-contracts.md`** specifies the provisional-contract lifecycle (`provisional: true`, draft-mode gate semantics, irreversible default-deny with approval even in draft, human promotion that reuses the re-seal machinery) and the versioned conformance-vector suite format (`vectors/` layout, `suite-version`, the three cross-runtime categories, byte-specified JSON shapes, and the shared-version pinning rule). The empty `vectors/` skeleton ships `suite-version: 0`; `tests/test_ge1_skeleton.py` pins the nine required sections and the six GEP normative anchors. No engine or schema files changed.
+
 ## [1.4.0] — 2026-11-09
 
 ### Added — Conformance CLI and Tier 1 adapters (M2.1–M2.3)
