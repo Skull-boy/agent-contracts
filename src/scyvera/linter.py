@@ -203,6 +203,21 @@ def lint_contract(contract_path: str | Path) -> LintResult:
                     )
                 )
 
+    # Rule AC801: explicit `provisional: false` is redundant (RFC 0005 §3.2).
+    # Warning only; it never changes validate_contract()'s result.
+    if "provisional" in contract and contract.get("provisional") is False:
+        warnings.append(
+            LintWarning(
+                rule_id="AC801",
+                title="Redundant Provisional Flag",
+                message=(
+                    "`provisional: false` is the default; omit the field unless "
+                    "a generated draft is being documented explicitly."
+                ),
+                severity="warning",
+            )
+        )
+
     return LintResult(
         valid_structure=True,
         warnings=tuple(warnings),

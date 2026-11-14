@@ -50,13 +50,25 @@ from .exceptions import (
     GatewayError,
     GuardrailViolationError,
     PackError,
+    PromotionIntentError,
+    ProvisionalContractError,
     RegistryError,
     ResealError,
     TraceError,
 )
 from .gateway import BaseGateway, GitHubGateway, QdrantGateway
 from .registry import ContractRegistry, RegistryEntry
-from .reseal import RESEAL_AUDIT_NOTE, ResealRecord, ResealResult, reseal
+from .reseal import (
+    RESEAL_AUDIT_NOTE,
+    PromotionIntent,
+    PromotionReceipt,
+    ResealRecord,
+    ResealResult,
+    diff_sha256,
+    promotion_diff,
+    reseal,
+    verify_promotion_confirmation,
+)
 from .selfcheck import (
     SELF_CHECK_REPORT_VERSION,
     SELF_MANIFEST_FILENAME,
@@ -158,6 +170,10 @@ __all__ = [
     "PACKS_DIR",
     "PackError",
     "PolicyPack",
+    "PromotionIntent",
+    "PromotionIntentError",
+    "PromotionReceipt",
+    "ProvisionalContractError",
     "QdrantGateway",
     "RateLimit",
     "REPORT_SCHEMA_VERSION",
@@ -214,6 +230,7 @@ __all__ = [
     "compute_chain_intervals",
     "declaration_token",
     "detect_contract_version",
+    "diff_sha256",
     "eval_status",
     "extract_contract_declarations",
     "from_audit_report",
@@ -224,6 +241,7 @@ __all__ = [
     "load_pack",
     "load_report_schema",
     "next_prev_hash",
+    "promotion_diff",
     "render_badge",
     "render_check",
     "render_report",
@@ -233,5 +251,6 @@ __all__ = [
     "trace_from_audit",
     "validate_contract",
     "verify_chain_entries",
+    "verify_promotion_confirmation",
     "write_draft",
 ]

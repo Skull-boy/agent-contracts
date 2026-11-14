@@ -18,11 +18,29 @@ from .conformance import (
     render_check,
     resolve_tier,
 )
-from .exceptions import ContractFileNameError
-from .generate import build_draft, write_draft
+from .exceptions import (
+    ContractFileNameError,
+    PromotionIntentError,
+    RegistryError,
+    ResealError,
+)
+from .generate import (
+    build_draft,
+    build_provisional_contract,
+    write_draft,
+    write_provisional_contract,
+)
 from .linter import lint_contract
 from .packs import PackError, load_pack
+from .registry import ContractRegistry
 from .report import render_badge, render_report
+from .reseal import (
+    PromotionIntent,
+    diff_sha256,
+    promotion_diff,
+    reseal,
+    verify_promotion_confirmation,
+)
 from .selfcheck import (
     FAILURE_MANIFEST_INVALID,
     FAILURE_MANIFEST_MISSING,
@@ -32,7 +50,7 @@ from .selfcheck import (
     self_check,
 )
 from .unified import audit_status, from_check_report, from_eval_result
-from .validator import validate_contract
+from .validator import load_contract, validate_contract
 
 # Loaded tier 1 adapters, keyed by absolute source path, so repeated checks in
 # one process do not re-exec the adapter module.
@@ -472,6 +490,90 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prompt interactively for contract details",
     )
 
+    init_parser.add_argument(
+        "--infer",
+        metavar="TARGET",
+        type=Path,
+        default=None,
+        help=(
+            "Generate a provisional contract from static inference over "
+            "TARGET (no target code is executed); requires human promotion "
+            "before full-mode enforcement"
+        ),
+    )
+
+    init_parser.add_argument(
+        "--pack",
+        metavar="NAME",
+        default=None,
+        help=(
+            "Apply a local Policy Pack from packs/<NAME>.yaml when generating "
+            "with --infer"
+        ),
+    )
+
+    # promote subcommand (RFC 0005 §5.5). This is a human-only surface; it is
+    # deliberately not exposed as an MCP tool or skill script (§5.6).
+    promote_parser = subparsers.add_parser(
+        "promote",
+        help="Promote a provisional contract to full with explicit human intent.",
+        description=(
+            "Promote a provisional contract through the RFC 0005 re-seal "
+            "ritual. Prints the deterministic diff, requires a reviewer, an "
+            "intent, and a confirmation prefix of diff_sha256, and records the "
+            "promotion block on the new registry entry."
+        ),
+        epilog=(
+            "exit codes: 0 promoted, 1 refused, 2 usage/IO error. "
+            "There is no --yes/--force bypass."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    promote_parser.add_argument(
+        "contract",
+        type=Path,
+        help="Path to the promoted contract.yaml (provisional removed)",
+    )
+
+    promote_parser.add_argument(
+        "--registry",
+        type=Path,
+        required=True,
+        help="Path to the registry JSONL file",
+    )
+
+    promote_parser.add_argument(
+        "--reviewer",
+        type=str,
+        required=True,
+        help="Name of the human who reviewed and approved the promotion",
+    )
+
+    promote_parser.add_argument(
+        "--intent",
+        type=str,
+        required=True,
+        help="Why the promotion is approved (recorded verbatim)",
+    )
+
+    promote_parser.add_argument(
+        "--reference",
+        type=str,
+        default=None,
+        help="Optional issue/PR/ticket URL or ID",
+    )
+
+    promote_parser.add_argument(
+        "--confirm",
+        type=str,
+        required=True,
+        help=(
+            "First 12 or more hex characters of diff_sha256; binds the "
+            "confirmation to the exact change"
+        ),
+    )
+
     return parser
 
 
@@ -637,10 +739,91 @@ def run_init(
     spec_version: str = "1.1",
     force: bool = False,
     interactive: bool = False,
+    infer: Path | None = None,
+    pack: str | None = None,
 ) -> int:
+    if pack is not None and infer is None:
+        print(
+            "scyvera init: error: --pack requires --infer <target>",
+            file=sys.stderr,
+        )
+        return 2
+    if infer is not None and spec_version != "1.1":
+        print(
+            "scyvera init: error: --infer always generates a v1.1 provisional "
+            "contract; remove --spec-version 1",
+            file=sys.stderr,
+        )
+        return 2
+    if infer is not None and interactive:
+        print(
+            "scyvera init: error: --infer and --interactive are mutually "
+            "exclusive",
+            file=sys.stderr,
+        )
+        return 2
+
     if output_path.exists() and not force:
         print(f"ERROR  {output_path} already exists. Use --force to overwrite.")
         return 1
+
+    if infer is not None:
+        if output_path.suffix == ".yml":
+            print(
+                f"scyvera init: error: {output_path} must use the .yaml "
+                "extension so `scyvera validate` can load it",
+                file=sys.stderr,
+            )
+            return 2
+        policy_pack = None
+        if pack is not None:
+            try:
+                policy_pack = load_pack(pack)
+            except PackError as error:
+                print(f"scyvera init: error: {error}", file=sys.stderr)
+                return 2
+        try:
+            report = scan_tree(infer)
+        except FileNotFoundError:
+            print(f"ERROR  {infer}")
+            print("       file not found")
+            return 2
+        except PermissionError:
+            print(f"ERROR  {infer}")
+            print("       permission denied")
+            return 2
+        except AuditError as error:
+            print(f"ERROR  {infer}")
+            print(f"       {error}")
+            return 2
+
+        draft = build_provisional_contract(
+            report,
+            domain=domain or "software",
+            pack=policy_pack,
+        )
+        try:
+            write_provisional_contract(draft, output_path)
+        except PermissionError:
+            print(
+                f"scyvera init: error: cannot write {output_path}: "
+                "permission denied",
+                file=sys.stderr,
+            )
+            return 2
+        except (OSError, ValueError) as error:
+            print(
+                f"scyvera init: error: cannot write {output_path}: {error}",
+                file=sys.stderr,
+            )
+            return 2
+
+        print(f"CREATED {output_path} (provisional draft)")
+        print(
+            "PROVISIONAL  this contract is not full-mode authority; a human "
+            "must review it and run `scyvera promote` before enforcement."
+        )
+        return 0
 
     purpose = "Operational contract for intelligent/automated system"
     risk_level = "low"
@@ -721,6 +904,161 @@ def run_init(
         yaml.dump(contract_data, f, sort_keys=False)
 
     print(f"CREATED {output_path} (spec version {spec_version})")
+    return 0
+
+
+def run_promote(
+    contract_path: Path,
+    registry_path: Path,
+    reviewer: str,
+    intent: str,
+    reference: str | None = None,
+    confirm: str | None = None,
+) -> int:
+    """Run the RFC 0005 §5.5 human promotion command.
+
+    Prints the deterministic §5.2 diff, verifies the operator's confirmation
+    prefix against ``diff_sha256``, and only then calls the single sanctioned
+    promotion path, :func:`scyvera.reseal.reseal` with a
+    :class:`~scyvera.reseal.PromotionIntent`. There is no ``--yes``/``--force``
+    bypass and no TTY or CI inference.
+    """
+    try:
+        parsed = load_contract(contract_path)
+    except FileNotFoundError:
+        print(
+            f"scyvera promote: error: contract not found: {contract_path}",
+            file=sys.stderr,
+        )
+        return 2
+    except PermissionError:
+        print(
+            f"scyvera promote: error: permission denied: {contract_path}",
+            file=sys.stderr,
+        )
+        return 2
+    except yaml.YAMLError as error:
+        print(
+            f"scyvera promote: error: invalid YAML in {contract_path}: {error}",
+            file=sys.stderr,
+        )
+        return 2
+    except OSError as error:
+        print(
+            f"scyvera promote: error: cannot read {contract_path}: {error}",
+            file=sys.stderr,
+        )
+        return 2
+
+    if not isinstance(parsed, dict) or not parsed:
+        print(
+            f"scyvera promote: error: {contract_path} is empty or not a mapping",
+            file=sys.stderr,
+        )
+        return 2
+
+    if parsed.get("provisional") is True:
+        print(
+            "scyvera promote: error: contract is still provisional; remove "
+            "`provisional` from the file before promoting (nothing to promote)",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not registry_path.exists():
+        print(
+            f"scyvera promote: error: registry not found: {registry_path}",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        registry = ContractRegistry(registry_path)
+        registry.verify_chain()
+        latest = registry.get_latest_by_path(contract_path.resolve())
+    except RegistryError as error:
+        print(f"scyvera promote: error: {error}", file=sys.stderr)
+        return 2
+
+    if latest is None or not latest.draft:
+        print(
+            "scyvera promote: error: not a promotion: the latest registry "
+            "entry for this contract is not a draft",
+            file=sys.stderr,
+        )
+        return 1
+
+    changes = promotion_diff(latest.content, dict(parsed))
+    if not changes:
+        print(
+            "scyvera promote: error: no changes: a promotion that changes "
+            "nothing is not a promotion",
+            file=sys.stderr,
+        )
+        return 1
+    if not any(
+        change["op"] == "remove" and change["path"] == "/provisional"
+        for change in changes
+    ):
+        print(
+            "scyvera promote: error: diff does not record removal of "
+            "`/provisional`; the promoted file must omit the flag",
+            file=sys.stderr,
+        )
+        return 1
+
+    digest = diff_sha256(changes)
+    print("Promotion diff (RFC 0005 section 5.2):")
+    print(json.dumps(changes, indent=2, ensure_ascii=True))
+    print(f"diff_sha256: {digest}")
+
+    try:
+        verify_promotion_confirmation(digest, confirm)
+    except ResealError as error:
+        print(f"scyvera promote: error: {error.reason}", file=sys.stderr)
+        return 2
+
+    try:
+        promotion = PromotionIntent(
+            reviewer=reviewer,
+            intent=intent,
+            reference=reference,
+        )
+    except PromotionIntentError as error:
+        print(f"scyvera promote: error: {error}", file=sys.stderr)
+        return 2
+
+    try:
+        result = reseal(
+            contract_path,
+            registry,
+            promotion=promotion,
+            expected_diff_sha256=digest,
+        )
+    except PromotionIntentError as error:
+        print(f"scyvera promote: error: {error}", file=sys.stderr)
+        return 2
+    except ResealError as error:
+        print(
+            f"scyvera promote: error: {error.step}: {error.reason}",
+            file=sys.stderr,
+        )
+        return 1
+
+    receipt = result.promotion_receipt
+    if receipt is None:  # pragma: no cover - reseal guarantees it on promotion
+        print(
+            "scyvera promote: error: promotion completed without a receipt",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("Promotion receipt (RFC 0005 section 5.4):")
+    print(json.dumps(receipt.to_dict(), indent=2, ensure_ascii=True))
+    print(
+        f"PROMOTED {contract_path}: registry version "
+        f"{receipt.from_version} -> {receipt.to_version}"
+    )
     return 0
 
 
@@ -1062,6 +1400,18 @@ def main() -> int:
             spec_version=args.spec_version,
             force=args.force,
             interactive=args.interactive,
+            infer=args.infer,
+            pack=args.pack,
+        )
+
+    if args.command == "promote":
+        return run_promote(
+            contract_path=args.contract,
+            registry_path=args.registry,
+            reviewer=args.reviewer,
+            intent=args.intent,
+            reference=args.reference,
+            confirm=args.confirm,
         )
 
     parser.error(f"unknown command: {args.command}")

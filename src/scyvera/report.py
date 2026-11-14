@@ -177,12 +177,14 @@ def render_report(
     dash = _dash_for(resolved)
     scored = [finding for finding in report.findings if finding.scored]
     ungoverned = report.governance == "ungoverned"
+    provisional = report.governance == "provisional"
+    marker = " [ungoverned]" if ungoverned else (" [provisional]" if provisional else "")
 
     if not scored:
         lines = [
             f"PASS  {report.target} {dash} exploit risk none "
             f"(score {report.score}/100)"
-            + (" [ungoverned]" if ungoverned else "")
+            + marker
         ]
         if ungoverned:
             # One honest next step, not a claim of safety: the audit measures
@@ -190,6 +192,11 @@ def render_report(
             lines.append(
                 f"{_INDENT}no contract.yaml found {dash} audit measures blast "
                 "radius only; run 'scyvera init' to declare the agent's bounds"
+            )
+        if provisional:
+            lines.append(
+                f"{_INDENT}contract is provisional {dash} human review and "
+                "promotion are required before full-mode enforcement"
             )
         # Preserve the M2.0a.1 quarantine transparency contract: fixture-only
         # trees report that findings were seen but not scored. This is a count,
@@ -209,7 +216,7 @@ def render_report(
 
     lines = [
         f"{status}  {report.target}"
-        + (" [ungoverned]" if ungoverned else ""),
+        + marker,
         f"{_INDENT}Blast Radius: {report.score}/100 ({report.band})",
         _scanned_line(report),
         "",

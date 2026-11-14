@@ -82,6 +82,10 @@ _TRACE_FIELDS: tuple[str, ...] = (
     "contract_field_reference",
 )
 
+# RFC 0005 §4.4: additive optional field. It is accepted on input and emitted
+# only when True, so full-mode JSONL bytes stay identical to RFC 0003 §C4.
+_OPTIONAL_TRACE_FIELDS: tuple[str, ...] = ("provisional",)
+
 _UNDECLARED_MARKER = " is not declared in "
 
 
@@ -157,6 +161,9 @@ class TraceEntry:
     timestamp: str
     reason: str
     contract_field_reference: str
+    # RFC 0005 §4.4: None is the internal "absent" value. True serializes;
+    # None and False are omitted so full-mode trace JSONL is byte-identical.
+    provisional: bool | None = None
 
     def __post_init__(self) -> None:
         if self.node_id is not None:
@@ -165,6 +172,8 @@ class TraceEntry:
         _validate_str(self.action_type, "action_type", allow_empty=False)
         if type(self.declared) is not bool:
             raise TraceError("trace field 'declared' must be a boolean")
+        if self.provisional is not None and type(self.provisional) is not bool:
+            raise TraceError("trace field 'provisional' must be a boolean")
         if not isinstance(self.result, str) or self.result not in TRACE_RESULTS:
             raise TraceError(
                 "trace field 'result' must be one of "
@@ -178,8 +187,16 @@ class TraceEntry:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Return the exact RFC field set as a JSON-serializable mapping."""
-        return {field: getattr(self, field) for field in _TRACE_FIELDS}
+        """Return the exact RFC field set as a JSON-serializable mapping.
+
+        RFC 0005 §4.4: ``provisional`` is emitted only when it is ``True``.
+        ``None`` (full mode or unmarked) and ``False`` are omitted, preserving
+        the pre-RFC trace bytes.
+        """
+        payload = {field: getattr(self, field) for field in _TRACE_FIELDS}
+        if self.provisional is True:
+            payload["provisional"] = True
+        return payload
 
     @classmethod
     def from_dict(cls, data: Any) -> "TraceEntry":
@@ -199,10 +216,16 @@ class TraceEntry:
             raise TraceError(
                 "trace entry is missing field(s): " + ", ".join(missing)
             )
-        unknown = sorted(set(data) - set(_TRACE_FIELDS))
+        allowed = set(_TRACE_FIELDS) | set(_OPTIONAL_TRACE_FIELDS)
+        unknown = sorted(set(data) - allowed)
         if unknown:
             raise TraceError(
                 "trace entry has unknown field(s): " + ", ".join(unknown)
+            )
+        provisional = data.get("provisional")
+        if "provisional" in data and type(provisional) is not bool:
+            raise TraceError(
+                "trace field 'provisional' must be a boolean when present"
             )
         return cls(
             node_id=data["node_id"],
@@ -214,6 +237,7 @@ class TraceEntry:
             timestamp=data["timestamp"],
             reason=data["reason"],
             contract_field_reference=data["contract_field_reference"],
+            provisional=provisional,
         )
 
 
@@ -319,6 +343,7 @@ def trace_from_audit(
         timestamp=entry.timestamp,
         reason=entry.reason,
         contract_field_reference=entry.contract_field_reference,
+        provisional=True if entry.provisional else None,
     )
 
 
@@ -350,4 +375,5 @@ def audit_from_trace(trace: TraceEntry) -> AuditEntry:
         decision=decision,
         reason=trace.reason,
         contract_field_reference=trace.contract_field_reference,
+        provisional=bool(trace.provisional),
     )
