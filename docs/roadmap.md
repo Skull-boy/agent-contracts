@@ -302,9 +302,28 @@ IDs below are new (GE-prefix) and never collide with `M`/`PD`/`R`/`G` tasks.
 
 | Lane | Scope | Status |
 |---|---|---|
-| GE-1 | RFC 0005 draft | shipped-on 2026-11-14 on `docs/ge1-rfc-0005` (RFC 0005 Draft; PR pending) |
-| GE-2 | Draft governance (Python) | shipped-on 2026-11-14 on `feat/ge2-draft-governance` (RFC 0005 §3-§5; PR pending) |
-| GE-3 | Vector suite | unblocked by RFC 0005 |
-| GE-4 | scyvera-ts | not started |
+| GE-1 | RFC 0005 draft | ✅ shipped (PR #80) |
+| GE-2 | Draft governance (Python) | ✅ shipped (PR #81; verified): provisional field, draft mode, `init --infer`, promotion ritual via reseal, provisional status in audit/trace |
+| GE-3 | Vector suite | unblocked by RFC 0005 — also carries the Q8 closure and the atomic-write fix below |
+| GE-4 | scyvera-ts | not started (unblocked by GE-3's suite) |
 | GE-5 | scyvera-rs | not started |
 | GE-6 | Rust audit binary | conditional, deferred |
+
+### Open follow-ups (kept visible — disposition, not promises)
+
+| Item | Source | Disposition |
+|---|---|---|
+| `check` reports PASS on a provisional contract with no marker | RFC 0005 §8 Q8 (GE-2 report) | **GE-3** — tier-0/1 WARN naming the provisional status and the promotion step; non-provisional output byte-identical |
+| `write_provisional_contract` is not atomic (`os.replace` window) | GE-2 report §6 | **GE-3** — temp file in target dir + validate + `os.replace`; ~10 lines |
+| Registry `promotion` typed `Optional[dict]` | GE-2 report §6 | Opportunistic — next time `registry.py` is touched; not a PR of its own |
+| Draft-mode rate/budget caps | RFC 0005 §8 Q1 | **Hold** — non-normative; needs an RFC amendment and a vector-suite version bump before code |
+| Second reviewer for high-risk promotions | RFC 0005 §8 Q4 | **Hold** — blocked on Q10 (signed reviewer identity); a second self-asserted string adds ceremony, not assurance |
+| Signed reviewer identity in promotion receipts | RFC 0005 §8 Q10 | Decision needed — own lane once Q4 is wanted |
+| Byte-identical Rust audit output (differential corpus) | GE-6 | Conditional — lane rejected honestly if unachievable |
+
+**Design note recorded from GE-2** (RFC 0005 §4.3 conformance): the gate
+(`_is_action_declared()`) and the draft-mode irreversibility floor share one
+matching implementation. Divergence between the two is a security bug by
+construction (an action could become declared-but-not-approval-gated), so the
+implementation deliberately couples them; any future split requires an RFC
+amendment and two separate test suites, never two drifting copies.
