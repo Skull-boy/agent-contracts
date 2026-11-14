@@ -343,6 +343,7 @@ def reseal(
     registry: Union[ContractRegistry, str, Path],
     *,
     promotion: PromotionIntent | None = None,
+    expected_diff_sha256: str | None = None,
 ) -> ResealResult:
     """Run the re-seal ritual and return a governable enforcer.
 
@@ -375,6 +376,11 @@ def reseal(
         promotion: Explicit human :class:`PromotionIntent` for
             ``draft -> full``. Required for that transition and rejected for
             every other one.
+        expected_diff_sha256: Optional full ``diff_sha256`` the human already
+            confirmed. When supplied, the ritual fails closed before any
+            append if the recomputed diff no longer matches, closing the
+            window between printing the diff and registering it. Rejected
+            unless ``promotion`` is also supplied.
 
     Returns:
         :class:`ResealResult` with the new enforcer and the audit record, plus
@@ -382,12 +388,20 @@ def reseal(
 
     Raises:
         ResealError: If any step fails, including skipped registration,
-            a legacy/non-chain registry, an invalid promotion transition, or
-            an unexpected version transition.
+            a legacy/non-chain registry, an invalid promotion transition, a
+            confirmation that no longer matches, or an unexpected version
+            transition.
         PromotionIntentError: If ``promotion`` is malformed.
         TypeError: If ``registry`` is neither a registry nor a path.
     """
     path = Path(new_contract_path)
+
+    if expected_diff_sha256 is not None and promotion is None:
+        raise ResealError(
+            "promotion",
+            "expected_diff_sha256 is only meaningful with a PromotionIntent; "
+            "an ordinary re-seal has no promotion diff to confirm",
+        )
 
     # (0) Read the new content before validation so the transition can be
     # classified without guessing from filenames.
@@ -527,10 +541,17 @@ def reseal(
     promotion_hash: str | None = None
     promotion_block: dict[str, Any] | None = None
     if promotion is not None:
-        # The transition table guarantees a draft predecessor here. `parsed`
-        # is exactly what registration re-reads, not the enforcer's normalized
-        # copy, so the committed diff cannot disagree over injected defaults.
-        assert previous is not None
+        # The transition table above already guarantees a draft predecessor.
+        # Keep an explicit typed guard instead of `assert` so the fail-closed
+        # behaviour survives `python -O`, where assertions are stripped.
+        if previous is None:
+            raise ResealError(
+                "promotion",
+                "not a promotion: no prior registry entry to promote",
+            )
+        # `parsed` is exactly what registration re-reads, not the enforcer's
+        # normalized copy, so the committed diff cannot disagree over injected
+        # defaults.
         candidate_content = dict(parsed)
         promotion_changes = promotion_diff(previous.content, candidate_content)
         if not promotion_changes:
@@ -549,6 +570,15 @@ def reseal(
                 "promoted file must omit the flag",
             )
         promotion_hash = diff_sha256(promotion_changes)
+        if expected_diff_sha256 is not None:
+            confirmed = expected_diff_sha256.strip().lower()
+            if promotion_hash != confirmed:
+                raise ResealError(
+                    "promotion",
+                    "the contract changed after review: diff_sha256 "
+                    f"'{promotion_hash}' does not match the confirmed "
+                    f"'{confirmed}'; re-run the diff and confirm the new hash",
+                )
         promotion_block = {
             "reviewer": promotion.reviewer,
             "intent": promotion.intent,
@@ -621,9 +651,11 @@ def reseal(
     # (g) Verify the committed entry reproduces the reviewed diff exactly.
     promotion_receipt: PromotionReceipt | None = None
     if promotion is not None:
-        assert previous is not None
-        assert promotion_hash is not None
-        assert promotion_block is not None
+        if previous is None or promotion_hash is None or promotion_block is None:
+            raise ResealError(
+                "promotion",
+                "promotion state is incomplete; refusing to issue a receipt",
+            )
         committed_changes = promotion_diff(previous.content, entry.content)
         committed_hash = diff_sha256(committed_changes)
         if committed_changes != promotion_changes or committed_hash != promotion_hash:

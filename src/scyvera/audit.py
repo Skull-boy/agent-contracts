@@ -337,27 +337,41 @@ def _contract_is_provisional(target: Path, relative_path: str) -> bool | None:
     RFC 0005 §4.5: an unreadable or malformed contract is never claimed as
     provisional or governed. ``None`` means "cannot verify"; the caller maps
     that to ``ungoverned``.
+
+    A non-boolean ``provisional`` is malformed (the schema requires a boolean),
+    so it also fails closed to ``None`` rather than being coerced. Invalid
+    UTF-8 is a read failure, not a reason to crash ``scyvera audit``.
     """
     contract_path = Path(target) / relative_path
     try:
         with contract_path.open("r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle)
-    except (OSError, yaml.YAMLError):
+    except (OSError, UnicodeError, yaml.YAMLError):
         return None
     if not isinstance(data, dict):
         return None
-    return data.get("provisional") is True
+    if "provisional" not in data:
+        return False
+    provisional = data["provisional"]
+    if not isinstance(provisional, bool):
+        return None
+    return provisional
+
+
+def _status_for_target(target: Path) -> tuple[str, str | None]:
+    """Return ``(status, contract_path)`` for a target, failing closed."""
+    contract_path = _find_contract(target)
+    if contract_path is None:
+        return "ungoverned", None
+    provisional = _contract_is_provisional(target, contract_path)
+    if provisional is None:
+        return "ungoverned", contract_path
+    return ("provisional" if provisional else "governed"), contract_path
 
 
 def _governance_status(target: Path) -> str:
     """Return ``governed``, ``provisional``, or ``ungoverned`` for a target."""
-    contract_path = _find_contract(target)
-    if contract_path is None:
-        return "ungoverned"
-    provisional = _contract_is_provisional(target, contract_path)
-    if provisional is None:
-        return "ungoverned"
-    return "provisional" if provisional else "governed"
+    return _status_for_target(target)[0]
 
 
 def governance_report(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -374,19 +388,9 @@ def governance_report(payload: Mapping[str, Any]) -> dict[str, Any]:
     malformed or unreadable contract reports ``ungoverned`` (RFC 0005 §4.5).
     """
     target = payload.get("target") if isinstance(payload, Mapping) else None
-    contract_path = (
-        _find_contract(Path(str(target))) if target is not None else None
-    )
-    if contract_path is None:
-        status = "ungoverned"
-    else:
-        provisional = _contract_is_provisional(
-            Path(str(target)), contract_path
-        )
-        if provisional is None:
-            status = "ungoverned"
-        else:
-            status = "provisional" if provisional else "governed"
+    if target is None:
+        return {"status": "ungoverned", "contract_path": None}
+    status, contract_path = _status_for_target(Path(str(target)))
     return {
         "status": status,
         "contract_path": contract_path,

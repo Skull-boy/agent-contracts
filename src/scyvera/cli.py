@@ -1029,7 +1029,12 @@ def run_promote(
         return 2
 
     try:
-        result = reseal(contract_path, registry, promotion=promotion)
+        result = reseal(
+            contract_path,
+            registry,
+            promotion=promotion,
+            expected_diff_sha256=digest,
+        )
     except PromotionIntentError as error:
         print(f"scyvera promote: error: {error}", file=sys.stderr)
         return 2

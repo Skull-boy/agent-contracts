@@ -1535,25 +1535,12 @@ class ContractEnforcer:
 
         elif action_type == "side_effect":
             field_name = "side_effects"
-            declared_effects = self._frozen_contract.get("side_effects", [])
-            for se in declared_effects:
-                if isinstance(se, str):
-                    if clean_action.lower() in se.lower() or clean_action == se or se.lower() in clean_action.lower():
-                        return True, field_name
-                elif isinstance(se, dict):
-                    se_type = se.get("type", "").lower()
-                    se_res = se.get("resource", "").lower()
-                    se_desc = se.get("description", "").lower()
-                    clean_lower = clean_action.lower()
-                    if clean_lower in (se_type, se_res, f"{se_res}:{se_type}"):
-                        return True, field_name
-                    if se_res and clean_lower.startswith(se_res):
-                        remainder = clean_lower[len(se_res):].lstrip(":-_ ")
-                        if remainder and (remainder in se_type or se_type in remainder or remainder in se_desc):
-                            return True, field_name
-                    if clean_lower in se_desc or (se_type and clean_lower in se_type):
-                        return True, field_name
-            return False, field_name
+            # Single source of truth. RFC 0005 §4.3 requires the irreversible
+            # check to use exactly this matching algorithm, so both the gate
+            # and the draft-mode floor call it rather than duplicating the
+            # string rules.
+            matches = self._matching_side_effect_declarations(clean_action)
+            return bool(matches), field_name
 
         return False, "unknown"
 

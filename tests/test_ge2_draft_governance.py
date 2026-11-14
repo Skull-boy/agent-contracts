@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scyvera import (
     ApprovalPendingError,
@@ -587,6 +588,33 @@ def test_malformed_contract_fails_closed_to_ungoverned(tmp_path: Path) -> None:
     assert report.governance == "ungoverned"
 
 
+def test_invalid_utf8_contract_fails_closed_without_crashing(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "contract.yaml").write_bytes(
+        b"version: 1.1\nsystem:\n  name: \xff\xfe\n"
+    )
+    (tmp_path / "app.py").write_text("print('x')\n", encoding="utf-8")
+
+    report = scan_tree(tmp_path)
+
+    assert report.governance == "ungoverned"
+    assert governance_status(report.to_dict()) == "ungoverned"
+
+
+def test_non_boolean_provisional_fails_closed_to_ungoverned(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "contract.yaml").write_text(
+        "version: 1.1\nprovisional: 'true'\nsystem:\n  name: x\n",
+        encoding="utf-8",
+    )
+
+    report = scan_tree(tmp_path)
+
+    assert report.governance == "ungoverned"
+
+
 # ---------------------------------------------------------------------------
 # RFC 0005 §5.2: deterministic diff and confirmation
 # ---------------------------------------------------------------------------
@@ -618,6 +646,71 @@ def test_confirmation_requires_a_real_hex_prefix() -> None:
         with pytest.raises(ResealError) as excinfo:
             verify_promotion_confirmation(digest, bad)
         assert excinfo.value.step == "promotion"
+
+
+def test_confirmed_diff_hash_is_rechecked_before_registration(
+    tmp_path: Path,
+) -> None:
+    """RFC 0005 §5.1: confirmation binds to the exact change the human read."""
+    path = _draft_fixture(tmp_path / "contract.yaml")
+    registry_path = tmp_path / "registry.jsonl"
+    registry = ContractRegistry(registry_path)
+    ContractEnforcer.load(path, mode="draft").register(registry)
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("provisional: true\n", ""),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ResealError, match="changed after review") as excinfo:
+        reseal(
+            path,
+            registry,
+            promotion=PromotionIntent(reviewer="alice", intent="why"),
+            expected_diff_sha256="0" * 64,
+        )
+
+    assert excinfo.value.step == "promotion"
+    assert len(_rows(registry_path)) == 1
+
+
+def test_confirmed_diff_hash_must_equal_the_computed_hash(
+    tmp_path: Path,
+) -> None:
+    path = _draft_fixture(tmp_path / "contract.yaml")
+    registry = _registry(tmp_path)
+    draft_entry = ContractEnforcer.load(path, mode="draft").register(registry)
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("provisional: true\n", ""),
+        encoding="utf-8",
+    )
+    expected = diff_sha256(
+        promotion_diff(
+            draft_entry.content,
+            yaml.safe_load(path.read_text(encoding="utf-8")),
+        )
+    )
+
+    result = reseal(
+        path,
+        registry,
+        promotion=PromotionIntent(reviewer="alice", intent="why"),
+        expected_diff_sha256=expected.upper(),
+    )
+
+    assert result.promotion_receipt.diff_sha256 == expected
+
+
+def test_confirmed_diff_hash_without_a_promotion_is_refused(
+    tmp_path: Path,
+) -> None:
+    path = _contract(tmp_path / "contract.yaml")
+    registry_path = tmp_path / "registry.jsonl"
+    registry = ContractRegistry(registry_path)
+
+    with pytest.raises(ResealError, match="only meaningful with a PromotionIntent"):
+        reseal(path, registry, expected_diff_sha256="a" * 64)
+
+    assert _rows(registry_path) == []
 
 
 # ---------------------------------------------------------------------------
