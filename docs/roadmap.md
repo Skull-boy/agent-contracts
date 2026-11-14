@@ -184,12 +184,12 @@ Distribution reach = M3.1 + M3.2 + PD-6 + PD-7.
 | **P0** | Release Hygiene | 3/3 | v1.2.0 released |
 | **P2A** | Adoption Funnel (RFC 0004) | 4/4 | `scyvera audit` front door live — shipped in v1.3.0 (2026-11-05) |
 | **Growth** | Flywheel ops (RFC 0004 + positioning) | 1/4 (G2 film rendered, publication pending) | G1 done; launch film rendered (`/brag`, 2026-11-05) |
-| **P1** | Core Hardening (C1, C2) | 0/5 | Provable chain, self-verifiable install, T12/T14 pinned |
-| **P2** | Conformance & Evals (C3, C4) + Guardrails (C5) | 0/6 | `scyvera check` end-to-end |
-| **P3** | Distribution (C6) | 0/5 | Skill/plugin installable + attested |
-| **P4** | Post-release enforcer upgrades (optional) | 0/3 | T1 mitigation, async approvals, A2A handshake |
-| **v1.4 gate** | Production-Defensibility Program (PD rows, cross-phase) | 6/8 PD rows shipped; gate condition 5 satisfied (M3.1 + M3.2) | Signed install + self-check + CI Action + MCP mode + hash-chained receipts + harness skill + per-target adoption kits; PD-5 benchmark open, PD-8 deferred |
-| **v1.4.0** | Release 1.4.0 (2026-11-09) | shipped | Full platform on PyPI; remaining distribution reach: `scyvera-harness` skill (M3.1) and per-target packaging (M3.2) |
+| **P1** | Core Hardening (C1, C2) | 4/5 (M1.5 open — threat-model doc status refresh; tracked to ride with GE-1) | Hash chain, identity pinning, re-seal shipped (PRs #58, #60, #64); T12/T14 pinned |
+| **P2** | Conformance & Evals (C3, C4) + Guardrails (C5) | 7/7 (M2.0a–c + M2.1–M2.7) | `check` end-to-end, eval harness, unified report, guardrails v1.2 (PRs #53–#66) |
+| **P3** | Distribution (C6) | 5/5 (M3.1–M3.5) | Skill, kits, attestation, self-check, docs surface (PRs #61, #62, #75, #77) |
+| **P4** | Post-release enforcer upgrades (optional) | 0/3 | M4.1 sliding-window throttling is the security-real item — candidate mini-lane inside the GEP |
+| **v1.4 gate** | Production-Defensibility Program (PD rows, cross-phase) | **closed 2026-11-13** (all five conditions verified live; PR #78 flip) | Signed install + self-check + CI Action + MCP mode + harness skill + per-target adoption kits; PD-5 benchmark open, PD-8 superseded by GEP GE-5/GE-6 |
+| **v1.4.0** | Release 1.4.0 (2026-11-09) | shipped | Full platform on PyPI, attested; distribution reach complete |
 
 ---
 
