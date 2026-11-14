@@ -258,6 +258,58 @@ class ContractRegistry:
             existing = []
         version = len(existing) + 1
 
+        # RFC 0005 §5.4: a promotion block is evidence of a draft -> full
+        # transition. The registry refuses to attach one unless the latest
+        # entry for this path is the draft the block names, so a caller cannot
+        # launder promotion evidence by calling register() directly.
+        if promotion is not None:
+            required = (
+                "reviewer",
+                "intent",
+                "reference",
+                "from_entry_id",
+                "from_version",
+                "from_contract_hash",
+                "diff_sha256",
+            )
+            missing = [field for field in required if field not in promotion]
+            if missing:
+                raise RegistryError(
+                    "register",
+                    "promotion block is missing field(s): "
+                    + ", ".join(missing),
+                )
+            if file_path is None:
+                raise RegistryError(
+                    "register",
+                    "a promotion block requires a file contract path",
+                )
+            previous = existing[-1] if existing else None
+            if previous is None or not previous.draft:
+                raise RegistryError(
+                    "register",
+                    "a promotion block requires the latest entry to be a "
+                    "draft",
+                )
+            if promotion["from_entry_id"] != previous.entry_id:
+                raise RegistryError(
+                    "register",
+                    "promotion block from_entry_id does not match the latest "
+                    "draft entry",
+                )
+            if promotion["from_version"] != previous.version:
+                raise RegistryError(
+                    "register",
+                    "promotion block from_version does not match the latest "
+                    "draft entry",
+                )
+            if promotion["from_contract_hash"] != previous.contract_hash:
+                raise RegistryError(
+                    "register",
+                    "promotion block from_contract_hash does not match the "
+                    "latest draft entry",
+                )
+
         # RFC 0003 §C1: chain every new entry. A fresh (empty) registry starts
         # from the fixed genesis value; otherwise hash the last entry's
         # canonical bytes.
