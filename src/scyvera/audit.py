@@ -18,6 +18,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Mapping
 
+import yaml
+
 from .audit_rules import RULES, SEVERITY_WEIGHTS, Finding
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids import cycles
@@ -199,10 +201,11 @@ class AuditReport:
     per :data:`FILE_KINDS` category. It is deliberately excluded from
     :meth:`to_dict`, so ``--json`` output stays byte-identical (M2.0b).
 
-    ``governance`` is likewise render-only (``"governed"`` or
-    ``"ungoverned"``) and excluded from :meth:`to_dict`; the unified envelope
-    carries it additively instead. It defaults to ``"governed"`` so synthetic
-    reports built before the field existed render unchanged.
+    ``governance`` is likewise render-only (``"governed"``,
+    ``"provisional"``, or ``"ungoverned"``) and excluded from
+    :meth:`to_dict`; the unified envelope carries it additively instead. It
+    defaults to ``"governed"`` so synthetic reports built before the field
+    existed render unchanged.
     """
 
     report_version: int
@@ -328,6 +331,35 @@ def _find_contract(target: Path) -> str | None:
     return None
 
 
+def _contract_is_provisional(target: Path, relative_path: str) -> bool | None:
+    """Read ``provisional`` from a detected contract, failing closed to ``None``.
+
+    RFC 0005 §4.5: an unreadable or malformed contract is never claimed as
+    provisional or governed. ``None`` means "cannot verify"; the caller maps
+    that to ``ungoverned``.
+    """
+    contract_path = Path(target) / relative_path
+    try:
+        with contract_path.open("r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("provisional") is True
+
+
+def _governance_status(target: Path) -> str:
+    """Return ``governed``, ``provisional``, or ``ungoverned`` for a target."""
+    contract_path = _find_contract(target)
+    if contract_path is None:
+        return "ungoverned"
+    provisional = _contract_is_provisional(target, contract_path)
+    if provisional is None:
+        return "ungoverned"
+    return "provisional" if provisional else "governed"
+
+
 def governance_report(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Describe governance for an audit payload without changing its bytes.
 
@@ -335,22 +367,34 @@ def governance_report(payload: Mapping[str, Any]) -> dict[str, Any]:
     ``target`` string is read. The result is the additive summary block used
     by the unified envelope::
 
-        {"status": "governed" | "ungoverned", "contract_path": str | None}
+        {"status": "governed" | "provisional" | "ungoverned",
+         "contract_path": str | None}
 
-    Detection is read-only and name-based (see :func:`_find_contract`).
+    Detection is read-only and name-based (see :func:`_find_contract`). A
+    malformed or unreadable contract reports ``ungoverned`` (RFC 0005 §4.5).
     """
     target = payload.get("target") if isinstance(payload, Mapping) else None
     contract_path = (
         _find_contract(Path(str(target))) if target is not None else None
     )
+    if contract_path is None:
+        status = "ungoverned"
+    else:
+        provisional = _contract_is_provisional(
+            Path(str(target)), contract_path
+        )
+        if provisional is None:
+            status = "ungoverned"
+        else:
+            status = "provisional" if provisional else "governed"
     return {
-        "status": "governed" if contract_path is not None else "ungoverned",
+        "status": status,
         "contract_path": contract_path,
     }
 
 
 def governance_status(payload: Mapping[str, Any]) -> str:
-    """Return ``"governed"`` or ``"ungoverned"`` for an audit payload."""
+    """Return ``governed``, ``provisional``, or ``ungoverned`` for a payload."""
     return governance_report(payload)["status"]
 
 
@@ -533,11 +577,7 @@ def scan_tree(target: Path) -> AuditReport:
                 if kind in file_kind_counts
             }
         ),
-        governance=(
-            "governed"
-            if _find_contract(target_path) is not None
-            else "ungoverned"
-        ),
+        governance=_governance_status(target_path),
     )
 
 
