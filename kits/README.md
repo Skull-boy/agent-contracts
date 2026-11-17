@@ -5,6 +5,24 @@ target. It tells an adopter what to install, how to run the target's check, and
 what to copy into their repository. A kit never ships engine code, never
 duplicates a scanner rule, and never calls the network.
 
+## Authoring guide and a new reference kit
+
+- [`docs/kits-authoring.md`](../docs/kits-authoring.md) — how to scaffold a kit:
+  the required files, the verify-script exit-code contract, the read-only
+  `vectors/` corpus, honest limitations, and the "do not touch core" rule. It
+  also records the frozen-pin constraint described below.
+- [`docs/kits/google-adk/`](../docs/kits/google-adk/README.md) — a Google ADK
+  reference kit (issue #85). It is **orchestration, not enforcement**: ADK
+  chooses a tool, the Scyvera gate decides whether it may run. It verifies
+  Tier 0 plus audit only; there is no ADK Tier-1 adapter yet.
+
+The Google ADK kit lives under `docs/kits/` rather than `kits/` on purpose.
+`tests/test_m32_kits.py` pins the exact top-level contents of this directory and
+the exact file set of each shipped kit, so registering a new `kits/<target>/`
+requires editing that test. The issue that added the ADK kit is scoped to
+`kits/` and `docs/` with no test changes; the authoring guide explains how to
+promote the kit once a pin update is allowed.
+
 ## Required contents
 
 Every `kits/<target>/` directory contains **exactly** these files:

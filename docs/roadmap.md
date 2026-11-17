@@ -309,6 +309,22 @@ IDs below are new (GE-prefix) and never collide with `M`/`PD`/`R`/`G` tasks.
 | GE-5 | scyvera-rs | not started |
 | GE-6 | Rust audit binary | conditional, deferred |
 
+### Adoption-kit follow-up (not a GEP lane)
+
+Issue #85 adds contributor-facing kit scaffolding and one new reference kit.
+This is a pointer only: it changes no GEP lane, no status, no shipped kit, and
+no exit code.
+
+- [`kits-authoring.md`](./kits-authoring.md) — required kit files, the
+  `verify.sh`/`verify.ps1` `0`/`1`/`2` contract, read-only `vectors/` use, the
+  honest-limitations template, and the frozen-pin constraint on `kits/`.
+- [`kits/google-adk/`](./kits/google-adk/README.md) — a Google ADK reference
+  kit. It is orchestration, not enforcement, and verifies Tier 0 plus audit
+  only (no ADK Tier-1 adapter exists).
+
+The shipped `kits/n8n/` and `kits/langgraph/` targets and their test pin are
+unchanged.
+
 ### Open follow-ups (kept visible — disposition, not promises)
 
 | Item | Source | Disposition |
