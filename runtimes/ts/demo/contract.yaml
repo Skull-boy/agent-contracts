@@ -1,0 +1,19 @@
+# Demo contract for the GE-4 end-to-end scenario.
+# Intentionally provisional: draft mode accepts it, full mode refuses it with
+# ProvisionalContractError until a human promotes it.
+version: 1.1
+system:
+  name: demo-agent
+lifecycle:
+  mode: request-response
+  initiation: human-only
+provisional: true
+permissions:
+  - github:issues:read
+side_effects:
+  - type: file_delete
+    resource: workspace
+    irreversible: true
+  - type: cache_write
+    resource: cache
+approvals: []
