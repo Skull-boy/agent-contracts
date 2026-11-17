@@ -374,6 +374,8 @@ def check_status(report: "CheckReport") -> str:
         return "FAIL"
     if report.tier1_findings or report.soft_warnings:
         return "WARN"
+    if report.provisional:
+        return "WARN"
     return "PASS"
 
 
@@ -545,6 +547,8 @@ def from_check_report(report: "CheckReport") -> UnifiedReport:
         "tier1_findings": len(report.tier1_findings),
         "tier1_failed": report.tier1_failed,
     }
+    if report.provisional:
+        summary["provisional"] = True
     return UnifiedReport(
         mode=mode,
         status=check_status(report),

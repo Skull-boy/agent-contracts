@@ -47,6 +47,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
+import yaml
+
 from .linter import LintWarning, lint_contract
 from .validator import ValidationError, validate_contract
 
@@ -349,6 +351,12 @@ class CheckReport:
     ``tier1_findings`` is additive: it stays empty for tier 0 and tier 2, so
     existing call sites and output are unchanged. Tier 1 findings never
     rewrite ``valid``; :attr:`tier1_failed` carries their verdict separately.
+
+    ``provisional`` is an additive RFC 0005 section 4.5 marker. It never
+    changes ``valid`` or the exit code: a provisional contract is warn-only,
+    exactly like an ACxxx soft warning, so ``check`` stays a superset of
+    ``validate`` + ``lint``. It only changes rendering (``PASS`` becomes
+    ``WARN``) and adds a promotion hint.
     """
 
     contract_path: str
@@ -358,6 +366,7 @@ class CheckReport:
     validation_errors: tuple[ValidationError, ...]
     warnings: tuple[LintWarning, ...]
     tier1_findings: tuple[Tier1Finding, ...] = ()
+    provisional: bool = False
 
     @property
     def error_warnings(self) -> tuple[LintWarning, ...]:
@@ -384,8 +393,10 @@ class CheckReport:
         This is the payload carried inside the unified envelope's ``data``
         key. It is new: no existing call site, renderer, or exit-code path
         reads it, so the pinned ``render_check`` output is unchanged.
+        ``provisional`` appears only when true, keeping non-provisional
+        envelopes byte-identical.
         """
-        return {
+        payload: dict[str, Any] = {
             "contract_path": self.contract_path,
             "tier": int(self.tier),
             "tier_note": self.tier_note,
@@ -416,6 +427,9 @@ class CheckReport:
             ],
             "tier1_failed": self.tier1_failed,
         }
+        if self.provisional:
+            payload["provisional"] = True
+        return payload
 
     def unified(self) -> "UnifiedReport":
         """Project this report into the RFC 0003 unified envelope (M2.5)."""
@@ -468,6 +482,22 @@ def resolve_tier(tier: str | CheckTier | None) -> tuple[CheckTier, str | None]:
             "with roadmap task M2.4. Use --tier 0 or --tier auto."
         )
     return requested, None
+
+
+def _contract_is_provisional(contract_path: str | Path) -> bool:
+    """Return ``True`` only for a boolean ``provisional: true``.
+
+    RFC 0005 section 4.5: a malformed or unreadable contract is never claimed
+    as provisional or governed. ``check_contract`` has already validated the
+    file, so this is a best-effort marker for rendering; anything other than
+    an exact boolean ``True`` yields ``False`` and cannot turn a FAIL into a
+    WARN.
+    """
+    try:
+        data = yaml.safe_load(Path(contract_path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return False
+    return isinstance(data, dict) and data.get("provisional") is True
 
 
 def check_contract(
@@ -543,6 +573,7 @@ def check_contract(
         validation_errors=validation_result.errors,
         warnings=lint_result.warnings,
         tier1_findings=tier1_findings,
+        provisional=_contract_is_provisional(contract_path),
     )
 
 
@@ -559,6 +590,11 @@ def _status_line(report: CheckReport) -> str:
                 f"FAIL  {report.contract_path} (tier {report.tier}: "
                 f"{len(report.tier1_findings)} tier-1 finding(s))"
             )
+        if report.provisional:
+            return (
+                f"WARN  {report.contract_path} (tier {report.tier}: "
+                "provisional contract)"
+            )
         if report.tier1_findings or report.soft_warnings:
             return (
                 f"WARN  {report.contract_path} (tier {report.tier}: "
@@ -572,6 +608,11 @@ def _status_line(report: CheckReport) -> str:
         return (
             f"FAIL  {report.contract_path} (tier {report.tier}: "
             "schema validation + ACxxx lint)"
+        )
+    if report.provisional:
+        return (
+            f"WARN  {report.contract_path} (tier {report.tier}: "
+            "provisional contract)"
         )
     if report.soft_warnings:
         return (
@@ -611,6 +652,12 @@ def render_check(report: CheckReport, *, encoding: str | None = None) -> str:
     lines = [_status_line(report)]
     if report.tier_note:
         lines.append(f"      note: {report.tier_note}")
+    if report.provisional:
+        lines.append(
+            "      [provisional] contract is provisional; human review and "
+            "promotion ('scyvera promote') are required before full-mode "
+            "enforcement (RFC 0005 section 4.5)"
+        )
     for error in report.validation_errors:
         if error.path:
             lines.append(f"      {error.path}: {error.message}")

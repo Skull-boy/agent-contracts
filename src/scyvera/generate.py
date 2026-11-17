@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 import json
+import os
 from pathlib import Path
 import re
 import tempfile
@@ -615,15 +616,35 @@ def write_provisional_contract(
     draft: Mapping[str, Any],
     path: str | Path,
 ) -> None:
-    """Write a provisional draft only after validation and lint succeed.
+    """Write a provisional draft atomically after validation and lint succeed.
 
     RFC 0005 §3.4 requires zero validation errors and zero lint errors before
-    a generated contract is written. The candidate is rendered into the OS
-    temporary directory, checked, and only then written to ``path``; the target
-    tree still receives exactly one file.
+    a generated contract is written. GE-3 replaces the earlier two-step write
+    with a single atomic commit:
+
+    1. render the draft into a temporary file **in the target directory**
+       (same filesystem, so the final rename cannot cross devices);
+    2. validate and lint that temporary file;
+    3. ``os.replace()`` it onto ``path`` only when both pass.
+
+    If anything fails, the temporary file is removed and ``path`` is left
+    untouched: a crash mid-write leaves either the previous contract or no
+    contract, never a partial file that could later load as governed or
+    ungoverned by accident. The target tree still receives exactly one file
+    (the contract); the temporary file is deleted before return.
     """
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        candidate = Path(tmp_dir) / "contract.yaml"
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    descriptor, temp_name = tempfile.mkstemp(
+        prefix=f".{output_path.name}.",
+        suffix=".tmp",
+        dir=output_path.parent,
+    )
+    os.close(descriptor)
+    candidate = Path(temp_name)
+
+    try:
         write_draft(draft, candidate)
 
         validation = validate_contract(candidate)
@@ -653,7 +674,13 @@ def write_provisional_contract(
                 f"written: {details}"
             )
 
-    write_draft(draft, path)
+        os.replace(candidate, output_path)
+    except BaseException:
+        try:
+            candidate.unlink()
+        except FileNotFoundError:  # pragma: no cover - replace already moved it
+            pass
+        raise
 
 
 def write_draft(draft: Mapping[str, Any], path: str | Path) -> None:
