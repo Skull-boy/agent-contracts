@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - kit authoring guide and Google ADK reference kit (issue #85)
+- **`docs/kits-authoring.md`** documents how to scaffold an adoption kit: the required files, the frozen `kits/` pin, the `verify.sh`/`verify.ps1` `0`/`1`/`2` contract, read-only use of the shared `vectors/` corpus, the honest-limitations section, and the "do not touch core" rule.
+- **`docs/kits/google-adk/`** adds a Google ADK reference kit: a valid v1.1 contract fixture for an ADK support-triage agent, a house-template `KIT.md`, offline verify scripts, byte-identical finding/exit-code tables, and a reference wiring file that places the Scyvera gate inside each ADK tool. The kit verifies Tier 0 plus a clean audit and states explicitly that it is orchestration, not enforcement, and that no ADK Tier-1 adapter exists.
+- **`kits/README.md`** and **`docs/roadmap.md`** link the guide and the kit; the shipped n8n/langgraph kits and their test pin are unchanged.
+- No engine, schema, vector, test, CLI, exit-code, `audit --json`, `check` render, or trace JSONL changes. The suite remains 902 passed + 8 skipped and `git diff --stat src/scyvera schemas vectors tests` is empty.
+
 ### Added — harness skill package (M3.1)
 - **`skills/scyvera-governance/`** packages the governance workflow as an installable harness skill: `SKILL.md` teaches the seven CLI commands and the five MCP tools, pins the three NEVERs, and states the knowledge-not-powers principle; `reference/` documents every finding code and exit code; `scripts/` wraps `scyvera audit` with explicit exit capture. The skill ships its own `contract.yaml` (Tier 0 PASS) and is hash-locked by `tools/lock_skill.py` into `skills-registry.json` with deterministic per-file SHA-256 hashes. No engine files changed.
 

@@ -1,0 +1,142 @@
+# contract.yaml - Google ADK adoption template (issue #85)
+#
+# This is a READ-ONLY reference fixture. Copy it to `contract.yaml` beside your
+# ADK agent, then replace every field marked "# EDIT". Keep the filename
+# `contract.yaml` (never `.yml`): the loader and schema reject the short form.
+#
+# The kit is orchestration, not enforcement. This file declares authority. The
+# `scyvera` gate in reference/adk_agent.py is what enforces it at each tool
+# call. A contract that no gate consults changes nothing at runtime.
+version: 1.1
+
+system:
+  name: ADK Support Triage Agent            # EDIT: stable agent name
+  purpose: >-                              # EDIT: one concrete purpose
+    Reads a GitHub issue, drafts a triage reply, and closes the issue only
+    after a human maintainer approves the close.
+  version: "1.0.0"                         # EDIT: your agent version
+
+domain: support                            # EDIT: your operational domain
+
+capabilities:
+  - name: triage_support_request
+    description: Classify an issue and choose one bounded next action.
+  - name: draft_issue_reply
+    description: Draft a reply from the issue text and the local knowledge base.
+  - name: escalate_to_human
+    description: Stop and ask a maintainer when confidence is low.
+
+resources:
+  - name: support                          # EDIT: the service token your tools use
+    type: external_api
+    access: read-write
+  - name: support_kb
+    type: datastore
+    access: read
+  - name: approval_channel
+    type: channel
+    access: write
+
+inputs:
+  - name: issue_number
+    type: integer
+    required: true
+  - name: issue_title
+    type: string
+    required: true
+  - name: issue_body
+    type: string
+    required: true
+
+outputs:
+  - name: triage_summary
+    type: string
+  - name: posted_comment_url
+    type: string
+
+permissions:
+  # EDIT: one resource/verb pair per real client method. The gate matches
+  # "resource:action" exactly, so "support:read" is callable and an undeclared
+  # verb such as "support:delete" is denied.
+  - resource: support
+    actions:
+      - read
+      - comment
+      - close
+  - resource: support_kb
+    actions:
+      - read
+
+side_effects:
+  # EDIT: every write that leaves the process belongs here.
+  - type: comment
+    resource: support
+    description: Posts one triage comment on the triggering issue.
+    irreversible: false
+  - type: close
+    resource: support
+    description: >-
+      Closes the issue after a human maintainer confirms the resolution.
+      Reopening is possible, but the notification and state change are visible
+      to every watcher, so this kit treats the close as irreversible.
+    irreversible: true
+
+approvals:
+  # EDIT: name the human role that can approve each irreversible action.
+  - action: support:close
+    required: true
+    approver: human-maintainer
+    condition: Only after the triage comment is posted and the reporter confirms.
+
+dependencies:
+  # EDIT: pin the ADK, model, and API surfaces your agent actually uses.
+  - name: google-adk
+    type: framework
+    required: true
+  - name: gemini_api
+    type: external_api
+    required: true
+  - name: github_api
+    type: external_api
+    required: true
+
+state:
+  # EDIT: name the store, key, and retention window.
+  persistence: session
+  scope: One triage run per issue; no cross-issue memory is retained.
+
+recovery:
+  # EDIT: say what happens when a tool fails.
+  strategy: human_escalation
+  details: >-
+    Any tool error stops the run. The agent reports the failed action and does
+    not retry destructive actions; a maintainer decides whether to resume.
+
+replay:
+  # EDIT: say whether a re-run is safe and what key makes it so.
+  mode: conditional
+  details: >-
+    Reads are idempotent. Commenting is not: the caller must deduplicate on
+    issue number plus reply hash before retrying.
+
+observability:
+  # EDIT: keep at least one durable signal an operator can inspect.
+  level: audit
+  sinks:
+    - "scyvera audit log (every gated decision)"
+    - "trace JSONL (draft-mode entries carry provisional: true)"
+
+risk:
+  # EDIT: the honest band for this surface.
+  level: medium
+  category: support_automation
+
+lifecycle:
+  mode: request-response
+  initiation: human-only
+  resumability: stateless
+
+implementation:
+  framework: google-adk
+  runtime: python
+  language: python
