@@ -1,0 +1,57 @@
+{
+  "name": "scyvera-ts",
+  "version": "0.1.0",
+  "description": "Native TypeScript runtime for Agent Contracts: the RFC 0005 provisional-contract model, default-deny gate, trace JSONL, and conformance vector runner.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "scyvera-ts": "./dist/src/cli.js"
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist/src",
+    "README.md",
+    "PUBLISHING.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "test": "npm run build && node scripts/run-tests.mjs",
+    "vectors": "node dist/src/cli.js vectors --root ../../vectors",
+    "prepublishOnly": "npm run build && node scripts/run-tests.mjs"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.2",
+    "typescript": "5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Skull-boy/agent-contracts.git",
+    "directory": "runtimes/ts"
+  },
+  "keywords": [
+    "agent-contracts",
+    "agent-governance",
+    "scyvera",
+    "policy-enforcement",
+    "conformance"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
