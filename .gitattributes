@@ -7,3 +7,5 @@
 *.json text eol=lf
 *.sh text eol=lf
 *.ps1 text eol=lf
+# RFC 0005 section 6.2: suite-version is exactly `suite-version: <n>\n`.
+vectors/suite-version text eol=lf

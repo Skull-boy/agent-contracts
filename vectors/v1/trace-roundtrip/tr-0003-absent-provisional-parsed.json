@@ -1,0 +1,14 @@
+{
+  "category": "trace-roundtrip",
+  "description": "An absent provisional field parses as a full-mode entry.",
+  "expect": {
+    "result": "parsed"
+  },
+  "id": "tr-0003-absent-provisional-parsed",
+  "input": {
+    "jsonl": "{\"node_id\": null, \"action_name\": \"github:issues:read\", \"action_type\": \"permission\", \"declared\": true, \"result\": \"allowed\", \"hash_of_contract\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"timestamp\": \"2026-01-01T00:00:00+00:00\", \"reason\": \"declared\", \"contract_field_reference\": \"permissions\"}\n",
+    "operation": "parse"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

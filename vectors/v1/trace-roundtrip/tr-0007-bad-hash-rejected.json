@@ -1,0 +1,16 @@
+{
+  "category": "trace-roundtrip",
+  "description": "A non-hexadecimal hash_of_contract is rejected.",
+  "expect": {
+    "error_code": "TraceError",
+    "message_contains": "hexadecimal",
+    "result": "rejected"
+  },
+  "id": "tr-0007-bad-hash-rejected",
+  "input": {
+    "jsonl": "{\"node_id\": null, \"action_name\": \"github:issues:read\", \"action_type\": \"permission\", \"declared\": true, \"result\": \"allowed\", \"hash_of_contract\": \"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\", \"timestamp\": \"2026-01-01T00:00:00+00:00\", \"reason\": \"declared\", \"contract_field_reference\": \"permissions\"}\n",
+    "operation": "parse"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

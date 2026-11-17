@@ -1,0 +1,45 @@
+{
+  "category": "gate-decision",
+  "description": "A contract mutated after load is denied by the integrity gate.",
+  "expect": {
+    "decisions": [
+      "DENIED"
+    ],
+    "errors": [
+      {
+        "error_code": "ContractViolationError",
+        "index": 0,
+        "message_contains": "tampered"
+      }
+    ]
+  },
+  "id": "gd-0006-tampered-contract-denied",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "full",
+    "scenario": [
+      {
+        "action": "github:issues:read",
+        "action_type": "permission"
+      }
+    ],
+    "tamper_before": true
+  },
+  "notes": "RFC 0005 section 6.7 has no dedicated tamper code; integrity denials map to ContractViolationError.",
+  "suite_version": 1,
+  "vector_version": 1
+}

@@ -1,0 +1,32 @@
+{
+  "category": "contract-model",
+  "description": "A permissions value that is not an array is invalid.",
+  "expect": {
+    "errors": [
+      {
+        "message_contains": "not of type 'array'",
+        "path": "/permissions"
+      }
+    ],
+    "result": "invalid"
+  },
+  "id": "cm-0007-invalid-permissions-type",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": "*",
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "operation": "validate"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

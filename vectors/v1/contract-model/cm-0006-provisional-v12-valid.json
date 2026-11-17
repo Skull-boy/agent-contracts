@@ -1,0 +1,25 @@
+{
+  "category": "contract-model",
+  "description": "A v1.2 contract with provisional true validates.",
+  "expect": {
+    "result": "valid"
+  },
+  "id": "cm-0006-provisional-v12-valid",
+  "input": {
+    "contract": {
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "provisional": true,
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.2
+    },
+    "operation": "validate"
+  },
+  "notes": "RFC 0005 section 8 Q14: v1.1 and v1.2 both allow the field.",
+  "suite_version": 1,
+  "vector_version": 1
+}

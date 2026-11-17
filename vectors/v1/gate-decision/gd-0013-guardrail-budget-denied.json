@@ -1,0 +1,56 @@
+{
+  "category": "gate-decision",
+  "description": "A v1.2 side-effect budget denies the second side effect.",
+  "expect": {
+    "decisions": [
+      "ALLOWED",
+      "DENIED"
+    ],
+    "errors": [
+      {
+        "error_code": "GuardrailViolationError",
+        "index": 1,
+        "message_contains": "Guardrail 'budgets' denied action"
+      }
+    ]
+  },
+  "id": "gd-0013-guardrail-budget-denied",
+  "input": {
+    "contract": {
+      "guardrails": {
+        "budgets": {
+          "side_effects_per_window": 1,
+          "window": "1h"
+        }
+      },
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [],
+      "side_effects": [
+        {
+          "resource": "github",
+          "type": "comment"
+        }
+      ],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.2
+    },
+    "mode": "full",
+    "scenario": [
+      {
+        "action": "comment",
+        "action_type": "side_effect"
+      },
+      {
+        "action": "comment",
+        "action_type": "side_effect"
+      }
+    ]
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

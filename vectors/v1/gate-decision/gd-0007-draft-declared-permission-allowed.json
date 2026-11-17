@@ -1,0 +1,37 @@
+{
+  "category": "gate-decision",
+  "description": "Draft mode allows a declared permission.",
+  "expect": {
+    "decisions": [
+      "ALLOWED"
+    ]
+  },
+  "id": "gd-0007-draft-declared-permission-allowed",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "provisional": true,
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "draft",
+    "scenario": [
+      {
+        "action": "github:issues:read",
+        "action_type": "permission"
+      }
+    ]
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

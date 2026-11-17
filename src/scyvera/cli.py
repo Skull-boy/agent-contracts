@@ -514,8 +514,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # promote subcommand (RFC 0005 §5.5). This is a human-only surface; it is
     # deliberately not exposed as an MCP tool or skill script (§5.6).
-    promote_parser = subparsers.add_parser(
-        "promote",
+    promote_parser = subparsers.add_parser(        "promote",
         help="Promote a provisional contract to full with explicit human intent.",
         description=(
             "Promote a provisional contract through the RFC 0005 re-seal "
@@ -571,6 +570,51 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "First 12 or more hex characters of diff_sha256; binds the "
             "confirmation to the exact change"
+        ),
+    )
+
+    # vectors subcommand (RFC 0005 §6). The suite is the shared acceptance
+    # corpus; this runner never writes to vectors/ or executes a target.
+    vectors_parser = subparsers.add_parser(
+        "vectors",
+        help="Run the RFC 0005 conformance vector suite.",
+        description=(
+            "Load the pinned suite in vectors/ and execute every vector against "
+            "the real engines. The suite version is the shared pin from RFC "
+            "0005 section 6.2 (anchor A6)."
+        ),
+        epilog=(
+            "exit codes: 0 all pass, 1 any failure, 2 suite configuration or "
+            "usage error."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    vectors_parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path("vectors"),
+        help="Suite root containing suite-version (default: vectors)",
+    )
+
+    vectors_parser.add_argument(
+        "--category",
+        type=str,
+        choices=[
+            "contract-model",
+            "gate-decision",
+            "trace-roundtrip",
+        ],
+        default=None,
+        help="Run only one RFC 0005 section 6.1 category",
+    )
+
+    vectors_parser.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            "Emit the RFC 0003 unified report envelope (report_version: 1, "
+            "mode: vectors)"
         ),
     )
 
@@ -687,6 +731,59 @@ def run_check(
         print(render_check(report), end="")
 
     return 1 if (not report.valid or report.tier1_failed) else 0
+
+
+def run_vectors(
+    root: Path,
+    *,
+    category: str | None = None,
+    as_json: bool = False,
+) -> int:
+    """Run the RFC 0005 conformance vector suite and return its exit code.
+
+    Exit codes: ``0`` every selected vector passed, ``1`` at least one vector
+    failed, ``2`` a suite configuration or usage error (missing/malformed
+    ``suite-version``, wrong version directory, unknown category, a malformed
+    or non-canonical vector, a duplicate ID). ``--json`` emits the RFC 0003
+    unified envelope with ``mode: "vectors"``; its ``data`` key carries the
+    canonical RFC 0005 section 6.8 result object unchanged.
+    """
+    from .vectors import CATEGORIES, VectorSuiteError, load_suite, run_suite
+
+    try:
+        suite = load_suite(root)
+        result = run_suite(suite, category=category)
+    except VectorSuiteError as error:
+        print(f"scyvera vectors: error: {error}", file=sys.stderr)
+        return 2
+
+    if as_json:
+        print(result.unified().to_json())
+    else:
+        failed_ids = {failure.id for failure in result.failures}
+        status = "PASS" if result.failed == 0 else "FAIL"
+        lines = [
+            f"{status}  {result.total} vectors (suite-version "
+            f"{result.suite_version}): {result.passed} passed, "
+            f"{result.failed} failed"
+        ]
+        for name in CATEGORIES:
+            ids = [
+                vector.id
+                for vector in suite.vectors
+                if vector.category == name
+            ]
+            if not ids or (category is not None and category != name):
+                continue
+            failed = sum(1 for vector_id in ids if vector_id in failed_ids)
+            lines.append(
+                f"      {name}: {len(ids) - failed} passed, {failed} failed"
+            )
+        for failure in result.failures:
+            lines.append(f"      {failure.id}: {failure.reason}")
+        print("\n".join(lines))
+
+    return 0 if result.failed == 0 else 1
 
 
 def run_eval_case(path: Path, as_json: bool = False) -> int:
@@ -1367,6 +1464,13 @@ def main() -> int:
             tier=args.tier,
             schema_path=args.schema,
             unified=args.unified,
+        )
+
+    if args.command == "vectors":
+        return run_vectors(
+            args.root,
+            category=args.category,
+            as_json=args.json,
         )
 
     if args.command == "eval":

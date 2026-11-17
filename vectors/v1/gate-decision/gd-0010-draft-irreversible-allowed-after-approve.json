@@ -1,0 +1,43 @@
+{
+  "category": "gate-decision",
+  "description": "An explicitly approved irreversible action is allowed in draft mode.",
+  "expect": {
+    "decisions": [
+      "ALLOWED"
+    ]
+  },
+  "id": "gd-0010-draft-irreversible-allowed-after-approve",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "workspace:delete"
+      ],
+      "provisional": true,
+      "side_effects": [
+        {
+          "resource": "workspace",
+          "type": "file_delete"
+        }
+      ],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "draft",
+    "scenario": [
+      {
+        "action": "file_delete",
+        "action_type": "side_effect",
+        "approve": true
+      }
+    ]
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

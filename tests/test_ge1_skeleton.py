@@ -1,8 +1,8 @@
 """Grep-pins for the GE-1 specification skeleton (RFC 0005 + vectors/).
 
 This test is deliberately tiny: it pins the files GE-1 is allowed to create,
-the empty-suite version, and the six GEP normative anchors that GE-2/GE-3
-implement. It asserts no engine behaviour and adds no dependencies.
+the suite version pin GE-3 fills in, and the six GEP normative anchors that
+GE-2/GE-3 implement. It asserts no engine behaviour and adds no dependencies.
 """
 
 from __future__ import annotations
@@ -42,23 +42,25 @@ NORMATIVE_ANCHORS = (
 )
 
 
-def test_suite_version_is_the_empty_suite() -> None:
+def test_suite_version_is_pinned() -> None:
     raw = SUITE_VERSION.read_bytes()
     # Git may check the extensionless file out with CRLF on Windows; the
     # canonical bytes in the repository are LF. Pin the content, not the
     # checkout's line-ending artifact.
     assert not raw.startswith(b"\xef\xbb\xbf")
     normalized = raw.replace(b"\r\n", b"\n")
-    assert normalized == b"suite-version: 0\n"
+    assert normalized == b"suite-version: 1\n"
     assert re.fullmatch(rb"suite-version: (0|[1-9][0-9]*)\n", normalized)
-    assert int(normalized.decode("ascii").split(": ", 1)[1]) == 0
+    assert int(normalized.decode("ascii").split(": ", 1)[1]) == 1
+    # GE-3 populated the first non-empty suite at v1.
+    assert (VECTORS / "v1").is_dir()
 
 
 def test_vectors_readme_points_at_rfc_0005_section_6() -> None:
     text = README.read_text(encoding="utf-8")
     assert "RFC 0005" in text
     assert "RFC 0005 §6" in text
-    assert "No vectors yet" in text
+    assert "Suite version 1" in text
     assert "GE-3" in text
 
 

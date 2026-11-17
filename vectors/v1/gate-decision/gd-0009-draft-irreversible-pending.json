@@ -1,0 +1,50 @@
+{
+  "category": "gate-decision",
+  "description": "Draft mode default-denies an irreversible side effect with no approvals.",
+  "expect": {
+    "decisions": [
+      "PENDING"
+    ],
+    "errors": [
+      {
+        "error_code": "ApprovalPendingError",
+        "index": 0,
+        "message_contains": "requires human approval"
+      }
+    ]
+  },
+  "id": "gd-0009-draft-irreversible-pending",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "workspace:delete"
+      ],
+      "provisional": true,
+      "side_effects": [
+        {
+          "resource": "workspace",
+          "type": "file_delete"
+        }
+      ],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "draft",
+    "scenario": [
+      {
+        "action": "file_delete",
+        "action_type": "side_effect"
+      }
+    ]
+  },
+  "notes": "RFC 0005 section 4.2 anchor A2: irreversible default-deny even in draft mode.",
+  "suite_version": 1,
+  "vector_version": 1
+}

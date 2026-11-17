@@ -1,0 +1,54 @@
+{
+  "category": "gate-decision",
+  "description": "A declared approval point is pending, then allowed after approve.",
+  "expect": {
+    "decisions": [
+      "PENDING",
+      "ALLOWED"
+    ],
+    "errors": [
+      {
+        "error_code": "ApprovalPendingError",
+        "index": 0,
+        "message_contains": "requires human approval"
+      }
+    ]
+  },
+  "id": "gd-0005-approval-pending-then-allowed",
+  "input": {
+    "contract": {
+      "approvals": [
+        {
+          "action": "prod:deploy",
+          "required": true
+        }
+      ],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "prod:deploy"
+      ],
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "full",
+    "scenario": [
+      {
+        "action": "prod:deploy",
+        "action_type": "permission"
+      },
+      {
+        "action": "prod:deploy",
+        "action_type": "permission",
+        "approve": true
+      }
+    ]
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

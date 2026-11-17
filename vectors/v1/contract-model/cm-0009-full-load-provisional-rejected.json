@@ -1,0 +1,33 @@
+{
+  "category": "contract-model",
+  "description": "Full mode rejects a provisional contract with ProvisionalContractError.",
+  "expect": {
+    "error_code": "ProvisionalContractError",
+    "message_contains": "promotion",
+    "result": "rejected"
+  },
+  "id": "cm-0009-full-load-provisional-rejected",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "provisional": true,
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "full",
+    "operation": "load"
+  },
+  "notes": "RFC 0005 section 4.1 anchor A1: no inference-time enforcement.",
+  "suite_version": 1,
+  "vector_version": 1
+}
