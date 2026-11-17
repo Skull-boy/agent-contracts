@@ -691,6 +691,11 @@ def _json_pointer(path: str) -> str:
 def _write_contract(
     contract: Mapping[str, Any], directory: Path, filename: str
 ) -> Path:
+    # Resolve before handing the path to the enforcer. macOS exposes /var as a
+    # symlink to /private/var and Windows temp dirs can be 8.3 short names
+    # (RUNNER~1); the enforcer's T14 escape check compares resolve() output to
+    # the addressed directory, so an unresolved temp path looks like an escape.
+    directory = Path(directory).resolve()
     path = directory / filename
     path.write_text(
         yaml.safe_dump(dict(contract), sort_keys=True, allow_unicode=False),

@@ -156,6 +156,52 @@ def test_one_crashing_vector_does_not_abort_the_suite(
     assert all("secret" not in failure.reason for failure in run.failures)
 
 
+def test_runner_hands_the_enforcer_a_resolved_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """macOS /var and Windows 8.3 temp names must not look like T14 escapes."""
+    captured: list[Path] = []
+    real_load = ContractEnforcer.load.__func__
+
+    def spy(cls, path, *args, **kwargs):
+        captured.append(Path(path))
+        return real_load(cls, path, *args, **kwargs)
+
+    monkeypatch.setattr(ContractEnforcer, "load", classmethod(spy))
+    run_suite(load_suite(VECTORS_ROOT))
+
+    assert captured
+    assert all(path == path.resolve() for path in captured)
+
+
+def test_runner_tolerates_a_symlinked_temp_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reproduces macOS, where tempfile returns /var but resolve() gives /private/var."""
+    real = tmp_path / "real-temp"
+    real.mkdir()
+    link = tmp_path / "linked-temp"
+    try:
+        link.symlink_to(real, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation is not permitted on this platform")
+
+    class _LinkedTempDir:
+        def __init__(self, *args, **kwargs):
+            self.name = str(link)
+
+        def __enter__(self):
+            return str(link)
+
+        def __exit__(self, *exc_info):
+            return False
+
+    monkeypatch.setattr("scyvera.vectors.tempfile.TemporaryDirectory", _LinkedTempDir)
+
+    run = run_suite(load_suite(VECTORS_ROOT))
+    assert run.failed == 0, [failure.to_dict() for failure in run.failures]
+
+
 # ---------------------------------------------------------------------------
 # Fail-closed suite configuration (exit code 2)
 # ---------------------------------------------------------------------------
