@@ -1,0 +1,32 @@
+{
+  "category": "contract-model",
+  "description": "Draft mode rejects a non-provisional contract.",
+  "expect": {
+    "error_code": "ContractValidationError",
+    "message_contains": "not provisional",
+    "result": "rejected"
+  },
+  "id": "cm-0010-draft-load-non-provisional-rejected",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "draft",
+    "operation": "load"
+  },
+  "notes": "RFC 0005 section 4.1: draft mode is not a general relaxed mode.",
+  "suite_version": 1,
+  "vector_version": 1
+}

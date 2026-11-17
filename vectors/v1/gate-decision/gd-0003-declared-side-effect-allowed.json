@@ -1,0 +1,41 @@
+{
+  "category": "gate-decision",
+  "description": "A declared side effect is allowed in full mode.",
+  "expect": {
+    "decisions": [
+      "ALLOWED"
+    ]
+  },
+  "id": "gd-0003-declared-side-effect-allowed",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "side_effects": [
+        {
+          "resource": "github",
+          "type": "comment"
+        }
+      ],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "full",
+    "scenario": [
+      {
+        "action": "comment",
+        "action_type": "side_effect"
+      }
+    ]
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

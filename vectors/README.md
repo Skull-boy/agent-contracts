@@ -6,13 +6,14 @@ Read that section before adding, changing, or running a vector.
 
 ## Status
 
-**No vectors yet; the suite fills in GE-3.**
+**Suite version 1 ships 33 vectors across the three RFC 0005 §6.1
+categories.** The Python reference runner lives in `src/scyvera/vectors.py` and
+is exposed as `scyvera vectors`.
 
-`suite-version: 0` means the suite is empty. Version `0` is reserved for this
-skeleton: a runner pinned to `0` passes with `total: 0`. The first non-empty
-suite is version `1`; GE-3 adds the `v1/` tree and bumps `suite-version`.
+`suite-version: 0` meant "empty skeleton" in GE-1. The first non-empty suite is
+version `1`; GE-3 added the `v1/` tree and bumped `suite-version` to `1`.
 
-## Layout (when non-empty)
+## Layout
 
 ```text
 vectors/
@@ -30,7 +31,8 @@ vectors/
 
 The three categories are closed: `contract-model`, `gate-decision`, and
 `trace-roundtrip`. Promotion orchestration is Python-only in v0/v1 and is not a
-cross-runtime category.
+cross-runtime category (RFC 0005 §6.10, §8 Q5); its non-negotiables are pinned
+by `tests/test_ge3_vectors.py` instead.
 
 ## Rules
 
@@ -56,6 +58,17 @@ cross-runtime category.
 4. Bump `suite-version`, add the changelog section, and update every runtime's
    pinned version in the same release train.
 
-No runner code lives in this repository yet. GE-3 ships the Python runner
-first; `scyvera-ts` and `scyvera-rs` implement their own runners against these
-same bytes.
+## Running the suite
+
+```text
+scyvera vectors                  # all vectors, human PASS/FAIL + per-category counts
+scyvera vectors --category gate-decision
+scyvera vectors --json           # RFC 0003 unified envelope, mode "vectors"
+```
+
+Exit codes: `0` all pass, `1` at least one failure, `2` suite configuration or
+usage error. The canonical RFC 0005 §6.8 result object is carried unchanged in
+the unified envelope's `data` key.
+
+The Python runner is the reference semantics, not a dependency. `scyvera-ts`
+and `scyvera-rs` implement their own runners against these same bytes.

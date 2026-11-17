@@ -1,0 +1,28 @@
+{
+  "category": "contract-model",
+  "description": "A v1.1 contract without the provisional key validates.",
+  "expect": {
+    "result": "valid"
+  },
+  "id": "cm-0003-provisional-absent-valid",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "operation": "validate"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

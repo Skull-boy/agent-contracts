@@ -1,0 +1,29 @@
+{
+  "category": "contract-model",
+  "description": "A promoted full contract loads in full mode.",
+  "expect": {
+    "result": "loaded"
+  },
+  "id": "cm-0011-full-load-promoted",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "full",
+    "operation": "load"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

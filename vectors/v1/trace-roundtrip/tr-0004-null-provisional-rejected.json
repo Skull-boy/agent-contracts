@@ -1,0 +1,16 @@
+{
+  "category": "trace-roundtrip",
+  "description": "A null provisional value is rejected.",
+  "expect": {
+    "error_code": "TraceError",
+    "message_contains": "must be a boolean",
+    "result": "rejected"
+  },
+  "id": "tr-0004-null-provisional-rejected",
+  "input": {
+    "jsonl": "{\"node_id\": null, \"action_name\": \"github:issues:read\", \"action_type\": \"permission\", \"declared\": true, \"result\": \"allowed\", \"hash_of_contract\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"timestamp\": \"2026-01-01T00:00:00+00:00\", \"reason\": \"declared\", \"contract_field_reference\": \"permissions\", \"provisional\": null}\n",
+    "operation": "parse"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

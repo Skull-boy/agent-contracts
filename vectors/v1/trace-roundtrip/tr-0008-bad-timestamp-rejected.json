@@ -1,0 +1,16 @@
+{
+  "category": "trace-roundtrip",
+  "description": "A non-ISO-8601 timestamp is rejected.",
+  "expect": {
+    "error_code": "TraceError",
+    "message_contains": "ISO-8601",
+    "result": "rejected"
+  },
+  "id": "tr-0008-bad-timestamp-rejected",
+  "input": {
+    "jsonl": "{\"node_id\": null, \"action_name\": \"github:issues:read\", \"action_type\": \"permission\", \"declared\": true, \"result\": \"allowed\", \"hash_of_contract\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"timestamp\": \"not-a-date\", \"reason\": \"declared\", \"contract_field_reference\": \"permissions\"}\n",
+    "operation": "parse"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

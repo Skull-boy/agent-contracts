@@ -1,0 +1,15 @@
+{
+  "category": "trace-roundtrip",
+  "description": "A full-mode trace entry round-trips to canonical JSONL without provisional.",
+  "expect": {
+    "canonical_jsonl": "{\"action_name\":\"github:issues:read\",\"action_type\":\"permission\",\"contract_field_reference\":\"permissions\",\"declared\":true,\"hash_of_contract\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"node_id\":null,\"reason\":\"declared\",\"result\":\"allowed\",\"timestamp\":\"2026-01-01T00:00:00+00:00\"}\n",
+    "result": "roundtrip"
+  },
+  "id": "tr-0001-full-mode-roundtrip",
+  "input": {
+    "jsonl": "{\"node_id\": null, \"action_name\": \"github:issues:read\", \"action_type\": \"permission\", \"declared\": true, \"result\": \"allowed\", \"hash_of_contract\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"timestamp\": \"2026-01-01T00:00:00+00:00\", \"reason\": \"declared\", \"contract_field_reference\": \"permissions\"}\n",
+    "operation": "roundtrip"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

@@ -1,0 +1,30 @@
+{
+  "category": "contract-model",
+  "description": "Draft mode loads a provisional contract.",
+  "expect": {
+    "result": "loaded"
+  },
+  "id": "cm-0008-draft-load-provisional",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "provisional": true,
+      "side_effects": [],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "draft",
+    "operation": "load"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

@@ -1,0 +1,16 @@
+{
+  "category": "trace-roundtrip",
+  "description": "An unknown trace result is rejected.",
+  "expect": {
+    "error_code": "TraceError",
+    "message_contains": "result",
+    "result": "rejected"
+  },
+  "id": "tr-0009-unknown-result-rejected",
+  "input": {
+    "jsonl": "{\"node_id\": null, \"action_name\": \"github:issues:read\", \"action_type\": \"permission\", \"declared\": true, \"result\": \"maybe\", \"hash_of_contract\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"timestamp\": \"2026-01-01T00:00:00+00:00\", \"reason\": \"declared\", \"contract_field_reference\": \"permissions\"}\n",
+    "operation": "parse"
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

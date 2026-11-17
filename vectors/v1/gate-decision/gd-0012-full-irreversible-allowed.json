@@ -1,0 +1,42 @@
+{
+  "category": "gate-decision",
+  "description": "Full mode keeps its pre-RFC T8 behavior: an irreversible side effect with no approval is allowed.",
+  "expect": {
+    "decisions": [
+      "ALLOWED"
+    ]
+  },
+  "id": "gd-0012-full-irreversible-allowed",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "workspace:delete"
+      ],
+      "side_effects": [
+        {
+          "resource": "workspace",
+          "type": "file_delete"
+        }
+      ],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "full",
+    "scenario": [
+      {
+        "action": "file_delete",
+        "action_type": "side_effect"
+      }
+    ]
+  },
+  "notes": "RFC 0005 section 8 Q2: the draft-mode floor is not retrofitted onto full mode in v1.",
+  "suite_version": 1,
+  "vector_version": 1
+}

@@ -1,0 +1,42 @@
+{
+  "category": "gate-decision",
+  "description": "A reversible side effect needs no approval in draft mode.",
+  "expect": {
+    "decisions": [
+      "ALLOWED"
+    ]
+  },
+  "id": "gd-0011-draft-reversible-allowed",
+  "input": {
+    "contract": {
+      "approvals": [],
+      "lifecycle": {
+        "initiation": "human-only",
+        "mode": "request-response"
+      },
+      "permissions": [
+        "github:issues:read"
+      ],
+      "provisional": true,
+      "side_effects": [
+        {
+          "resource": "cache",
+          "type": "cache_write"
+        }
+      ],
+      "system": {
+        "name": "vector-agent"
+      },
+      "version": 1.1
+    },
+    "mode": "draft",
+    "scenario": [
+      {
+        "action": "cache_write",
+        "action_type": "side_effect"
+      }
+    ]
+  },
+  "suite_version": 1,
+  "vector_version": 1
+}

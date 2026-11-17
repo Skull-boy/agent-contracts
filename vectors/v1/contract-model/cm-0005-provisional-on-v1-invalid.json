@@ -1,0 +1,35 @@
+{
+  "category": "contract-model",
+  "description": "A v1 contract rejects the provisional key.",
+  "expect": {
+    "errors": [
+      {
+        "message_contains": "1.1 or later",
+        "path": "/provisional"
+      }
+    ],
+    "result": "invalid"
+  },
+  "id": "cm-0005-provisional-on-v1-invalid",
+  "input": {
+    "contract": {
+      "approval_points": [],
+      "dependencies": [],
+      "inputs": [],
+      "observability": [],
+      "outputs": [],
+      "permissions": [],
+      "provisional": true,
+      "recovery_strategy": "retry",
+      "replay_semantics": "idempotent",
+      "side_effects": [],
+      "state": "none",
+      "version": 1,
+      "workflow": "vector"
+    },
+    "operation": "validate"
+  },
+  "notes": "v1 predates draft semantics; the key is rejected even when false.",
+  "suite_version": 1,
+  "vector_version": 1
+}
