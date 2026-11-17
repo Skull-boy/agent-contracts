@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Contract v1",
+  "description": "Machine-readable schema for an Agent Contract.",
+  "type": "object",
+
+  "required": [
+    "version",
+    "workflow",
+    "inputs",
+    "outputs",
+    "permissions",
+    "side_effects",
+    "approval_points",
+    "recovery_strategy",
+    "replay_semantics",
+    "dependencies",
+    "state",
+    "observability"
+  ],
+
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+
+    "workflow": {
+      "type": "string"
+    },
+
+    "framework": {
+      "type": "string"
+    },
+
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 1,
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+
+    "side_effects": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "approval_points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "recovery_strategy": {
+      "type": "string"
+    },
+
+    "replay_semantics": {
+      "type": "string"
+    },
+
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "state": {
+      "type": "string"
+    },
+
+    "observability": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
