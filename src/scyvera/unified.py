@@ -66,6 +66,7 @@ from typing import TYPE_CHECKING, Any, Mapping
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids import cycles
     from .conformance import CheckReport
     from .evals.runner import EvalResult
+    from .vectors import VectorRun
 
 __all__ = [
     "MODES",
@@ -82,6 +83,7 @@ __all__ = [
     "from_audit_report",
     "from_check_report",
     "from_eval_result",
+    "from_vectors_result",
     "load_report_schema",
 ]
 
@@ -98,6 +100,7 @@ MODES: tuple[str, ...] = (
     "check-tier1",
     "check-tier2",
     "eval",
+    "vectors",
 )
 
 #: The three verdicts every mode maps onto.
@@ -362,8 +365,8 @@ def check_status(report: "CheckReport") -> str:
     """Map a :class:`CheckReport` to ``PASS`` / ``WARN`` / ``FAIL``.
 
     FAIL: tier 0 invalid (schema or error-severity ACxxx) or a failing tier 1
-    finding (``T101`` / error ``T102``). WARN: soft warnings or T103-only
-    findings. PASS: clean.
+    finding (``T101`` / error ``T102``). WARN: soft warnings, T103-only
+    findings, or a provisional contract (RFC 0005 section 4.5). PASS: clean.
     """
     if not report.valid or report.error_warnings:
         return "FAIL"
@@ -572,5 +575,39 @@ def from_eval_result(result: "EvalResult") -> UnifiedReport:
         subject=result.name,
         summary=summary,
         findings=_eval_findings(result),
+        data=data,
+    )
+
+
+def from_vectors_result(result: "VectorRun") -> UnifiedReport:
+    """Project a conformance-vector run into the unified envelope.
+
+    ``mode`` is ``"vectors"`` (added to the schema additively). The canonical
+    RFC 0005 section 6.8 result object is carried unchanged as ``data`` so a
+    consumer that ignores the envelope still sees the byte-defined shape.
+    """
+    data = result.to_dict()
+    summary = {
+        "suite_version": result.suite_version,
+        "total": result.total,
+        "passed": result.passed,
+        "failed": result.failed,
+    }
+    findings = tuple(
+        UnifiedFinding(
+            id=failure.id,
+            severity="high",
+            title="Vector failure",
+            message=failure.reason,
+            path="",
+        )
+        for failure in result.failures
+    )
+    return UnifiedReport(
+        mode="vectors",
+        status="PASS" if result.failed == 0 else "FAIL",
+        subject=f"vectors v{result.suite_version}",
+        summary=summary,
+        findings=findings,
         data=data,
     )
