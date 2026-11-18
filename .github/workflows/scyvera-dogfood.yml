@@ -43,7 +43,7 @@ jobs:
 
       # Deliberately non-blocking in the gate itself: exit-on-finding is false
       # so a boundary regression does not block unrelated PRs during this
-      # gate's first week. The Shielded floor is asserted on the next step as
+      # gate's first week. The covenant floor is asserted on the next step as
       # a ::warning:: instead, which keeps the drift loud without turning every
       # unrelated change red. Tighten to "true" once the baseline is stable.
       - name: Run scyvera gate (audit)
@@ -56,14 +56,17 @@ jobs:
           report-format: text
           exit-on-finding: "false"
 
-      - name: Assert the Shielded floor (warning only)
+      # RFC 0004 Amendment 1 sets the dogfood covenant at 84/100 Controlled:
+      # AU-CI-002 (high) is a declared and approved capability, not a finding
+      # to hide. See rfcs/0004-amendment-1-dogfood-declared-capability.md.
+      - name: Assert the covenant floor (warning only)
         if: always() && steps.gate.outputs.score != ''
         shell: bash
         env:
           SCORE: ${{ steps.gate.outputs.score }}
         run: |
-          if [ "$SCORE" -lt 92 ]; then
-            echo "::warning::Blast Radius score ${SCORE}/100 is below the 92 dogfood floor; the repository left its Shielded baseline."
+          if [ "$SCORE" -lt 84 ]; then
+            echo "::warning::Blast Radius score ${SCORE}/100 is below the 84 covenant floor; the scored surface grew beyond RFC 0004 Amendment 1."
           else
-            echo "Blast Radius ${SCORE}/100 is at or above the 92 dogfood floor."
+            echo "Blast Radius ${SCORE}/100 is at or above the 84 covenant floor."
           fi
