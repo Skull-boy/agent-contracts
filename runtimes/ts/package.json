@@ -1,5 +1,5 @@
 {
-  "name": "scyvera-ts",
+  "name": "@scyvera/scyvera-ts",
   "version": "0.1.0",
   "description": "Native TypeScript runtime for Agent Contracts: the RFC 0005 provisional-contract model, default-deny gate, trace JSONL, and conformance vector runner.",
   "type": "module",
