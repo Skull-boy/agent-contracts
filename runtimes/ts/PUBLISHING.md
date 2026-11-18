@@ -56,8 +56,10 @@ dirty.
 2. Update the version in `runtimes/ts/package.json` (and the lockfile's root
    version) and add a `CHANGELOG.md` entry.
 3. Merge through the normal PR path; never push `main`.
-4. Tag the merged commit with `v<version>` (for example `v0.1.0`) and push the
-   tag.
+4. Tag the merged commit with `scyvera-ts-v<version>` (for example
+   `scyvera-ts-v0.1.0`) and push the tag. The runtime tag is namespaced because
+   the bare `v<version>` tag namespace belongs to the Python package (for
+   example `v0.1.0`); reusing it would collide with an existing release tag.
 5. Add the reviewed publish workflow below (tag or manual dispatch), approve the
    `npm-production` environment gate, and let it run the same local preflight
    before `npm publish --provenance --access public`.
@@ -104,7 +106,7 @@ jobs:
       - name: Verify tag and suite pin
         run: |
           version="$(node -p "require('./package.json').version")"
-          test "${GITHUB_REF_NAME}" = "v${version}"
+          test "${GITHUB_REF_NAME}" = "scyvera-ts-v${version}"
           suite="$(tr -d '\r' < ../../vectors/suite-version)"
           test "${suite}" = "suite-version: ${PINNED_SUITE_VERSION}"
       - run: npm test
