@@ -16,7 +16,7 @@ MCP and A2A standardize how agents communicate with tools and each other. Scyver
 [![Python](https://img.shields.io/badge/python-3.10%E2%80%933.14-blue)](pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#-install-and-platform-support)
 [![Security Policy](https://img.shields.io/badge/security-policy-blue)](./SECURITY.md)
-[![Blast Radius](https://img.shields.io/badge/blast%20radius-shielded-green)](#-the-2-minute-demo)
+[![Blast Radius](https://img.shields.io/badge/blast%20radius-controlled-orange)](#-the-2-minute-demo)
 </div>
 
 ---
@@ -45,8 +45,10 @@ And this is `scyvera audit .` run inside the Scyvera repository itself:
 
 ```text
 WARN  .
-      Blast Radius: 92/100 (Shielded)
+      Blast Radius: 84/100 (Controlled)
 
+      HIGH      [AU-CI-002] deploy or publish job detected
+                .github/workflows/publish-scyvera-ts.yml:30
       MEDIUM    [AU-N8N-001] n8n workflow with external writes
                 implementations/n8n/competitor-feature-parity-watcher/workflow.json:169 + 3 more
       MEDIUM    [AU-NET-002] outbound network calls in source
@@ -55,6 +57,11 @@ WARN  .
       With a contract: force-push -> requires approval; .env -> unread;
       npm publish -> forbidden.  Run with --generate to draft one.
 ```
+
+That `AU-CI-002` finding is the repository's own npm publish workflow. It stays
+scored: the capability is declared and approved in `contract.yaml`, and the
+score records the real cost (see
+[RFC 0004 Amendment 1](rfcs/0004-amendment-1-dogfood-declared-capability.md)).
 
 The scan is read-only. It did not change a file.
 
@@ -88,7 +95,7 @@ scyvera audit . --badge
 Alongside the report, it prints the snippet below. This repository's own badge is in the hero row above.
 
 ```markdown
-[![Blast Radius: Shielded](https://img.shields.io/badge/blast%20radius-Shielded-green)](scyvera)
+[![Blast Radius: Controlled](https://img.shields.io/badge/blast%20radius-Controlled-orange)](scyvera)
 ```
 
 ### c. Gate CI
@@ -727,7 +734,7 @@ agent-contracts/
 - **Re-seal ritual**: `reseal()` is the only sanctioned regeneration path and returns a fresh sealed enforcer plus a frozen audit record.
 - **Distribution integrity**: `scyvera self-check [--json]`, a signed package manifest, CycloneDX 1.5 SBOMs, and Sigstore-attested release bundles.
 - **Production trust surface**: `SECURITY.md`, SHA-pinned GitHub Actions, least-privilege workflow permissions, a safe-YAML pin, and a **Windows / Linux / macOS × Python 3.10–3.14** test matrix.
-- **Permanent dogfood gate**: the test suite asserts that `scyvera audit .` keeps this repository in the `Shielded` band.
+- **Permanent dogfood covenant**: the test suite asserts the exact scored surface of `scyvera audit .` (84/100 `Controlled` since [RFC 0004 Amendment 1](./rfcs/0004-amendment-1-dogfood-declared-capability.md)), including the declared and approved `registry:publish` capability.
 
 ### Roadmap
 
@@ -752,7 +759,7 @@ The suite currently collects **782 tests**: 776 pass, and 6 symlink tests skip o
 
 Two repo-level gates run inside the suite:
 
-- **Dogfood**: `scyvera audit .` must keep this repository in the `Shielded` band (currently 92/100).
+- **Dogfood**: `scyvera audit .` must match the [RFC 0004 Amendment 1](./rfcs/0004-amendment-1-dogfood-declared-capability.md) covenant — 84/100 `Controlled`, one `AU-CI-002` on the npm publish workflow plus the six known demo findings. The capability is declared (`registry:publish`) and approved in `contract.yaml`; `AU-CI-002` remains a scored high finding by design.
 - **Draft accuracy**: every audit fixture corpus is drafted, written, re-read from disk, and re-validated with zero schema errors and zero lint warnings.
 
 The release workflows are checked by construction: every action is pinned by full commit SHA, and the attested wheel is downloaded from the publish run rather than rebuilt.
