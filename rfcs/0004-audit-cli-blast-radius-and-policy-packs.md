@@ -171,6 +171,8 @@ construction:
 
 ## 7. QA Bar (what makes this not feel like an MVP)
 
+> **Amended by [RFC 0004 Amendment 1](./0004-amendment-1-dogfood-declared-capability.md)** — check #1's `Shielded` pin was release-scoped to 1.3.0; the dogfood covenant now records 84/100 `Controlled`.
+
 1. **Dogfood**: `scyvera audit .` runs against the Scyvera repo itself in CI; result is asserted in a test snapshot (band must remain `Shielded` at 1.3.0 release; if drift occurs, the test fails loudly, not silently).
 2. **Fixture corpus**: `tests/fixtures/audit/` contains a miniature synthetic repo (env file, shell script, workflow, python source, dockerfile, n8n json) — one per scanner — plus negative variants. Scanned against in tests via relative path resolution (same pattern as existing FIXTURE logic).
 

@@ -498,21 +498,23 @@ def test_cli_help_documents_flags_and_exit_codes(
 # --- Dogfood and determinism guards (RFC 0004 §7) ---------------------------
 
 
-def test_dogfood_gate_is_shielded(
+def test_dogfood_gate_is_controlled(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # RFC 0004 Amendment 1: the covenant floor is 84/100 Controlled because the
+    # npm publish workflow's AU-CI-002 is declared and approved, not hidden.
     code, out, _ = _run_cli(
         monkeypatch,
         capsys,
         "audit",
         str(ROOT),
         "--fail-under",
-        "90",
+        "84",
     )
 
-    assert code == 0, f"expected exit 0 under --fail-under 90, got {code}"
-    assert "Blast Radius: 92/100 (Shielded)" in out, (
+    assert code == 0, f"expected exit 0 under --fail-under 84, got {code}"
+    assert "Blast Radius: 84/100 (Controlled)" in out, (
         f"dogfood report drifted: {out!r}"
     )
 

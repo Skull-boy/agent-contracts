@@ -253,8 +253,8 @@ def test_dogfood_audit_floor_is_a_warning_only() -> None:
     workflow = _load(WORKFLOW)
     audit_job = workflow["jobs"]["dogfood-audit"]
     scripts = [step.get("run", "") for step in audit_job["steps"]]
-    floor = [script for script in scripts if "92" in script]
-    assert floor, "the 92-point dogfood floor is not asserted"
+    floor = [script for script in scripts if "84" in script]
+    assert floor, "the 84-point covenant floor is not asserted"
     assert any("::warning::" in script for script in floor)
     assert all("exit 1" not in script for script in floor)
 

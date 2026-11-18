@@ -1,0 +1,72 @@
+# Publishing @scyvera/scyvera-ts (human-gated, provenance-attested).
+#
+# This workflow is the exact YAML documented in runtimes/ts/PUBLISHING.md
+# (section "Exact workflow to add when approved"). It is now committed, and
+# the capability it exercises - `registry:publish` - is declared and approved
+# in the repository root contract.yaml.
+#
+# Required repository settings (both are maintainer-owned):
+#   1. Secret `NPM_TOKEN` - an npm automation token with publish rights on the
+#      @scyvera scope. It is referenced only as `NODE_AUTH_TOKEN` in the publish
+#      step; no token is stored in the repository.
+#   2. Environment `npm-production` - must exist and must list the maintainer
+#      as a required reviewer.
+#
+# The maintainer approves the `npm-production` environment gate at run time:
+# the job pauses before any step runs the publish and waits for
+# "Review approvals -> Approve and deploy". Nothing is published on merge.
+#
+# Releases for this package are tagged `scyvera-ts-v<version>`. The bare
+# `v<version>` namespace belongs to the Python package, so the tag check below
+# compares against "scyvera-ts-v${version}".
+
+name: Publish @scyvera/scyvera-ts
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "npm publish --dry-run only"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-production
+    defaults:
+      run:
+        working-directory: runtimes/ts
+    env:
+      PINNED_SUITE_VERSION: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: runtimes/ts/package-lock.json
+      - run: npm ci
+      - name: Verify tag and suite pin
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "scyvera-ts-v${version}"
+          suite="$(tr -d '\r' < ../../vectors/suite-version)"
+          test "${suite}" = "suite-version: ${PINNED_SUITE_VERSION}"
+      - run: npm test
+      - run: npm run vectors
+      - name: Publish with provenance
+        run: |
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            npm publish --dry-run --provenance --access public
+          else
+            npm publish --provenance --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
