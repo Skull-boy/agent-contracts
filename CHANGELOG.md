@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Released — `@scyvera/scyvera-ts@0.1.0` published to npm with provenance (2026-11-18)
+- **`@scyvera/scyvera-ts@0.1.0` is live on the public npm registry** at <https://www.npmjs.com/package/@scyvera/scyvera-ts>, with `latest` pointing at `0.1.0`. The published tarball is the same 27-file package verified in local preflight: `dist/src/**`, `README.md`, `PUBLISHING.md`, `LICENSE`, and `package.json` only.
+- **Provenance is attested and independently verifiable.** `npm view @scyvera/scyvera-ts dist.attestations` returns the npm publish attestation and a `slsa.dev/provenance/v1` statement naming `https://github.com/Skull-boy/agent-contracts` at `refs/tags/scyvera-ts-v0.1.0`, built by `.github/workflows/publish-scyvera-ts.yml` on a GitHub-hosted runner (run `44269664090`, attempt 3). The installed package was smoke-tested: `npm install @scyvera/scyvera-ts` then `npx scyvera-ts --help`.
+- **Release tag `scyvera-ts-v0.1.0` points at `6ff7240`** (the PR #90 merge), not at `40fbdae`: a `release: published` event runs the workflow from the tagged commit, so the tag must contain the workflow file. The bare `v0.1.0` tag remains the Python package's first release.
+- **Registry note:** an earlier attempt with a stage-only token entered npm's staged-publishing flow, which created the automatic `0.0.0-stage` placeholder version before `0.1.0` was published. `latest` is `0.1.0`; the placeholder is a registry artifact of that attempt, not a release.
+- **Credential requirements recorded in `runtimes/ts/PUBLISHING.md`:** a granular token used by CI needs **Bypass two-factor authentication** (a 2FA-bound token fails with `EOTP`) *and* **Read and write (publish and stage)** (a stage-only token returns `E_STAGE_REQUIRED` for a package's first version).
+- No code, schema, vector, or exit-code change; the dogfood covenant is unchanged at 84/100 `Controlled`.
+
+
 ### Changed — npm publish enablement: declared capability, 84/100 dogfood covenant (RFC 0004 Amendment 1)
 - **`.github/workflows/publish-scyvera-ts.yml` is now committed** — the workflow documented in `runtimes/ts/PUBLISHING.md`, with its existing SHA pins kept. It triggers on `release: published` or `workflow_dispatch` (dry-run by default), runs behind the `npm-production` environment gate that the maintainer approves at run time, checks the tag and the pinned suite version, runs `npm ci`, the package tests, and the vector suite, then publishes with `--provenance --access public`. Nothing publishes on merge.
 - **The release tag is namespaced `scyvera-ts-v<version>`** because the bare `v0.1.0` tag already exists on `origin` for the Python package. `PUBLISHING.md` and the workflow's tag check are updated in the same change, so the documented procedure and the workflow cannot disagree.

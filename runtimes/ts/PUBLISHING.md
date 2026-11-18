@@ -55,9 +55,13 @@ test pin in one commit, with the warning as the stated reason.
 
 1. Confirm the npm account is a member of the `@scyvera` npm organization with
    publish rights on `@scyvera/scyvera-ts`, and has 2FA enabled.
-2. Add a repository secret `NPM_TOKEN` holding a **granular** npm token named
-   `scyvera-ts-publish`, scoped to **read-and-write** permission on the package
-   `@scyvera/scyvera-ts` (not a broad account-wide publish token).
+2. Add a repository secret `NPM_TOKEN` holding a **granular** npm token scoped to
+   the `@scyvera` scope (not a broad account-wide publish token) with two
+   settings that are easy to miss:
+   - **Read and write (publish and stage)** — a *stage-only* token cannot
+     publish a package's first version and fails with `E_STAGE_REQUIRED`;
+   - **Bypass two-factor authentication** checked — a 2FA-bound token fails in
+     CI with `EOTP`, because the workflow cannot supply an interactive code.
 3. Create the GitHub environment `npm-production` and require a reviewer.
 4. Use a workflow with minimal permissions: `contents: read` and
    `id-token: write` (the latter is only for npm provenance/OIDC).
@@ -153,14 +157,45 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
+## Next release: staged publishing and OIDC trusted publishing
+
+`0.1.0` was published directly by the workflow. From the next version on, the
+stronger path is the intended one, and release runs use the workflow at the
+tagged commit, so it takes effect on the next tag only.
+
+1. **Staged publishing.** CI runs `npm stage publish` instead of
+   `npm publish`; the version waits in npm's staging area and a maintainer
+   approves it with 2FA on npmjs.com (Staged Packages) before it goes live.
+   A stage-only token can stage but can never publish by itself, which matches
+   the human-gate rule. Requirements: npm CLI >= 11.15.0 and Node >= 22.14.0.
+   Pin the CI install as `npm install -g npm@11`, not `@latest`: npm 12
+   requires Node `^22.22.2 || ^24.15.0 || >=26`, and a runner on an older
+   Node patch fails with `EBADENGINE`.
+2. **Trusted publishing (OIDC).** Configure the package's Trusted Publisher for
+   `Skull-boy/agent-contracts`, workflow `publish-scyvera-ts.yml`, environment
+   `npm-production`; then drop `NODE_AUTH_TOKEN` and delete the `NPM_TOKEN`
+   secret. Provenance is generated automatically for OIDC publishes. A new
+   trusted-publisher configuration must complete its first successful publish
+   within 2 days, so create it immediately before a release.
+3. Once either path is validated, set the package's Publishing access to
+   "Require two-factor authentication and disallow tokens" and revoke the
+   granular token.
+
 ## Post-publish verification
 
 ```sh
 npm view @scyvera/scyvera-ts@<version> version dist.integrity
+npm view @scyvera/scyvera-ts@<version> dist.attestations
 npm install @scyvera/scyvera-ts@<version>
 npx scyvera-ts --version
 npx scyvera-ts vectors --root <path-to-vectors>
 ```
+
+`dist.attestations` must list both the npm publish attestation and a
+`slsa.dev/provenance/v1` statement. Decode the SLSA payload and confirm the
+source repository, `refs/tags/scyvera-ts-v<version>`, and
+`.github/workflows/publish-scyvera-ts.yml` — a release without that link is a
+failed release, regardless of what the package page shows.
 
 ## Rollback
 

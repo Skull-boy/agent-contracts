@@ -69,14 +69,14 @@ implemented against suite version **1** (33 vectors).
 
 ## Install and build
 
-Not published yet. Once published, install the scoped package:
+Published on npm as `@scyvera/scyvera-ts`. Install the scoped package:
 
 ```sh
 npm install @scyvera/scyvera-ts
 npx scyvera-ts --version        # the installed command stays unscoped
 ```
 
-Until then, build from this directory:
+To build from this directory instead:
 
 ```sh
 npm ci

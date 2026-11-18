@@ -62,6 +62,9 @@ That `AU-CI-002` finding is the repository's own npm publish workflow. It stays
 scored: the capability is declared and approved in `contract.yaml`, and the
 score records the real cost (see
 [RFC 0004 Amendment 1](rfcs/0004-amendment-1-dogfood-declared-capability.md)).
+The `with a contract:` footer above is the `--generate` draft default, not this
+repository's policy; `contract.yaml` declares `registry:publish` and requires a
+human approval for it.
 
 The scan is read-only. It did not change a file.
 
