@@ -2,6 +2,10 @@
 
 **Native TypeScript runtime for Agent Contracts — v0.1.0 (pre-release).**
 
+The npm package is **`@scyvera/scyvera-ts`** (scoped, public). The installed
+command remains **`scyvera-ts`**: the `bin` mapping is independent of the
+package name, so every `npx scyvera-ts ...` example below stays valid.
+
 `scyvera-ts` implements the contract model, the default-deny gate, the trace
 JSONL schema, and the conformance-vector runner described by
 [RFC 0005](../../rfcs/0005-provisional-contracts.md) and
@@ -65,7 +69,14 @@ implemented against suite version **1** (33 vectors).
 
 ## Install and build
 
-Not published yet. From this directory:
+Not published yet. Once published, install the scoped package:
+
+```sh
+npm install @scyvera/scyvera-ts
+npx scyvera-ts --version        # the installed command stays unscoped
+```
+
+Until then, build from this directory:
 
 ```sh
 npm ci

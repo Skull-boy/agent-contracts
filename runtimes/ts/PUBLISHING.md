@@ -1,8 +1,13 @@
-# Publishing `scyvera-ts`
+# Publishing `@scyvera/scyvera-ts`
 
 Publishing is a **human action**. This repository prepares the artifact and
 documents the provenance procedure; it never publishes on merge. No npm token is
 stored in the repository, and this GE-4 session did not publish anything.
+
+The npm **package** is scoped: `@scyvera/scyvera-ts`. The installed **command**
+stays unscoped: `scyvera-ts`. They are independent — the `bin` mapping
+(`"scyvera-ts": "./dist/src/cli.js"`) does not follow the package name, so
+`npx scyvera-ts` remains correct after the rename.
 
 ## Why the publish workflow is not committed
 
@@ -17,12 +22,19 @@ contract to declare and approve `registry:publish`, rather than hiding the job.
 
 ## One-time maintainer setup
 
-1. Confirm the npm account is a member of the `scyvera-ts` package (or owns the
-   name) and has 2FA enabled.
-2. Add a repository secret `NPM_TOKEN` with publish permission for the package.
+1. Confirm the npm account is a member of the `@scyvera` npm organization with
+   publish rights on `@scyvera/scyvera-ts`, and has 2FA enabled.
+2. Add a repository secret `NPM_TOKEN` holding a **granular** npm token named
+   `scyvera-ts-publish`, scoped to **read-and-write** permission on the package
+   `@scyvera/scyvera-ts` (not a broad account-wide publish token).
 3. Create the GitHub environment `npm-production` and require a reviewer.
 4. Use a workflow with minimal permissions: `contents: read` and
    `id-token: write` (the latter is only for npm provenance/OIDC).
+
+Scoped packages default to **restricted** visibility. Every publish command
+below passes `--access public` explicitly, and `package.json` keeps
+`publishConfig.access: "public"`. Do not remove either: a restricted publish
+would either fail or create a private package, which is not the intent.
 
 ## Preflight (local, from `runtimes/ts`)
 
@@ -56,7 +68,7 @@ dirty.
 ### Exact workflow to add when approved
 
 ```yaml
-name: Publish scyvera-ts
+name: Publish @scyvera/scyvera-ts
 on:
   release:
     types: [published]
@@ -111,16 +123,16 @@ jobs:
 ## Post-publish verification
 
 ```sh
-npm view scyvera-ts@<version> version dist.integrity
-npm install scyvera-ts@<version>
+npm view @scyvera/scyvera-ts@<version> version dist.integrity
+npm install @scyvera/scyvera-ts@<version>
 npx scyvera-ts --version
 npx scyvera-ts vectors --root <path-to-vectors>
 ```
 
 ## Rollback
 
-- Prefer `npm deprecate scyvera-ts@<version> "<reason>"` and publish a fixed
-  patch.
+- Prefer `npm deprecate @scyvera/scyvera-ts@<version> "<reason>"` and publish a
+  fixed patch.
 - Do not unpublish a version that consumers may already depend on; npm's
   unpublish policy is time-limited and destructive.
 - A bad release does not change the conformance claim: the runtime is only

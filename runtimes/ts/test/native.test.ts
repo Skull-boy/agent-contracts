@@ -47,10 +47,12 @@ test("the only runtime dependency is the pinned YAML parser", () => {
     version: string;
     type: string;
     engines: { node: string };
+    bin: Record<string, string>;
     dependencies: Record<string, string>;
     devDependencies: Record<string, string>;
   };
-  assert.equal(manifest.name, "scyvera-ts");
+  assert.equal(manifest.name, "@scyvera/scyvera-ts");
+  assert.deepEqual(manifest.bin, { "scyvera-ts": "./dist/src/cli.js" });
   assert.equal(manifest.version, "0.1.0");
   assert.equal(manifest.type, "module");
   assert.equal(manifest.engines.node, ">=20");
