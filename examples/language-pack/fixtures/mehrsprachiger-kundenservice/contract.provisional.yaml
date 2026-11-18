@@ -1,0 +1,159 @@
+# Draft produced by static inference and NOT human-reviewed yet.
+# RFC 0005 §3.2: a full-mode enforcer MUST refuse a contract whose
+# `provisional` flag is true until a human promotes it.
+version: 1.1
+provisional: true
+
+system:
+  name: "Mehrsprachiger Retouren- und Reparaturservice"
+  purpose: "Nimmt Kundenanfragen auf Deutsch, Französisch und Japanisch an, prüft Retouren- und Reparaturfälle und leitet irreversible Schritte zur menschlichen Freigabe weiter."
+  version: "0.1.0-inferred"
+
+domain: business
+
+lifecycle:
+  mode: request-response
+  initiation: human-only
+  resumability: context-snapshot
+
+capabilities:
+  - name: anfrage_einordnen
+    description: "Erkennt die Sprache und das Anliegen (Retoure, Reparatur, Erstattung) aus der Kundenanfrage."
+  - name: retoure_pruefen
+    description: "Prüft Rückgabefrist, Zustand der Ware und Kulanzregeln (fr: délai de retour, ja: 返品期限)."
+  - name: reparatur_vermitteln
+    description: "Erstellt einen Werkstattauftrag und erklärt den weiteren Ablauf (fr: ordre de réparation, ja: 修理依頼)."
+  - name: eskalieren
+    description: "Übergibt unklare oder strittige Fälle mit vollständigem Kontext an das Serviceteam."
+
+resources:
+  - name: "顧客データ"
+    type: database
+    access: read
+    scope: "Stammdaten und Kontakthistorie (personenbezogene Daten)"
+  - name: bestellungen
+    type: database
+    access: write
+    scope: "Bestell-, Retouren- und Erstattungsdatensätze"
+  - name: "werkstattaufträge"
+    type: external_system
+    access: write
+    scope: "Aufträge an Partnerwerkstätten"
+  - name: wissensdatenbank
+    type: knowledge_base
+    access: read
+    scope: "Interne Servicerichtlinien und Kulanzregeln"
+
+inputs:
+  - name: kundenanfrage
+    type: string
+    required: true
+    description: "Freitext der Kundin oder des Kunden (Deutsch, Französisch oder Japanisch)."
+  - name: sprache
+    type: string
+    required: false
+    description: "Optionale Sprachangabe (de, fr, ja); wird sonst automatisch erkannt."
+  - name: bestellnummer
+    type: string
+    required: false
+
+outputs:
+  - name: antwort_text
+    type: string
+    description: "Antwort in der Sprache der Anfrage."
+  - name: eskalations_ticket
+    type: object
+    description: "Kontextpaket für die menschliche Nachbearbeitung."
+
+permissions:
+  - resource: "顧客データ"
+    actions:
+      - read
+  - resource: bestellungen
+    actions:
+      - read
+      - write
+  - resource: "werkstattaufträge"
+    actions:
+      - read
+      - write
+  - resource: wissensdatenbank
+    actions:
+      - read
+
+constraints:
+  - type: max_refund_amount
+    maximum: 250
+    currency: EUR
+    description: "Erstattungen über 250 EUR benötigen eine menschliche Freigabe."
+  - type: allowed_languages
+    allowed:
+      - de
+      - fr
+      - ja
+    description: "Nur diese drei Sprachen werden automatisch beantwortet; alles andere wird eskaliert."
+  - type: max_retoure_tage
+    maximum: 30
+    description: "Gesetzliches Widerrufsrecht; Kulanz nach Ablauf nur mit Freigabe."
+
+side_effects:
+  - type: datenbank_update
+    resource: bestellungen
+    description: "Retourenstatus und Erstattungsbetrag werden im Bestellsystem gespeichert (fr: mise à jour de la commande)."
+  - type: externe_beauftragung
+    resource: "werkstattaufträge"
+    description: "Ein Reparaturauftrag wird an die Partnerwerkstatt übermittelt (fr: ordre de réparation, ja: 修理依頼)."
+  - type: kundenbenachrichtigung
+    resource: bestellungen
+    description: "Bestätigungs-E-Mail an die Kundin oder den Kunden in der gewählten Sprache."
+  - type: storno
+    resource: bestellungen
+    irreversible: true
+    description: "Stornierung einer Bestellung; nach dem Auslösen nicht rückgängig zu machen."
+
+approvals:
+  - action: "bestellungen:stornieren"
+    required: true
+    approver: serviceteam_leitung
+    condition: "Immer erforderlich, da eine Stornierung irreversibel ist."
+  - action: "bestellungen:erstatten"
+    required: true
+    approver: serviceteam_leitung
+    condition: "Erstattungsbetrag über 250 EUR oder Kulanzfall ohne Rechtsanspruch."
+
+dependencies:
+  - name: crm_api
+    type: external_api
+    required: true
+  - name: werkstatt_portal
+    type: external_api
+    required: true
+  - name: uebersetzungsdienst
+    type: external_service
+    required: false
+
+state:
+  persistence: session
+  scope: "Ein Gespräch pro Ticket; keine dauerhafte Speicherung von Kundendaten im Agenten."
+
+recovery:
+  strategy: human_escalation
+  details: "Bei API-Ausfall oder unklarer Rechtslage wird ein Eskalationsticket erstellt."
+
+replay:
+  mode: non_idempotent
+  details: "Stornierungen und Erstattungen dürfen nicht automatisch wiederholt werden."
+
+observability:
+  level: audit
+  sinks:
+    - "unveränderliches Ereignisprotokoll (append-only)"
+
+risk:
+  level: high
+  category: financial_and_privacy
+
+implementation:
+  framework: custom
+  runtime: python
+  language: "de/fr/ja"
