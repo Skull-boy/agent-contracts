@@ -1,20 +1,31 @@
-# Publishing @scyvera/scyvera-ts (human-gated, provenance-attested).
+# Publishing @scyvera/scyvera-ts (human-gated, staged, OIDC-attested).
 #
-# This workflow is the exact YAML documented in runtimes/ts/PUBLISHING.md
-# (section "Exact workflow to add when approved"). It is now committed, and
-# the capability it exercises - `registry:publish` - is declared and approved
-# in the repository root contract.yaml.
+# GE-4b: releases are staged, never published directly. The flow is:
+#
+#   1. CI authenticates with a GitHub OIDC trusted publisher. There is no
+#      long-lived npm token for this repository and no `NPM_TOKEN` secret.
+#   2. CI runs `npm stage publish`, which needs no 2FA. The version waits in
+#      npm's staging area; it is not installable yet.
+#   3. The maintainer reviews it under "Staged Packages" on npmjs.com and
+#      approves it with 2FA. Only then does the version become public and the
+#      staged tag (default `latest`) take effect.
 #
 # Required repository settings (both are maintainer-owned):
-#   1. Secret `NPM_TOKEN` - an npm automation token with publish rights on the
-#      @scyvera scope. It is referenced only as `NODE_AUTH_TOKEN` in the publish
-#      step; no token is stored in the repository.
+#   1. Trusted publisher for `@scyvera/scyvera-ts`:
+#        GitHub Actions
+#        repository  Skull-boy/agent-contracts
+#        workflow    publish-scyvera-ts.yml
+#        environment npm-production
+#        allowed     npm stage publish only (not npm publish)
+#      Configure it immediately before a release: a trusted publisher that does
+#      not complete a successful publish within 2 days expires unvalidated.
 #   2. Environment `npm-production` - must exist and must list the maintainer
 #      as a required reviewer.
 #
-# The maintainer approves the `npm-production` environment gate at run time:
-# the job pauses before any step runs the publish and waits for
-# "Review approvals -> Approve and deploy". Nothing is published on merge.
+# The environment gate pauses the job before any step runs: the maintainer
+# approves "Review approvals -> Approve and deploy". Nothing is staged on
+# merge, and approving the job only stages the release - the second, 2FA
+# approval on npmjs.com is what publishes it.
 #
 # Releases for this package are tagged `scyvera-ts-v<version>`. The bare
 # `v<version>` namespace belongs to the Python package, so the tag check below
@@ -27,7 +38,7 @@ on:
   workflow_dispatch:
     inputs:
       dry-run:
-        description: "npm publish --dry-run only"
+        description: "npm stage publish --dry-run only"
         type: boolean
         default: true
 
@@ -44,14 +55,25 @@ jobs:
         working-directory: runtimes/ts
     env:
       PINNED_SUITE_VERSION: "1"
+      NPM_CLI_MAJOR: "11"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          cache: npm
-          cache-dependency-path: runtimes/ts/package-lock.json
+          # No dependency cache in a release build: a cached node_modules tree
+          # is an input to the artifact that gets attested, and npm's
+          # trusted-publishing guidance is to never cache release builds.
+      - name: Pin npm 11 for staged publishing
+        run: |
+          npm install -g "npm@${NPM_CLI_MAJOR}"
+          version="$(npm --version)"
+          major="${version%%.*}"
+          if [ "${major}" -lt 11 ]; then
+            echo "::error::staged publishing requires npm >= 11.15.0, got ${version}"
+            exit 1
+          fi
       - run: npm ci
       - name: Verify tag and suite pin
         run: |
@@ -61,12 +83,10 @@ jobs:
           test "${suite}" = "suite-version: ${PINNED_SUITE_VERSION}"
       - run: npm test
       - run: npm run vectors
-      - name: Publish with provenance
+      - name: Stage the release (OIDC, no token)
         run: |
           if [ "${{ inputs.dry-run }}" = "true" ]; then
-            npm publish --dry-run --provenance --access public
+            npm stage publish --dry-run --provenance --access public
           else
-            npm publish --provenance --access public
+            npm stage publish --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
