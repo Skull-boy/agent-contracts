@@ -1,8 +1,11 @@
 # Publishing `@scyvera/scyvera-ts`
 
 Publishing is a **human action**. This repository prepares the artifact and
-documents the provenance procedure; it never publishes on merge. No npm token is
-stored in the repository, and this GE-4 session did not publish anything.
+documents the provenance procedure; it never publishes or stages on merge. No
+npm token is stored in the repository: CI authenticates with GitHub OIDC
+trusted publishing, and a maintainer approves the published version with 2FA on
+npmjs.com. `0.1.0` (2026-11-18) was the last direct publish; from the next
+version on the release is staged first (GE-4b).
 
 The npm **package** is scoped: `@scyvera/scyvera-ts`. The installed **command**
 stays unscoped: `scyvera-ts`. They are independent — the `bin` mapping
@@ -12,16 +15,18 @@ stays unscoped: `scyvera-ts`. They are independent — the `bin` mapping
 ## Why the publish workflow is committed and gated
 
 The repository's own dogfood audit has a high-severity rule for CI jobs that
-run `npm publish` (AU-CI-002, "deploy or publish job detected"). That rule is
-correct here: a CI job really can publish a public package. The workflow is
-therefore **committed and gated**, not hidden:
+run `npm publish` or `npm stage publish` (AU-CI-002, "deploy or publish job
+detected"). That rule is correct here: a CI job really can publish a public
+package, and staging is the same capability with the 2FA step deferred. The
+workflow is therefore **committed and gated**, not hidden:
 
 - The repository root `contract.yaml` declares `permissions: ["registry:publish"]`
   and approves it with `{action: registry:publish, required: true}` and the
   human role `repository_maintainer`. It is a full-authority, non-provisional
   contract, registered through the re-seal ritual.
 - The workflow runs behind the `npm-production` environment, so a human
-  approves every run at the moment of publication.
+  approves every run. Approving the job only stages the release; a second, 2FA
+  approval on npmjs.com is what publishes it.
 - The dogfood score is **84/100 `Controlled`**, not 92/100 `Shielded`. The
   finding contributes its full high-severity weight (8.0) and is still scored:
   governance detection is render-only and does not discount it. This is
@@ -37,7 +42,7 @@ the exact papering-over that AU-CI-002 exists to prevent.
 
 ## Known cosmetic warning
 
-`npm publish` prints:
+`npm publish` (and `npm stage publish`) prints:
 
 ```text
 npm warn publish "bin[scyvera-ts]" script name was cleaned
@@ -54,17 +59,29 @@ test pin in one commit, with the warning as the stated reason.
 ## One-time maintainer setup
 
 1. Confirm the npm account is a member of the `@scyvera` npm organization with
-   publish rights on `@scyvera/scyvera-ts`, and has 2FA enabled.
-2. Add a repository secret `NPM_TOKEN` holding a **granular** npm token scoped to
-   the `@scyvera` scope (not a broad account-wide publish token) with two
-   settings that are easy to miss:
-   - **Read and write (publish and stage)** — a *stage-only* token cannot
-     publish a package's first version and fails with `E_STAGE_REQUIRED`;
-   - **Bypass two-factor authentication** checked — a 2FA-bound token fails in
-     CI with `EOTP`, because the workflow cannot supply an interactive code.
-3. Create the GitHub environment `npm-production` and require a reviewer.
-4. Use a workflow with minimal permissions: `contents: read` and
-   `id-token: write` (the latter is only for npm provenance/OIDC).
+   write access to `@scyvera/scyvera-ts`, and has 2FA enabled.
+2. Create the GitHub environment `npm-production` and require a reviewer.
+3. Configure the package's **Trusted Publisher** (npmjs.com → package →
+   Settings → Trusted publishing) for GitHub Actions:
+   - organization/user `Skull-boy`, repository `agent-contracts`;
+   - workflow filename `publish-scyvera-ts.yml` (filename only);
+   - environment `npm-production`;
+   - allowed action **`npm stage publish` only** — do not grant `npm publish`,
+     and do not grant `npm dist-tag` (the staged tag is applied by the stage
+     operation itself).
+   The CLI equivalent (npm ≥ 11.15.0, 2FA prompt) is:
+   `npm trust github @scyvera/scyvera-ts --file publish-scyvera-ts.yml --repo Skull-boy/agent-contracts --env npm-production --allow-stage-publish`
+4. There is **no `NPM_TOKEN` secret**. The workflow declares `id-token: write`
+   and npm exchanges the GitHub OIDC token for a short-lived publish token. Do
+   not add a token secret as a shortcut: that would defeat the reason this path
+   exists.
+5. After the first staged release succeeds, set the package's publishing access
+   to **"Require two-factor authentication and disallow tokens"**. Trusted
+   publishers keep working; token publishes stop.
+
+A newly created trusted publisher must complete its first successful publish
+**within 2 days** or it expires unvalidated. Create it immediately before a
+release, not weeks ahead.
 
 Scoped packages default to **restricted** visibility. Every publish command
 below passes `--access public` explicitly, and `package.json` keeps
@@ -77,12 +94,13 @@ would either fail or create a private package, which is not the intent.
 npm ci
 npm test                     # package tests + pinned suite-version test
 npm run vectors              # 33/33 at suite-version 1
-npm publish --dry-run --provenance --access public
+npm stage publish --dry-run --provenance --access public
 ```
 
-Do not continue if any step is red, if `vectors/suite-version` differs from the
-runtime's `PINNED_SUITE_VERSION` (currently `1`), or if the working tree is
-dirty.
+The dry run needs npm CLI ≥ 11.15.0 and Node ≥ 22.14.0 (the staged-publish
+floor; the workflow installs and checks npm 11 itself). Do not continue if any
+step is red, if `vectors/suite-version` differs from the runtime's
+`PINNED_SUITE_VERSION` (currently `1`), or if the working tree is dirty.
 
 ## Release procedure
 
@@ -96,9 +114,13 @@ dirty.
    the bare `v<version>` tag namespace belongs to the Python package (for
    example `v0.1.0`); reusing it would collide with an existing release tag.
 5. Run the committed publish workflow (release published, or manual dispatch on
-   the tag), approve the `npm-production` environment gate, and let it run the
-   same local preflight before `npm publish --provenance --access public`.
-6. Confirm the npm page shows the **Provenance** attestation linking the tarball
+   the tag) and approve the `npm-production` environment gate. It runs the same
+   local preflight, then `npm stage publish --provenance --access public`.
+   Staging needs no 2FA and puts nothing live.
+6. Review the staged version (npmjs.com → **Staged Packages**, or
+   `npm stage list @scyvera/scyvera-ts`) and approve it with 2FA. Approval is
+   what publishes the tarball and moves `latest`.
+7. Confirm the npm page shows the **Provenance** attestation linking the tarball
    to this repository and workflow. A release without provenance is a failed
    release.
 
@@ -112,7 +134,7 @@ on:
   workflow_dispatch:
     inputs:
       dry-run:
-        description: "npm publish --dry-run only"
+        description: "npm stage publish --dry-run only"
         type: boolean
         default: true
 
@@ -129,14 +151,25 @@ jobs:
         working-directory: runtimes/ts
     env:
       PINNED_SUITE_VERSION: "1"
+      NPM_CLI_MAJOR: "11"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          cache: npm
-          cache-dependency-path: runtimes/ts/package-lock.json
+          # No dependency cache in a release build: a cached node_modules tree
+          # is an input to the artifact that gets attested, and npm's
+          # trusted-publishing guidance is to never cache release builds.
+      - name: Pin npm 11 for staged publishing
+        run: |
+          npm install -g "npm@${NPM_CLI_MAJOR}"
+          version="$(npm --version)"
+          major="${version%%.*}"
+          if [ "${major}" -lt 11 ]; then
+            echo "::error::staged publishing requires npm >= 11.15.0, got ${version}"
+            exit 1
+          fi
       - run: npm ci
       - name: Verify tag and suite pin
         run: |
@@ -146,42 +179,55 @@ jobs:
           test "${suite}" = "suite-version: ${PINNED_SUITE_VERSION}"
       - run: npm test
       - run: npm run vectors
-      - name: Publish with provenance
+      - name: Stage the release (OIDC, no token)
         run: |
           if [ "${{ inputs.dry-run }}" = "true" ]; then
-            npm publish --dry-run --provenance --access public
+            npm stage publish --dry-run --provenance --access public
           else
-            npm publish --provenance --access public
+            npm stage publish --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
-## Next release: staged publishing and OIDC trusted publishing
+## Rollout of the staged path (GE-4b)
 
-`0.1.0` was published directly by the workflow. From the next version on, the
-stronger path is the intended one, and release runs use the workflow at the
-tagged commit, so it takes effect on the next tag only.
+Release runs use the workflow at the tagged commit, so GE-4b takes effect on
+the tag after this change merges, not on the release that introduced it.
+Before that tag:
 
-1. **Staged publishing.** CI runs `npm stage publish` instead of
-   `npm publish`; the version waits in npm's staging area and a maintainer
-   approves it with 2FA on npmjs.com (Staged Packages) before it goes live.
-   A stage-only token can stage but can never publish by itself, which matches
-   the human-gate rule. Requirements: npm CLI >= 11.15.0 and Node >= 22.14.0.
-   Pin the CI install as `npm install -g npm@11`, not `@latest`: npm 12
-   requires Node `^22.22.2 || ^24.15.0 || >=26`, and a runner on an older
-   Node patch fails with `EBADENGINE`.
-2. **Trusted publishing (OIDC).** Configure the package's Trusted Publisher for
-   `Skull-boy/agent-contracts`, workflow `publish-scyvera-ts.yml`, environment
-   `npm-production`; then drop `NODE_AUTH_TOKEN` and delete the `NPM_TOKEN`
-   secret. Provenance is generated automatically for OIDC publishes. A new
-   trusted-publisher configuration must complete its first successful publish
-   within 2 days, so create it immediately before a release.
-3. Once either path is validated, set the package's Publishing access to
-   "Require two-factor authentication and disallow tokens" and revoke the
-   granular token.
+1. **Configure the trusted publisher** (step 3 above) immediately before
+   tagging. An unvalidated configuration expires after 2 days; a validated one
+   persists.
+2. **Keep the 2-day window honest.** The first run under the trusted publisher
+   must actually stage a version. If it fails with `ENEEDAUTH`, the repository
+   or workflow filename does not match the npm configuration exactly - both
+   are case-sensitive - or the runner is not GitHub-hosted.
+3. **Only then** restrict token access ("Require 2FA and disallow tokens") and
+   revoke any publish token that still exists. Removing token access first
+   would leave no working publish path if the trusted publisher were
+   misconfigured.
+
+Why `npm install -g npm@11` is pinned rather than `@latest`: staged publishing
+needs npm CLI ≥ 11.15.0, while npm 12 requires Node
+`^22.22.2 || ^24.15.0 || >=26`; a runner on an older Node 22 patch fails with
+`EBADENGINE`. The workflow installs npm 11 and fails early if the installed
+major is below 11.
+
+If the OIDC path has to be reverted, that is a workflow change like any other:
+restore the token step, recreate `NPM_TOKEN`, and record why in the CHANGELOG.
+Do not push a token back as an emergency edit on a tag.
 
 ## Post-publish verification
+
+Review the staged version before approving it:
+
+```sh
+npm stage list @scyvera/scyvera-ts
+npm stage view <stage-id>
+npm stage download <stage-id>     # inspect the exact tarball
+npm stage reject <stage-id>       # 2FA; removes it without publishing
+```
+
+After approval, verify the live release:
 
 ```sh
 npm view @scyvera/scyvera-ts@<version> version dist.integrity
@@ -199,8 +245,10 @@ failed release, regardless of what the package page shows.
 
 ## Rollback
 
-- Prefer `npm deprecate @scyvera/scyvera-ts@<version> "<reason>"` and publish a
-  fixed patch.
+- Before approval, prefer `npm stage reject <stage-id>` (2FA): nothing is live
+  and no version number is spent.
+- After publication, prefer `npm deprecate @scyvera/scyvera-ts@<version> "<reason>"`
+  and publish a fixed patch.
 - Do not unpublish a version that consumers may already depend on; npm's
   unpublish policy is time-limited and destructive.
 - A bad release does not change the conformance claim: the runtime is only

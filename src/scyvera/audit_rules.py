@@ -451,8 +451,12 @@ _WRITE_ALL_RE = re.compile(
 )
 _RUN_KEY_RE = re.compile(r"^(\s*)(?:-\s+)?run:\s*(.*)$")
 _SECRET_REF_RE = re.compile(r"\bsecrets\.[A-Za-z0-9_]+")
+# `npm stage publish` is a publish entry point too: it places a version in the
+# registry's staging area and only defers the 2FA approval, so it must keep
+# raising AU-CI-002 rather than slipping past the rule.
 _CI_PUBLISH_RE = re.compile(
-    r"\b(?:npm\s+publish|twine\s+upload|docker\s+push|kubectl\s+apply)\b",
+    r"\b(?:npm\s+(?:stage\s+)?publish|twine\s+upload|docker\s+push|"
+    r"kubectl\s+apply)\b",
     re.IGNORECASE,
 )
 
