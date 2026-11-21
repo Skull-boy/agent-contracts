@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Released — `@scyvera/scyvera-ts@0.1.1` staged over OIDC and published with provenance (2026-11-21)
+- **`@scyvera/scyvera-ts@0.1.1` is live** at <https://www.npmjs.com/package/@scyvera/scyvera-ts>, with `latest` pointing at `0.1.1` (published `2026-11-21T12:28:12Z`). `0.1.0` remains installable for anyone pinned to it.
+- **This is the first release produced by the GE-4b path.** GitHub Actions authenticated to npm with OIDC trusted publishing — no `NPM_TOKEN` — staged the tarball with `npm stage publish`, waited on the `npm-production` environment gate, and the maintainer approved the staged version with 2FA. Approval, not CI, is what published it.
+- **Provenance is attested and independently verifiable.** `npm view @scyvera/scyvera-ts@0.1.1 dist.attestations` returns the npm publish attestation plus a `slsa.dev/provenance/v1` statement naming `https://github.com/Skull-boy/scyvera` at `refs/tags/scyvera-ts-v0.1.1`, built by `.github/workflows/publish-scyvera-ts.yml` on a GitHub-hosted runner (run [`44903629650`](https://github.com/Skull-boy/scyvera/actions/runs/44903629650)). **This is the first attestation that points at the renamed repository**; `0.1.0`'s attestation correctly still names the repository as it was.
+- **`gitHead` is `40c2994`** (the PR #95 merge the tag points at), and the published manifest's `repository.url` is `git+https://github.com/Skull-boy/scyvera.git`.
+- **Package contents are unchanged from `0.1.0`** apart from `version` and `repository.url`: 27 files, 40.7 kB. Installed smoke test: `scyvera-ts --version` prints `scyvera-ts 0.1.1`.
+- **`0.0.0-stage` was unpublished** on 2026-11-21 inside npm's 72-hour window; the registry now lists `0.1.0` and `0.1.1` only.
+- No runtime, schema, vector, or exit-code change; suite 33/33 at suite-version 1; the dogfood covenant is unchanged at 84/100 `Controlled`.
+
 ### Changed — `scyvera-ts` 0.1.1 (2026-11-21)
 - **`runtimes/ts/package.json` moves `0.1.0` → `0.1.1`** and the lockfile root version follows. There is no runtime, schema, vector, or exit-code change: the only delta in the published tarball is `version`, plus the `repository.url` that the rename PR already landed (`git+https://github.com/Skull-boy/scyvera.git`).
 - **The version pins moved with it**: `runtimes/ts/test/native.test.ts` (the manifest assertion that fails the build if it drifts), `runtimes/ts/src/cli.ts` (`readVersion()`'s fallback), and the two version references in `runtimes/ts/README.md`. The README status paragraph now says `0.x` instead of naming a patch version, so it stops needing a bump every release.
 - **`0.0.0-stage` is gone from the registry.** The placeholder npm created during the failed stage-only token attempt was unpublished on 2026-11-21, inside the 72-hour window; the registry now lists `0.1.0` alone and its tarball returns 404.
-- This is the **first release on the GE-4b path** — OIDC trusted publishing plus `npm stage publish`, approved by the maintainer with 2FA, with no `NPM_TOKEN`. The retrospective `### Released` entry (run ID, attestation, tag) is added after the staged package is approved.
+- This is the **first release on the GE-4b path**; the run, attestation, and tag are recorded in the `### Released` entry above.
 
 ### Changed — repository renamed `agent-contracts` → `scyvera` (2026-11-21)
 - **The GitHub repository is now `Skull-boy/scyvera`.** The old URL redirects. Every live reference was updated: the README image, badges, and clone commands; `CONTRIBUTING.md`; `SECURITY.md`; the gate action's `uses:` lines and their test pin in `tests/test_pd6_action.py`; `runtimes/ts/package.json` `repository.url`; the trusted-publisher instructions in `runtimes/ts/PUBLISHING.md`; the publish workflow header comment; `docs/architecture.md`; the implementation READMEs; and the `pyproject.toml` project URLs.

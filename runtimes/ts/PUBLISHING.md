@@ -4,8 +4,8 @@ Publishing is a **human action**. This repository prepares the artifact and
 documents the provenance procedure; it never publishes or stages on merge. No
 npm token is stored in the repository: CI authenticates with GitHub OIDC
 trusted publishing, and a maintainer approves the published version with 2FA on
-npmjs.com. `0.1.0` (2026-11-18) was the last direct publish; from the next
-version on the release is staged first (GE-4b).
+npmjs.com. `0.1.0` (2026-11-18) was the last direct publish; `0.1.1`
+(2026-11-21) was the first release staged through GE-4b.
 
 The npm **package** is scoped: `@scyvera/scyvera-ts`. The installed **command**
 stays unscoped: `scyvera-ts`. They are independent — the `bin` mapping
