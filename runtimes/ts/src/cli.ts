@@ -46,7 +46,7 @@ function readVersion(): string {
   } catch {
     // Fall through to the package version this source line belongs to.
   }
-  return "0.1.0";
+  return "0.1.1";
 }
 
 function takeOption(args: string[], name: string): string | undefined {
