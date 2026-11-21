@@ -50,3 +50,6 @@ brag-output
 # Generated assurance reports / stray test artifacts
 .assurance/
 test.wav
+
+# Rust build output (runtimes/rs)
+/runtimes/rs/target/

@@ -1,0 +1,123 @@
+# Publishing `scyvera-rs` (human-gated, OIDC-authenticated, attested).
+#
+# GE-5 release path. crates.io differs from npm in one way that shapes this
+# workflow: the *first* publish of a crate cannot use trusted publishing,
+# because the trusted-publisher configuration lives on the crate settings page.
+# The bootstrap publish is therefore a documented human action
+# (runtimes/rs/PUBLISHING.md §2). Every publish after that goes through here.
+#
+# Flow:
+#   1. CI authenticates with the repository's crates.io trusted publisher via
+#      GitHub OIDC. There is no `CARGO_REGISTRY_TOKEN` secret in this repository.
+#   2. The job verifies the release tag, the crate version, and the suite pin.
+#   3. It runs the same gates as CI, packages the crate, and attests the
+#      `.crate` with GitHub's build-provenance attestation.
+#   4. `cargo publish --locked` uploads the package using the 30-minute token
+#      from the OIDC exchange. The action's post step revokes it.
+#
+# Required repository settings (maintainer-owned):
+#   1. crates.io -> scyvera-rs -> Settings -> Trusted Publishing:
+#        platform     GitHub Actions
+#        repository   Skull-boy/scyvera
+#        workflow     publish-scyvera-rs.yml
+#        environment  crates-io-production
+#   2. Environment `crates-io-production` must exist and list the maintainer as a
+#      required reviewer.
+#   3. After the first successful trusted publish, enable the crate's
+#      `trustpub_only` flag so API-token publishes are refused by the registry.
+#
+# What the attestation does and does not cover is recorded in
+# runtimes/rs/PUBLISHING.md §4. It covers the `.crate` bytes this run built; it
+# does not prove the registry reproduces the build.
+#
+# Release tags are `scyvera-rs-v<version>`. The bare `v<version>` namespace
+# belongs to the Python package, and `scyvera-ts-v<version>` to the TypeScript
+# runtime.
+
+name: Publish scyvera-rs
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "cargo publish --dry-run only"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: crates-io-production
+    defaults:
+      run:
+        working-directory: runtimes/rs
+    env:
+      PINNED_SUITE_VERSION: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0 (pinned 2026-11-06)
+
+      - name: Install Rust stable
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+          rustc --version
+
+      - name: Verify tag, version, and suite pin
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          echo "crate version:      ${version}"
+          echo "release ref:        ${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_NAME}" != "scyvera-rs-v${version}" ]; then
+            echo "::error::release tag must be scyvera-rs-v${version}, got ${GITHUB_REF_NAME}"
+            exit 2
+          fi
+          suite="$(tr -d '\r' < ../../vectors/suite-version)"
+          if [ "${suite}" != "suite-version: ${PINNED_SUITE_VERSION}" ]; then
+            echo "::error::suite-version drift: runtime pins ${PINNED_SUITE_VERSION}, suite says ${suite}"
+            exit 2
+          fi
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Clippy, warnings denied
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run the shared conformance vectors
+        run: cargo run --locked -- vectors --root ../../vectors
+
+      - name: Package the crate
+        run: cargo package --locked
+
+      - name: Attest the packaged crate
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f  # v3.2.0 (pinned 2026-11-06)
+        with:
+          subject-path: runtimes/rs/target/package/*.crate
+
+      - name: Record the packaged crate digest
+        run: |
+          sha256sum target/package/*.crate
+          echo "Compare this digest with the registry copy after publishing; see PUBLISHING.md section 4."
+
+      - name: Authenticate with crates.io (OIDC, no long-lived token)
+        id: auth
+        if: ${{ inputs.dry-run != true }}
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9  # v1.0.6 (pinned 2026-11-21)
+
+      - name: Publish (dry run)
+        if: ${{ inputs.dry-run == true }}
+        run: cargo publish --dry-run --locked
+
+      - name: Publish
+        if: ${{ inputs.dry-run != true }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked

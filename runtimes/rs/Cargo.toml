@@ -1,0 +1,24 @@
+﻿[package]
+name = "scyvera-rs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Native Rust runtime for Agent Contracts: the RFC 0005 provisional-contract model, default-deny gate, trace JSONL, and conformance vector runner."
+license = "MIT"
+repository = "https://github.com/Skull-boy/scyvera"
+documentation = "https://docs.rs/scyvera-rs"
+readme = "README.md"
+keywords = ["agent-contracts", "agent-governance", "scyvera", "policy-enforcement", "conformance"]
+categories = ["development-tools"]
+include = ["/src", "/schemas", "/README.md", "/PUBLISHING.md", "/LICENSE", "/Cargo.toml"]
+
+[[bin]]
+name = "scyvera-rs"
+path = "src/main.rs"
+
+[lib]
+name = "scyvera_rs"
+path = "src/lib.rs"
+
+[dependencies]
+yaml-rust2 = { version = "0.13.2", default-features = false }
