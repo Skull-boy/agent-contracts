@@ -25,8 +25,8 @@ Scyvera is a Python package (`scyvera`) plus a specification and a set of refere
 Click **Fork** on GitHub, then clone your fork locally:
 
 ```bash
-git clone https://github.com/<your-username>/agent-contracts.git
-cd agent-contracts
+git clone https://github.com/<your-username>/scyvera.git
+cd scyvera
 ```
 
 ### 2. Set up the development environment
@@ -256,7 +256,7 @@ Rules for maintainers:
 
 ## 🐛 Reporting Issues
 
-Found a bug or have an idea? Open an [Issue](https://github.com/Skull-boy/agent-contracts/issues) describing:
+Found a bug or have an idea? Open an [Issue](https://github.com/Skull-boy/scyvera/issues) describing:
 
 - What happened vs. what you expected.
 - Steps to reproduce, with a sample contract or code.

@@ -63,14 +63,14 @@ test pin in one commit, with the warning as the stated reason.
 2. Create the GitHub environment `npm-production` and require a reviewer.
 3. Configure the package's **Trusted Publisher** (npmjs.com → package →
    Settings → Trusted publishing) for GitHub Actions:
-   - organization/user `Skull-boy`, repository `agent-contracts`;
+   - organization/user `Skull-boy`, repository `scyvera`;
    - workflow filename `publish-scyvera-ts.yml` (filename only);
    - environment `npm-production`;
    - allowed action **`npm stage publish` only** — do not grant `npm publish`,
      and do not grant `npm dist-tag` (the staged tag is applied by the stage
      operation itself).
    The CLI equivalent (npm ≥ 11.15.0, 2FA prompt) is:
-   `npm trust github @scyvera/scyvera-ts --file publish-scyvera-ts.yml --repo Skull-boy/agent-contracts --env npm-production --allow-stage-publish`
+   `npm trust github @scyvera/scyvera-ts --file publish-scyvera-ts.yml --repo Skull-boy/scyvera --env npm-production --allow-stage-publish`
 4. There is **no `NPM_TOKEN` secret**. The workflow declares `id-token: write`
    and npm exchanges the GitHub OIDC token for a short-lived publish token. Do
    not add a token secret as a shortcut: that would defeat the reason this path

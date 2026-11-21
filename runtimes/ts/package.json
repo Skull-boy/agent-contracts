@@ -40,7 +40,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Skull-boy/agent-contracts.git",
+    "url": "git+https://github.com/Skull-boy/scyvera.git",
     "directory": "runtimes/ts"
   },
   "keywords": [

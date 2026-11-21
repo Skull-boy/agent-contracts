@@ -1,5 +1,5 @@
 <div align="center">
-<img src="https://raw.githubusercontent.com/Skull-boy/agent-contracts/main/assets/scyvera.png" alt="Scyvera" width="320">
+<img src="https://raw.githubusercontent.com/Skull-boy/scyvera/main/assets/scyvera.png" alt="Scyvera" width="320">
 
 # Scyvera
 
@@ -9,8 +9,8 @@ Operational contracts for AI agents: what a system can do, what it can access, a
 
 MCP and A2A standardize how agents communicate with tools and each other. Scyvera defines the layer above: the operational boundary those agents run inside.
 
-[![License](https://img.shields.io/github/license/Skull-boy/agent-contracts)](./LICENSE)
-[![Tests](https://github.com/Skull-boy/agent-contracts/actions/workflows/validate-contracts.yml/badge.svg)](https://github.com/Skull-boy/agent-contracts/actions/workflows/validate-contracts.yml)
+[![License](https://img.shields.io/github/license/Skull-boy/scyvera)](./LICENSE)
+[![Tests](https://github.com/Skull-boy/scyvera/actions/workflows/validate-contracts.yml/badge.svg)](https://github.com/Skull-boy/scyvera/actions/workflows/validate-contracts.yml)
 [![PyPI](https://img.shields.io/pypi/v/scyvera)](https://pypi.org/project/scyvera/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/scyvera?period=total&units=INTERNATIONAL_SYSTEM&left_color=RED&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scyvera)
 [![Python](https://img.shields.io/badge/python-3.10%E2%80%933.14-blue)](pyproject.toml)
@@ -164,8 +164,8 @@ Scyvera is a pure-Python wheel (`py3-none-any`): no compiler, no native extensio
 From a checkout instead:
 
 ```bash
-git clone https://github.com/Skull-boy/agent-contracts.git
-cd agent-contracts
+git clone https://github.com/Skull-boy/scyvera.git
+cd scyvera
 pip install -e ".[dev]"
 scyvera audit .
 ```
@@ -223,7 +223,7 @@ Verify a download yourself:
 
 ```bash
 gh attestation verify dist/scyvera-<version>-py3-none-any.whl \
-  --repo Skull-boy/agent-contracts
+  --repo Skull-boy/scyvera
 ```
 
 ---
@@ -639,7 +639,7 @@ See [`examples/v1.1/`](./examples/v1.1) for runnable, validated v1.1 contracts a
 ## 📂 Repository Structure
 
 ```text
-agent-contracts/
+scyvera/
 ├── README.md                           # This file
 ├── WORKFLOW-CONTRACT-SPEC.md           # Formal specification (v1 and v1.1)
 ├── CHANGELOG.md                        # Version history and releases

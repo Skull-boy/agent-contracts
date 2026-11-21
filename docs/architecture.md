@@ -1,7 +1,7 @@
 # Repository Architecture
 
 **Status:** Active  
-**Applies to:** Repository organization, architectural layers, and governance mechanisms across `agent-contracts` and the `scyvera` Python package.
+**Applies to:** Repository organization, architectural layers, and governance mechanisms across the `scyvera` repository and the `scyvera` Python package.
 
 ---
 

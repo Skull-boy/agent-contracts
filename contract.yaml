@@ -1,7 +1,7 @@
 version: 1.1
 
 system:
-  name: agent-contracts
+  name: scyvera
   purpose: >-
     Maintains the Scyvera Agent Contract specification, the Python governance
     runtime, and the scyvera-ts conformance runtime, and publishes the

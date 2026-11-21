@@ -116,4 +116,4 @@ Once configured, it runs automatically on the weekly schedule. You can also trig
 
 ---
 
-Part of the [agent-contracts](../../../) repository. Governed by [`contract.yaml`](./contract.yaml). See the [root README](../../../README.md) for the repository index and [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines.
+Part of the [scyvera](../../../) repository. Governed by [`contract.yaml`](./contract.yaml). See the [root README](../../../README.md) for the repository index and [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines.

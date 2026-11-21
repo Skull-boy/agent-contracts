@@ -22,7 +22,7 @@ step.
 **Use GitHub Security Advisories — do not open a public issue.**
 
 1. Go to the repository's **Security** tab and choose **Report a vulnerability**:
-   <https://github.com/Skull-boy/agent-contracts/security/advisories/new>
+   <https://github.com/Skull-boy/scyvera/security/advisories/new>
 2. Describe the affected version, the impact, and a minimal reproduction or
    proof of concept.
 3. Include any suggested fix or mitigation if you have one.

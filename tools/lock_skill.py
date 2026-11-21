@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_NAME = "scyvera-governance"
 SKILL_DIR = REPO_ROOT / "skills" / SKILL_NAME
 REGISTRY_PATH = REPO_ROOT / "skills-registry.json"
-SOURCE = "Skull-boy/agent-contracts"
+SOURCE = "Skull-boy/scyvera"
 SOURCE_TYPE = "github"
 REGISTRY_VERSION = 1
 
