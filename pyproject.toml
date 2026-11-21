@@ -67,9 +67,9 @@ dev = [
 scyvera = "scyvera.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Skull-boy/agent-contracts"
-Repository = "https://github.com/Skull-boy/agent-contracts"
-Issues = "https://github.com/Skull-boy/agent-contracts/issues"
+Homepage = "https://github.com/Skull-boy/scyvera"
+Repository = "https://github.com/Skull-boy/scyvera"
+Issues = "https://github.com/Skull-boy/scyvera/issues"
 
 
 [tool.setuptools.packages.find]

@@ -277,7 +277,7 @@ Full machine-readable contract: [`contract.yaml`](./contract.yaml)
 ## Relationship to the pattern and the n8n implementation
 
 This implementation is the first evidence for or against the core claim of the
-[`agent-contracts`](../../../) repository: that patterns outlive frameworks.
+[`scyvera`](../../../) repository: that patterns outlive frameworks.
 
 The `detect → judge → approve → act` shape is identical between this and the
 n8n workflow. What varied:
@@ -298,5 +298,5 @@ for the hypothesis this implementation is testing.
 
 ---
 
-Part of the [`agent-contracts`](../../../) collection.
+Part of the [`scyvera`](../../../) collection.
 Pattern: [`detect-judge-approve-act`](../../../patterns/detect-judge-approve-act.md)

@@ -4,7 +4,7 @@ Runs `scyvera audit` or `scyvera check` in CI and fails on findings, installing
 `scyvera>=1.3,<2` from PyPI rather than running repo code.
 
 ```yaml
-- uses: Skull-boy/agent-contracts/.github/actions/scyvera-gate@main
+- uses: Skull-boy/scyvera/.github/actions/scyvera-gate@main
   with:
     mode: audit
     target: .
@@ -31,7 +31,7 @@ Outputs: `score` (audit only), `status` (`PASS`/`WARN`/`FAIL`), `findings`
 ## Examples
 ```yaml
 # Audit with a badge
-- uses: Skull-boy/agent-contracts/.github/actions/scyvera-gate@main
+- uses: Skull-boy/scyvera/.github/actions/scyvera-gate@main
   with:
     mode: audit
     target: .
@@ -39,7 +39,7 @@ Outputs: `score` (audit only), `status` (`PASS`/`WARN`/`FAIL`), `findings`
 ```
 ```yaml
 # Tier 1 check on an implementation directory (source: local dogfoods the repo)
-- uses: Skull-boy/agent-contracts/.github/actions/scyvera-gate@main
+- uses: Skull-boy/scyvera/.github/actions/scyvera-gate@main
   with:
     mode: check
     target: implementations/langgraph/duplicate-issue-detector

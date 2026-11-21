@@ -13,7 +13,7 @@
 # Required repository settings (both are maintainer-owned):
 #   1. Trusted publisher for `@scyvera/scyvera-ts`:
 #        GitHub Actions
-#        repository  Skull-boy/agent-contracts
+#        repository  Skull-boy/scyvera
 #        workflow    publish-scyvera-ts.yml
 #        environment npm-production
 #        allowed     npm stage publish only (not npm publish)

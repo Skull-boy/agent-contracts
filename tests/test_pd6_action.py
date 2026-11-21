@@ -271,4 +271,4 @@ def test_dogfood_triggers_on_push_main_and_pull_request() -> None:
 def test_action_readme_documents_sha_pinning() -> None:
     text = README.read_text(encoding="utf-8")
     assert "pin to a full commit sha" in text.lower()
-    assert "Skull-boy/agent-contracts/.github/actions/scyvera-gate@main" in text
+    assert "Skull-boy/scyvera/.github/actions/scyvera-gate@main" in text
