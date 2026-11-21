@@ -431,15 +431,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # serve-mcp subcommand (roadmap PD-7)
-    subparsers.add_parser(
+    serve_mcp_parser = subparsers.add_parser(
         "serve-mcp",
         help="Run scyvera as an out-of-process MCP server over stdio.",
         description=(
             "scyvera serve-mcp          Run scyvera as an out-of-process MCP "
             "server over stdio."
         ),
-        epilog="exit codes: 0 clean shutdown, 2 startup failure",
+        epilog=(
+            "exit codes: 0 clean shutdown, 2 startup failure (including stdin "
+            "being a terminal)"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    serve_mcp_parser.add_argument(
+        "--allow-interactive",
+        action="store_true",
+        help=(
+            "Read frames from an interactive terminal instead of refusing. "
+            "Without this flag a terminal stdin exits 2 with a hint, because a "
+            "stdio server otherwise looks frozen."
+        ),
     )
 
     # init subcommand
@@ -1494,7 +1506,7 @@ def main() -> int:
     if args.command == "serve-mcp":
         from .mcp_server import serve
 
-        return serve()
+        return serve(allow_interactive=args.allow_interactive)
 
     if args.command == "init":
         return run_init(
