@@ -140,6 +140,11 @@ Do not continue if any step is red, if `vectors/suite-version` is not exactly
   and `Cargo.toml` (see `include` in `Cargo.toml`). `schemas/` is a byte-identical
   copy of the monorepo's `schemas/`; a test asserts equality while the monorepo
   layout is present, and the copy is what ships.
+- `tests/` is deliberately **not** packaged, so `cargo package` prints
+  `warning: ignoring test ... as tests/... is not included in the published
+  package`. That is expected: the integration tests read `../../vectors`, which
+  does not exist inside a packaged crate. The tests run in CI from the
+  repository, not from the tarball.
 - `Cargo.lock` is committed. The release workflow publishes with `--locked`, so
   the dependency set that passed CI is the set that ships.
 - `publish = true` is the default; no `publish = ["..."]` allowlist is needed
