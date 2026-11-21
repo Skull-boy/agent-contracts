@@ -1,6 +1,6 @@
 # scyvera-ts
 
-**Native TypeScript runtime for Agent Contracts — v0.1.0 (pre-release).**
+**Native TypeScript runtime for Agent Contracts — v0.1.1 (pre-release).**
 
 The npm package is **`@scyvera/scyvera-ts`** (scoped, public). The installed
 command remains **`scyvera-ts`**: the `bin` mapping is independent of the
@@ -19,7 +19,7 @@ suite version ([`vectors/`](../../vectors/README.md)).
 
 ## Status and scope (no overclaim)
 
-`0.1.0` means **pre-release honesty**: the package has not proven itself
+`0.x` means **pre-release honesty**: the package has not proven itself
 against a stable published vector suite long enough to be `1.x`. It is
 implemented against suite version **1** (33 vectors).
 

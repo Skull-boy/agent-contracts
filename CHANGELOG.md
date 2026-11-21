@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — `scyvera-ts` 0.1.1 (2026-11-21)
+- **`runtimes/ts/package.json` moves `0.1.0` → `0.1.1`** and the lockfile root version follows. There is no runtime, schema, vector, or exit-code change: the only delta in the published tarball is `version`, plus the `repository.url` that the rename PR already landed (`git+https://github.com/Skull-boy/scyvera.git`).
+- **The version pins moved with it**: `runtimes/ts/test/native.test.ts` (the manifest assertion that fails the build if it drifts), `runtimes/ts/src/cli.ts` (`readVersion()`'s fallback), and the two version references in `runtimes/ts/README.md`. The README status paragraph now says `0.x` instead of naming a patch version, so it stops needing a bump every release.
+- **`0.0.0-stage` is gone from the registry.** The placeholder npm created during the failed stage-only token attempt was unpublished on 2026-11-21, inside the 72-hour window; the registry now lists `0.1.0` alone and its tarball returns 404.
+- This is the **first release on the GE-4b path** — OIDC trusted publishing plus `npm stage publish`, approved by the maintainer with 2FA, with no `NPM_TOKEN`. The retrospective `### Released` entry (run ID, attestation, tag) is added after the staged package is approved.
+
 ### Changed — repository renamed `agent-contracts` → `scyvera` (2026-11-21)
 - **The GitHub repository is now `Skull-boy/scyvera`.** The old URL redirects. Every live reference was updated: the README image, badges, and clone commands; `CONTRIBUTING.md`; `SECURITY.md`; the gate action's `uses:` lines and their test pin in `tests/test_pd6_action.py`; `runtimes/ts/package.json` `repository.url`; the trusted-publisher instructions in `runtimes/ts/PUBLISHING.md`; the publish workflow header comment; `docs/architecture.md`; the implementation READMEs; and the `pyproject.toml` project URLs.
 - **`contract.yaml` `system.name` is now `scyvera`, and the root contract was re-sealed.** `.scyvera/registry.jsonl` gained a chained version 2 entry whose `prev_hash` links to the version 1 entry. Governance remains `governed`, the dogfood covenant remains **84/100 `Controlled`**, and the scored-finding set is unchanged.
