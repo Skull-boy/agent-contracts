@@ -17,7 +17,35 @@ scyvera serve-mcp
 The process reads newline-delimited JSON-RPC 2.0 from stdin and writes one JSON
 object per line to stdout. Nothing is printed at startup; diagnostics go to
 stderr. Exit codes: `0` clean shutdown, `2` startup failure (stdin was already
-closed when the server started).
+closed when the server started, or stdin is an interactive terminal).
+
+### Why it looks frozen in a terminal
+
+A stdio server waits for frames. Run it by hand and it will sit there with a
+blank screen — that is the protocol, not a hang:
+
+```console
+$ scyvera serve-mcp
+scyvera serve-mcp waits for newline-delimited JSON-RPC frames on stdin and writes
+one JSON object per line to stdout; it is a stdio server for an MCP host, not an
+interactive REPL.
+Connect it to a host (see docs/mcp.md), or pass --allow-interactive to type frames
+by hand.
+$ echo $?
+2
+```
+
+The refusal exists so the failure is visible instead of silent. A host that
+spawns the server over a pipe is unaffected (`stdin` is not a TTY). To drive it
+by hand anyway:
+
+```console
+$ scyvera serve-mcp --allow-interactive
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+{"id":1,"jsonrpc":"2.0","result":{...}}
+```
+
+End the session with `Ctrl-C` or `Ctrl-Z`/`Ctrl-D` (EOF).
 
 ## Claude Desktop
 

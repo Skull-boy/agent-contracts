@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — `scyvera serve-mcp` is no longer silent when started in a terminal
+- **The command is a stdio JSON-RPC server, so it blocks on stdin by design** — but a human running `scyvera serve-mcp` saw a blank screen and no prompt, which is indistinguishable from a freeze. Nothing was broken: piping frames in (`initialize`, `tools/list`, `tools/call`) always worked.
+- **A terminal stdin now exits `2` with an explicit hint on stderr** instead of waiting forever. The hint names the transport and points at `docs/mcp.md` and `--allow-interactive`. stdout stays clean on refusal, so the "no unprompted stdout bytes" rule is preserved.
+- **`--allow-interactive`** keeps the manual path: it reads frames from a terminal exactly as before. Hosts that spawn the server over a pipe are unaffected (`isatty()` is false) and need no config change.
+- Exit-code mapping is unchanged elsewhere: `0` clean shutdown, `2` startup/configuration failure. `docs/mcp.md` gained a "Why it looks frozen in a terminal" section, and `src/scyvera/_self_manifest.json` was regenerated (37 files verified).
+
 ### Added — native Rust runtime `scyvera-rs` (GE-5; built, not published)
 - **`runtimes/rs/`** implements the RFC 0005 cross-runtime surface natively: contract model for v1/v1.1/v1.2 (provisional rules, lifecycle defaults, wildcard refusal, `.yml` rejection, T14 escape refusal, pinned SHA-256 identity), the default-deny gate (integrity → declaration → approval → guardrails, draft-mode irreversibility, per-instance guardrails, audit trail), the RFC 0003 §C4 trace with the additive `provisional` field, and the shared conformance-vector runner. Nothing spawns Python, embeds an interpreter, or wraps the `scyvera` CLI.
 - **One direct dependency**: `yaml-rust2` with `default-features = false`. JSON parsing, canonical JSON/JSONL output, SHA-256, ISO-8601 formatting, and the closed JSON Schema subset the contract schemas use are implemented in-crate; `cargo tree --depth 1` is asserted in CI. MSRV **1.85** (edition 2021), verified on `1.85.0` and stable.

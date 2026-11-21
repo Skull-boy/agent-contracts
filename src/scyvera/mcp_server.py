@@ -7,8 +7,9 @@ tool result is produced by the same engine functions the CLI dispatches to, so
 MCP output and CLI output cannot drift.
 
 stdout carries protocol frames only; a host parses one JSON object per line.
-:func:`serve` never prints: diagnostics belong on stderr, and none are emitted
-today because every failure is a JSON-RPC error frame.
+:func:`serve` never writes protocol content anywhere else: diagnostics belong on
+stderr. The only stderr output is the startup hint emitted when stdin is a
+terminal, because a stdio server started by hand looks like a hang.
 """
 
 from __future__ import annotations
@@ -47,6 +48,17 @@ SERVER_NAME = "scyvera-mcp"
 HELP_LINE = (
     "scyvera serve-mcp          Run scyvera as an out-of-process MCP server "
     "over stdio."
+)
+
+#: Printed once, to stderr, when a human starts the server in a terminal. A
+#: stdio server that waits for frames looks identical to a frozen process, so
+#: the refusal is explicit instead of silent.
+SERVE_TERMINAL_HINT = (
+    "scyvera serve-mcp waits for newline-delimited JSON-RPC frames on stdin and "
+    "writes one JSON object per line to stdout; it is a stdio server for an MCP "
+    "host, not an interactive REPL.\n"
+    "Connect it to a host (see docs/mcp.md), or pass --allow-interactive to type "
+    "frames by hand.\n"
 )
 
 # JSON-RPC 2.0 error codes (https://www.jsonrpc.org/specification#error_object).
@@ -484,20 +496,44 @@ class _MethodNotFound(Exception):
         self.method = method
 
 
-def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> int:
+def _is_terminal(stream: TextIO) -> bool:
+    """True when the stream is an interactive terminal, never for pipes/files."""
+    isatty = getattr(stream, "isatty", None)
+    if isatty is None:
+        return False
+    try:
+        return bool(isatty())
+    except (ValueError, OSError):
+        return False
+
+
+def serve(
+    stdin: TextIO | None = None,
+    stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
+    allow_interactive: bool = False,
+) -> int:
     """Serve JSON-RPC frames until EOF.
 
-    Returns ``0`` after a clean shutdown and ``2`` when the input stream is
-    already closed (the "started, but the host is gone" case). Nothing is
-    written at startup: a host may treat any unprompted stdout byte as fatal.
+    Returns ``0`` after a clean shutdown, ``2`` when the input stream is
+    already closed (the "started, but the host is gone" case), and ``2`` when
+    stdin is an interactive terminal without ``allow_interactive`` — a stdio
+    server started by hand otherwise looks like a hang. Nothing is written to
+    stdout at startup: a host may treat any unprompted stdout byte as fatal.
     """
     input_stream = sys.stdin if stdin is None else stdin
     output_stream = sys.stdout if stdout is None else stdout
-    server = McpServer(output_stream)
+    error_stream = sys.stderr if stderr is None else stderr
 
     if input_stream is None:
         return 2
 
+    if not allow_interactive and _is_terminal(input_stream):
+        error_stream.write(SERVE_TERMINAL_HINT)
+        error_stream.flush()
+        return 2
+
+    server = McpServer(output_stream)
     saw_input = False
     while True:
         line = input_stream.readline()

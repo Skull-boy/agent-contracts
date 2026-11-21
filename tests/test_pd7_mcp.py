@@ -407,6 +407,66 @@ def test_serve_reports_closed_input_and_clean_eof() -> None:
     )
 
 
+class _TerminalInput(io.StringIO):
+    """A stream that claims to be a TTY, like ``sys.stdin`` in a shell."""
+
+    def isatty(self) -> bool:  # noqa: D102 - trivial override
+        return True
+
+
+def test_serve_refuses_a_terminal_stdin_instead_of_hanging() -> None:
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    assert (
+        serve(
+            stdin=_TerminalInput(""),
+            stdout=stdout,
+            stderr=stderr,
+        )
+        == 2
+    )
+    # A host must never see an unprompted stdout byte, even on refusal.
+    assert stdout.getvalue() == ""
+    hint = stderr.getvalue()
+    assert "--allow-interactive" in hint
+    assert "stdio server" in hint
+
+
+def test_serve_allow_interactive_reads_terminal_frames() -> None:
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    stdin = _TerminalInput('{"jsonrpc":"2.0","id":1,"method":"ping"}\n')
+
+    assert (
+        serve(
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+            allow_interactive=True,
+        )
+        == 0
+    )
+    assert '"id":1' in stdout.getvalue()
+    assert stderr.getvalue() == ""
+
+
+def test_piped_stdin_is_never_treated_as_a_terminal() -> None:
+    # io.StringIO.isatty() is False, which is the pipe/file case hosts use.
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    assert (
+        serve(
+            stdin=io.StringIO('{"jsonrpc":"2.0","id":1,"method":"ping"}\n'),
+            stdout=stdout,
+            stderr=stderr,
+        )
+        == 0
+    )
+    assert stderr.getvalue() == ""
+    assert '"id":1' in stdout.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # CLI registration and the no-process-surface pin
 # ---------------------------------------------------------------------------
@@ -416,12 +476,15 @@ def test_cli_registers_serve_mcp_and_prints_the_usage_line(capsys) -> None:
     parser = build_parser()
     args = parser.parse_args(["serve-mcp"])
     assert args.command == "serve-mcp"
+    assert args.allow_interactive is False
+    assert parser.parse_args(["serve-mcp", "--allow-interactive"]).allow_interactive is True
 
     with pytest.raises(SystemExit) as raised:
         parser.parse_args(["serve-mcp", "--help"])
     assert raised.value.code == 0
     help_text = " ".join(capsys.readouterr().out.split())
     assert " ".join(HELP_LINE.split()) in help_text
+    assert "--allow-interactive" in help_text
 
 
 def test_module_has_no_process_or_dynamic_code_surface() -> None:
