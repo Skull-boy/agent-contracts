@@ -1,0 +1,91 @@
+name: scyvera-rs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "runtimes/rs/**"
+      - "vectors/**"
+      - "schemas/**"
+      - ".github/workflows/scyvera-rs.yml"
+  pull_request:
+    paths:
+      - "runtimes/rs/**"
+      - "vectors/**"
+      - "schemas/**"
+      - ".github/workflows/scyvera-rs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Rust ${{ matrix.toolchain }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # MSRV (the floor declared in Cargo.toml and required by yaml-rust2 0.13)
+        # plus current stable. Clippy and rustfmt run on stable only: lint sets
+        # legitimately differ between compiler versions, and the MSRV job's
+        # promise is "this crate still builds and passes here".
+        toolchain: ["1.85.0", "stable"]
+    defaults:
+      run:
+        working-directory: runtimes/rs
+    env:
+      # RFC 0005 §6.2 / anchor A6: the runtime pins the suite integer here.
+      PINNED_SUITE_VERSION: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0 (pinned 2026-11-06)
+
+      - name: Install Rust ${{ matrix.toolchain }}
+        run: |
+          if [ "${{ matrix.toolchain }}" = "stable" ]; then
+            components="--component clippy,rustfmt"
+          else
+            components=""
+          fi
+          rustup toolchain install "${{ matrix.toolchain }}" --profile minimal ${components}
+          rustup default "${{ matrix.toolchain }}"
+          rustc --version
+          cargo --version
+
+      - name: Check pinned suite version
+        run: |
+          suite="$(tr -d '\r' < ../../vectors/suite-version)"
+          expected="suite-version: ${PINNED_SUITE_VERSION}"
+          echo "vectors/suite-version: ${suite}"
+          echo "runtime pin:            ${expected}"
+          if [ "${suite}" != "${expected}" ]; then
+            echo "::error::suite-version drift: this runtime pins ${PINNED_SUITE_VERSION}; update the runtime or revert the suite bump; do not run a subset"
+            exit 2
+          fi
+
+      - name: Check formatting (stable)
+        if: matrix.toolchain == 'stable'
+        run: cargo fmt --all --check
+
+      - name: Clippy, warnings denied (stable)
+        if: matrix.toolchain == 'stable'
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build and run the test suite
+        run: cargo test --locked
+
+      - name: Run the shared conformance vectors
+        run: cargo run --locked -- vectors --root ../../vectors
+
+      - name: Assert the direct dependency surface
+        if: matrix.toolchain == 'stable'
+        run: |
+          # The crate promises exactly one direct dependency (the YAML parser).
+          # Transitive crates come from that parser's own tree.
+          count="$(cargo tree --depth 1 --prefix none | sed '1d' | sed '/^$/d' | wc -l)"
+          echo "direct dependencies: ${count}"
+          if [ "${count}" -ne 1 ]; then
+            echo "::error::scyvera-rs must have exactly one direct dependency, found ${count}"
+            exit 1
+          fi
