@@ -229,3 +229,23 @@ two native runtimes stay comparable.
 - `cargo tree --depth 1`: exactly one direct dependency.
 - Publication: **not done** in this lane. No crate, tag, or attestation is
   claimed.
+
+### 7.3 Audit posture
+
+The dogfood covenant is unchanged: **84/100 `Controlled`**, governance
+`governed`, and the scored surface is still the pinned seven findings.
+
+Two things worth naming rather than leaving implicit:
+
+- **The audit's `AU-CI-002` does not detect `cargo publish`.** The new publish
+  workflow is therefore not scored, unlike the npm publish workflow. That is a
+  coverage gap in the rule, not evidence that the capability is absent; it is
+  out of scope for this lane because changing a rule or its severity is
+  forbidden here.
+- **The first version of the CLI tests spawned the binary with
+  `std::process::Command`, and AU-NET-002 correctly scored it** as a
+  process-spawning capability, which would have required a second covenant
+  amendment for a test harness. Instead the CLI logic moved into
+  `scyvera_rs::cli::run(args, stdout, stderr)` and the tests run in-process
+  against buffers. That is a source change with better exit-code coverage, not a
+  rule change or a waiver.
